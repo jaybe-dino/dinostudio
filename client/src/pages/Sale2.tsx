@@ -2,15 +2,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Maximize, Minimize } from "lucide-react";
 
 const TOTAL_SLIDES = 17;
-const slideSrc = (n: number) => `/deck/slide-${String(n).padStart(2, "0")}.webp`;
+const slideSrc = (n: number) => `/sale2/slide-${String(n).padStart(2, "0")}.webp`;
 
 /**
- * 비공개 슬라이드 뷰어 (/deck)
+ * 비공개 슬라이드 뷰어 (/sale2)
  * - 사이트 내비게이션에서 링크하지 않는 unlisted 페이지
  * - 검색엔진 차단: robots meta (아래) + vercel.json 의 X-Robots-Tag 헤더
  * - 원본 PDF 는 제공하지 않으며, 우클릭/드래그 저장을 막아 다운로드를 억제
  */
-export default function Deck() {
+export default function Sale2() {
   const [current, setCurrent] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);

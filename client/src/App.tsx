@@ -7,16 +7,16 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 
-const Deck = lazy(() => import("./pages/Deck"));
+const Sale2 = lazy(() => import("./pages/Sale2"));
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
       <Route path={"/"} component={Home} />
-      <Route path={"/deck"}>
+      <Route path={"/sale2"}>
         <Suspense fallback={<div className="min-h-screen" style={{ background: "#08081c" }} />}>
-          <Deck />
+          <Sale2 />
         </Suspense>
       </Route>
       <Route path={"/portfolio"}><Redirect to="/" /></Route>
