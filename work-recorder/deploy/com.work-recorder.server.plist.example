@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  로그인 시 작업 API + 워커 + 정기 실행을 함께 띄운다.
+
+  설치:
+    cp deploy/com.work-recorder.server.plist.example ~/Library/LaunchAgents/com.work-recorder.server.plist
+    # ProgramArguments의 경로와 WorkingDirectory를 실제 값으로 바꾼 뒤
+    launchctl load ~/Library/LaunchAgents/com.work-recorder.server.plist
+
+  비밀값은 이 파일에 직접 쓰지 말고 WorkingDirectory의 .env(권한 600)에 둔다.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.work-recorder.server</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/work-recorder</string>
+        <string>serve</string>
+        <string>--with-worker</string>
+        <string>--with-scheduler</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/CHANGE_ME/work-recorder</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/CHANGE_ME/.work-recorder/server.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/CHANGE_ME/.work-recorder/server.error.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>

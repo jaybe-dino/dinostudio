@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "work-recorder"
+version = "0.1.0"
+description = "업무 녹음 자동화 — 수집·전사·분석·발행 파이프라인"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "UNLICENSED" }
+# 코어는 표준 라이브러리만 사용한다. 외부 서비스는 아래 extras로만 들어온다.
+dependencies = []
+
+[project.optional-dependencies]
+drive = [
+  "google-api-python-client>=2.120",
+  "google-auth-oauthlib>=1.2",
+  "google-auth>=2.28",
+]
+claude = ["anthropic>=1.0"]
+dev = ["pytest>=8.0"]
+all = [
+  "google-api-python-client>=2.120",
+  "google-auth-oauthlib>=1.2",
+  "google-auth>=2.28",
+  "anthropic>=1.0",
+  "pytest>=8.0",
+]
+
+[project.scripts]
+work-recorder = "work_recorder.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

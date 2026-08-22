@@ -1,0 +1,19 @@
+# 비밀값과 로컬 상태는 절대 커밋하지 않는다.
+.env
+*.db
+*.db-wal
+*.db-shm
+credentials.json
+token.json
+work/
+*.wav
+*.m4a
+*.mp3
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+.venv/
