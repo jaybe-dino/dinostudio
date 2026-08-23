@@ -178,6 +178,43 @@ class GoogleDriveSource:
             raise AdapterError(f"Drive 다운로드 실패 ({recording.file_name}): {exc}") from exc
         return target
 
+    # ── 업로드 ────────────────────────────────────────────────────────
+    def upload(self, path: Path, business_date: date, *, source: str = "mac_menubar") -> str:
+        """녹음 청크를 업로드하고 Drive 파일 ID를 돌려준다.
+
+        `appProperties.business_date`를 함께 기록하는 것이 핵심이다. 서버는 이 값을
+        UTC `createdTime`보다 우선해서 쓰므로, 자정 전후 파일이 엉뚱한 날짜로
+        묶이지 않는다.
+        """
+        try:
+            from googleapiclient.http import MediaFileUpload
+        except ImportError as exc:  # pragma: no cover
+            raise AdapterError(
+                'Google Drive 어댑터에는 추가 패키지가 필요합니다: pip install "work-recorder[drive]"'
+            ) from exc
+
+        if not path.exists():
+            raise AdapterError(f"업로드할 파일이 없습니다: {path}")
+
+        metadata = {
+            "name": path.name,
+            "parents": [self.folder_id],
+            "appProperties": {
+                "business_date": business_date.isoformat(),
+                "source": source,
+            },
+        }
+        media = MediaFileUpload(str(path), resumable=True)
+        try:
+            created = (
+                self.service.files()
+                .create(body=metadata, media_body=media, fields="id", supportsAllDrives=True)
+                .execute()
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise AdapterError(f"Drive 업로드 실패 ({path.name}): {exc}") from exc
+        return str(created.get("id", ""))
+
 
 def _parse_hint(app_properties: dict) -> date | None:
     raw = app_properties.get("business_date")

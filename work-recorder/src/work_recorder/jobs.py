@@ -51,6 +51,29 @@ def enqueue_daily_summary(
     return job_to_dict(row), True
 
 
+STATUS_LABELS = {
+    "queued": "접수됨 — 대기 중",
+    "running": "정리하는 중…",
+    "succeeded": "정리 완료",
+    "failed": "정리 실패",
+}
+
+
+def describe_job(job: dict) -> str:
+    """작업 상태를 사용자에게 보여줄 한 줄로. 메뉴바 앱과 CLI가 공유한다."""
+    label = STATUS_LABELS.get(job.get("status", ""), job.get("status") or "알 수 없음")
+    if job.get("status") == "failed" and job.get("error"):
+        return f"{label}: {job['error']}"
+
+    result = job.get("result") or {}
+    if job.get("status") == "succeeded" and result:
+        if not result.get("analyzed") and not result.get("transcribed"):
+            return f"{label} — 새 녹음 없음"
+        published = ", ".join(result.get("published") or []) or "발행 없음"
+        return f"{label} — 녹음 {result.get('transcribed', 0)}건 정리, {published}"
+    return label
+
+
 def job_to_dict(row) -> dict:
     import json
 

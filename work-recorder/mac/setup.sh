@@ -54,7 +54,12 @@ echo "  ✓ 파이썬 $("$PYTHON" -c 'import sys; print(".".join(map(str, sys.ve
 echo "  · 설치 중… (처음에는 1~2분 걸립니다)"
 "$PYTHON" -m venv "$VENV_DIR" 2>/dev/null || true
 "$VENV_DIR/bin/python" -m pip install --quiet --upgrade pip
-"$VENV_DIR/bin/python" -m pip install --quiet -e "$PROJECT_DIR[all]"
+if [ "$(uname)" = "Darwin" ]; then
+    EXTRAS="[all,mac]"   # 메뉴바 앱(rumps)과 녹음(sounddevice) 포함
+else
+    EXTRAS="[all]"
+fi
+"$VENV_DIR/bin/python" -m pip install --quiet -e "$PROJECT_DIR$EXTRAS"
 echo "  ✓ 설치 완료"
 
 # ── 4. 설정 파일 ─────────────────────────────────────────────
@@ -77,41 +82,51 @@ fi
 
 mkdir -p "$HOME/업무녹음"
 
-# ── 5. 바탕화면 아이콘 ───────────────────────────────────────
-# 이 컴퓨터에서 직접 만든 파일이므로 Gatekeeper가 막지 않는다.
-mkdir -p "$DESKTOP"
+# ── 5. 메뉴바 앱 만들기 ──────────────────────────────────────
+# 이 컴퓨터에서 직접 만든 앱이라 Gatekeeper가 막지 않는다.
+# LSUIElement=1 이라 Dock에는 안 뜨고 상단 상태바에만 아이콘이 생긴다.
+APP_DIR="$HOME/Applications/업무녹음.app"
+rm -rf "$APP_DIR"
+mkdir -p "$APP_DIR/Contents/MacOS"
 
-cat > "$DESKTOP/업무녹음 정리.command" <<SHORTCUT
+cat > "$APP_DIR/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>            <string>업무녹음</string>
+    <key>CFBundleDisplayName</key>     <string>업무녹음</string>
+    <key>CFBundleIdentifier</key>      <string>kr.dinostudio.work-recorder</string>
+    <key>CFBundleVersion</key>         <string>0.1.0</string>
+    <key>CFBundleShortVersionString</key> <string>0.1.0</string>
+    <key>CFBundleExecutable</key>      <string>run</string>
+    <key>CFBundlePackageType</key>     <string>APPL</string>
+    <key>LSUIElement</key>             <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>업무 회의와 메모를 녹음해 자동으로 정리하기 위해 마이크를 사용합니다.</string>
+</dict>
+</plist>
+PLIST
+
+cat > "$APP_DIR/Contents/MacOS/run" <<RUNNER
 #!/bin/bash
+export WORK_RECORDER_ENV_FILE="$ENV_FILE"
 cd "$PROJECT_DIR"
-echo ""
-echo "  오늘 녹음을 정리합니다…"
-echo ""
-"$VENV_DIR/bin/work-recorder" --env-file "$ENV_FILE" --log-level WARNING run-daily --date today
-echo ""
-read -r -p "  엔터를 누르면 창이 닫힙니다..."
-SHORTCUT
+exec "$VENV_DIR/bin/python" "$PROJECT_DIR/clients/mac/menubar_app.py"
+RUNNER
+chmod +x "$APP_DIR/Contents/MacOS/run"
 
-cat > "$DESKTOP/업무녹음 설정.command" <<SHORTCUT
-#!/bin/bash
-open -t "$ENV_FILE"
-SHORTCUT
+echo "  ✓ 메뉴바 앱 생성 (~/Applications/업무녹음.app)"
 
-cat > "$DESKTOP/업무녹음 자동실행.command" <<SHORTCUT
-#!/bin/bash
-# 매일 밤 00:05(한국 시간)에 전날 녹음을 자동으로 정리한다.
-# 이 창을 닫으면 멈춘다.
-cd "$PROJECT_DIR"
-echo ""
-echo "  자동 정리 대기 중입니다. 멈추려면 Control + C."
-echo ""
-"$VENV_DIR/bin/work-recorder" --env-file "$ENV_FILE" serve --with-worker --with-scheduler
-SHORTCUT
-
-chmod +x "$DESKTOP/업무녹음 정리.command" \
-         "$DESKTOP/업무녹음 설정.command" \
-         "$DESKTOP/업무녹음 자동실행.command"
-echo "  ✓ 바탕화면에 아이콘 3개 생성"
+# 로그인할 때 자동으로 뜨도록 등록 (시스템 설정 → 일반 → 로그인 항목에서 해제 가능)
+if [ "$(uname)" = "Darwin" ]; then
+    osascript -e "tell application \"System Events\" to delete every login item whose name is \"업무녹음\"" >/dev/null 2>&1 || true
+    if osascript -e "tell application \"System Events\" to make login item at end with properties {path:\"$APP_DIR\", hidden:true}" >/dev/null 2>&1; then
+        echo "  ✓ 로그인 시 자동 실행 등록"
+    else
+        echo "  ! 로그인 항목 등록은 건너뜁니다 (시스템 설정 → 일반 → 로그인 항목에서 직접 추가 가능)"
+    fi
+fi
 
 # ── 6. 동작 확인 ─────────────────────────────────────────────
 DEMO="$HOME/.work-recorder/demo"
@@ -156,12 +171,16 @@ rm -rf "$DEMO"
 
 echo ""
 echo "  ═════════════════════════════════════════"
-echo "   설치 완료 — 바탕화면을 확인하세요"
+echo "   설치 완료"
 echo "  ═════════════════════════════════════════"
 echo ""
-echo "   업무녹음 설정      키 입력 (Google·Notion·Slack)"
-echo "   업무녹음 정리      오늘 녹음을 지금 정리"
-echo "   업무녹음 자동실행  매일 밤 자동 정리"
+echo "   ~/Applications 폴더의 '업무녹음' 앱을 실행하세요."
+echo "   화면 맨 위 상태바에 🎙 아이콘이 생깁니다."
 echo ""
-echo "   녹음 파일은 ~/업무녹음 폴더에 넣으면 됩니다."
+echo "   아이콘을 누르면:"
+echo "     ● 녹음 시작 / ■ 녹음 종료"
+echo "     오늘 녹음 정리하기"
+echo "     설정 열기 · 녹음 폴더 열기 · 점검하기"
+echo ""
+echo "   매일 $(grep -E '^DAILY_SUMMARY_TIME=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo 00:05) 에 자동 정리도 앱이 켜져 있으면 함께 돕니다."
 echo ""

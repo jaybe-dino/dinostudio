@@ -19,6 +19,8 @@ drive = [
   "google-auth>=2.28",
 ]
 claude = ["anthropic>=1.0"]
+# 맥 메뉴바 앱. sounddevice 휠에 PortAudio가 포함되어 있어 별도 설치가 필요 없다.
+mac = ["rumps>=0.4.0", "sounddevice>=0.4.6"]
 dev = ["pytest>=8.0"]
 all = [
   "google-api-python-client>=2.120",
