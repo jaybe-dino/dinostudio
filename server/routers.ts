@@ -5,9 +5,12 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { createContact, listContacts } from "./db";
 import { notifyOwner } from "./_core/notification";
+import { erpRouter } from "./erp/router";
 
 export const appRouter = router({
   system: systemRouter,
+  /** 경영관리 시스템 1차 오픈 (개발 사양서 §10.1) */
+  erp: erpRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {

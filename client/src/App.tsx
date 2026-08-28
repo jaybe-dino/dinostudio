@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 
 const Sale2 = lazy(() => import("./pages/Sale2"));
+const ErpApp = lazy(() => import("./pages/erp/ErpApp"));
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -17,6 +18,11 @@ function Router() {
       <Route path={"/sale2"}>
         <Suspense fallback={<div className="min-h-screen" style={{ background: "#08081c" }} />}>
           <Sale2 />
+        </Suspense>
+      </Route>
+      <Route path={"/erp"}>
+        <Suspense fallback={<div className="min-h-screen" style={{ background: "#F7F9F6" }} />}>
+          <ErpApp />
         </Suspense>
       </Route>
       <Route path={"/portfolio"}><Redirect to="/" /></Route>

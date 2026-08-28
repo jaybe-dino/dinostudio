@@ -1,0 +1,71 @@
+/**
+ * 서비스 팩토리 — DATABASE_URL이 있으면 MySQL, 없으면 §5.4 시드 메모리 저장소.
+ * server/db.ts의 graceful degradation과 같은 방식이다.
+ */
+import { ROLES, type Role } from "@shared/erp";
+import { drizzle } from "drizzle-orm/mysql2";
+import { DrizzleLedgerStore } from "./drizzleStore";
+import { LedgerService } from "./service";
+import { InMemoryLedgerStore, type LedgerStore } from "./store";
+
+let cached: LedgerService | null = null;
+
+export function getLedgerService(): LedgerService {
+  if (cached) return cached;
+  let store: LedgerStore;
+  if (process.env.DATABASE_URL) {
+    try {
+      store = new DrizzleLedgerStore(drizzle(process.env.DATABASE_URL));
+    } catch (error) {
+      console.warn(
+        "[ERP] MySQL 연결 실패 — 시드 메모리 저장소로 대체합니다:",
+        error
+      );
+      store = new InMemoryLedgerStore();
+    }
+  } else {
+    store = new InMemoryLedgerStore();
+  }
+  cached = new LedgerService(store);
+  return cached;
+}
+
+/** 테스트에서 저장소를 갈아끼울 때 사용 */
+export function setLedgerService(service: LedgerService | null) {
+  cached = service;
+}
+
+function isRole(value: string): value is Role {
+  return (ROLES as readonly string[]).includes(value);
+}
+
+/**
+ * §13.1 역할 해석. 순서 —
+ *   ① ERP_ROLE_MAP 환경변수 (email → 역할 JSON)
+ *   ② ERP_DEFAULT_ROLE 환경변수
+ *   ③ 개발 환경에서만 재무로 폴백. 프로덕션은 명시적 설정 없이는 접근 불가 (G10)
+ */
+export function resolveErpRole(email: string | null | undefined): Role | null {
+  const raw = process.env.ERP_ROLE_MAP;
+  if (raw && email) {
+    try {
+      const map = JSON.parse(raw) as Record<string, string>;
+      const found = map[email] ?? map[email.toLowerCase()];
+      if (found && isRole(found)) return found;
+    } catch (error) {
+      console.warn("[ERP] ERP_ROLE_MAP 파싱 실패:", error);
+    }
+  }
+  const fallback = process.env.ERP_DEFAULT_ROLE;
+  if (fallback && isRole(fallback)) return fallback;
+  if (process.env.NODE_ENV !== "production") return "재무";
+  return null;
+}
+
+export { LedgerService } from "./service";
+export type { Actor } from "./service";
+export { InMemoryLedgerStore } from "./store";
+export type { LedgerStore, EntryFilter } from "./store";
+export { DrizzleLedgerStore } from "./drizzleStore";
+export { ErpError, erpError } from "./errors";
+export type { ErpErrorCode } from "./errors";
