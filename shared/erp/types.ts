@@ -125,6 +125,11 @@ export interface Entry {
   /** 계산서 발행 O/X — 미수 판정에 사용 (원칙 4) */
   invoiceIssued: boolean | null;
   invoiceNo: string | null;
+  /**
+   * 계산서 발행일. §9.3의 `due_date = invoice_date + contract.payment_terms.days`가
+   * 참조하는 값인데 §6.2 필드 목록에는 없습니다. docs/erp-spec-gaps.md 참조.
+   */
+  invoiceDate: string | null;
   source: EntrySource;
   /** 슬랙 ts · 계산서 번호 등 — UNIQUE(source, sourceRef) */
   sourceRef: string | null;
@@ -261,4 +266,123 @@ export interface Journal {
   auto: boolean;
   reversedBy: string | null;
   lines: JournalLine[];
+}
+
+/* ─── 2차 — §6.3 나머지 테이블 ────────────────────────────────────────────── */
+
+/** party — 거래처. vat_mode가 사업부별 표기 차이를 흡수한다 (B3). */
+export interface Party {
+  id: string;
+  name: string;
+  bizNo: string | null;
+  bankAccount: string | null;
+  /** "vat별도" · "VAT포함" · null(미확정) — B3 */
+  vatMode: string | null;
+  contact: string | null;
+  memo: string | null;
+}
+
+/** contract — 입금예정일 산출의 근거 (§9.3) */
+export interface Contract {
+  id: string;
+  /** CT-YYMMDD-NN */
+  code: string;
+  partyId: string | null;
+  projectId: string | null;
+  amountTotal: number | null;
+  /** 회차 — [{ n, amount, dueRule }] */
+  installments: { n: number; amount: number | null; note: string | null }[];
+  /** "계산서 발행 후 N일" 형태 — days가 null이면 입금예정일을 산출할 수 없다 */
+  paymentTermsDays: number | null;
+  paymentTermsText: string | null;
+  driveUrl: string | null;
+  isAgency: boolean;
+}
+
+/** project — 프로젝트 마진의 귀속 단위 */
+export interface Project {
+  id: string;
+  code: string;
+  name: string;
+  buCode: BuCode | null;
+  status: string;
+  budget: number | null;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+/** debt — maturity_date가 null이면 만기 알람이 발동하지 않는다 (B2) */
+export interface Debt {
+  id: string;
+  /** DB-YYMMDD-NN */
+  code: string;
+  creditor: string;
+  /** null = 건별 잔액 미분해 (장기 7.9억) */
+  principal: number | null;
+  rate: number | null;
+  maturityDate: string | null;
+  repayType: string | null;
+  isRelatedParty: boolean;
+  /** 월 이자 실액 — 약정서가 없어도 실제 지급액으로 확인된 것 */
+  monthlyInterest: number | null;
+  term: "단기" | "장기";
+  docUrl: string | null;
+}
+
+/** debt_schedule — 13주 계획의 상환 라인 */
+export interface DebtSchedule {
+  id: string;
+  debtId: string;
+  dueDate: string;
+  principal: number;
+  interest: number;
+}
+
+/** intake — 수집 검수함. 원장 진입 전 대기열이며 파싱 실패도 여기 남는다. */
+export interface Intake {
+  id: string;
+  source: EntrySource;
+  sourceRef: string | null;
+  raw: string;
+  parsed: Record<string, unknown> | null;
+  /** waiting · parsed · failed · promoted · rejected */
+  status: string;
+  failReason: string | null;
+  entryId: string | null;
+  receivedAt: string;
+}
+
+/** notification_rule / notification — 미발송이어도 알림함에 적재된다 (B7) */
+export interface NotificationRule {
+  id: string;
+  trigger: string;
+  /** T0 즉시 · T1 당일 · T2 주간 · T3 월간 */
+  tier: string;
+  recipients: string[];
+  channel: string;
+  active: boolean;
+  /** 발동 불가 사유 — 만기 미확인 등 */
+  blockedReason: string | null;
+}
+
+export interface Notification {
+  id: string;
+  ruleId: string;
+  title: string;
+  body: string;
+  /** 이동할 화면 */
+  screen: string | null;
+  sentAt: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+/** period — 월 마감 잠금 (3차) */
+export interface Period {
+  /** YYYY-MM */
+  ym: string;
+  status: "open" | "closing" | "closed";
+  closedBy: string | null;
+  closedAt: string | null;
+  blockers: string[];
 }

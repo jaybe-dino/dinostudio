@@ -11,16 +11,31 @@ import { ErpUiContext } from "./context";
 import "./erp.css";
 import { AccountsScreen } from "./screens/Accounts";
 import { ApprovalsScreen } from "./screens/Approvals";
+import { ArScreen } from "./screens/Ar";
+import { BurnRateScreen } from "./screens/BurnRate";
 import { CashPositionScreen } from "./screens/CashPosition";
 import { CashflowScreen } from "./screens/Cashflow";
+import { ClosingScreen } from "./screens/Closing";
+import { DebtScreen } from "./screens/Debt";
+import { FinancialStatementsScreen } from "./screens/FinancialStatements";
+import { Forecast13wScreen } from "./screens/Forecast13w";
+import { GovernanceScreen } from "./screens/Governance";
+import { IntakeScreen } from "./screens/Intake";
+import { JournalsScreen } from "./screens/Journals";
 import { LedgerScreen } from "./screens/Ledger";
+import { MastersScreen } from "./screens/Masters";
+import { NotificationsScreen } from "./screens/Notifications";
+import { OpsScreen } from "./screens/Ops";
 import { OverviewScreen } from "./screens/Overview";
+import { PnlScreen } from "./screens/Pnl";
+import { SettingsScreen } from "./screens/Settings";
 
 interface ScreenDef {
   id: string;
   label: string;
   group: string;
   hint: string;
+  stage: 1 | 2 | 3;
   render: () => ReactElement;
 }
 
@@ -30,6 +45,7 @@ const SCREENS: ScreenDef[] = [
     label: "집행원장",
     group: "핵심 원장 (원본)",
     hint: "전건 · 필터 10종",
+    stage: 1,
     render: () => (
       <LedgerScreen
         title="집행원장"
@@ -42,6 +58,7 @@ const SCREENS: ScreenDef[] = [
     label: "지출 원장",
     group: "핵심 원장 (원본)",
     hint: "방향 + 상태 필터",
+    stage: 1,
     render: () => (
       <LedgerScreen
         direction="out"
@@ -55,6 +72,7 @@ const SCREENS: ScreenDef[] = [
     label: "수입 원장",
     group: "핵심 원장 (원본)",
     hint: "방향 + 상태 필터",
+    stage: 1,
     render: () => (
       <LedgerScreen
         direction="in"
@@ -68,6 +86,7 @@ const SCREENS: ScreenDef[] = [
     label: "계정과목 체계",
     group: "핵심 원장 (원본)",
     hint: "자동 판정 3종",
+    stage: 1,
     render: () => <AccountsScreen />,
   },
   {
@@ -75,6 +94,7 @@ const SCREENS: ScreenDef[] = [
     label: "현금흐름표",
     group: "지금 쓰는 것",
     hint: "일 · 월 · 연",
+    stage: 1,
     render: () => <CashflowScreen />,
   },
   {
@@ -82,6 +102,7 @@ const SCREENS: ScreenDef[] = [
     label: "현금 현황",
     group: "지금 쓰는 것",
     hint: "부족액 3종",
+    stage: 1,
     render: () => <CashPositionScreen />,
   },
   {
@@ -89,6 +110,7 @@ const SCREENS: ScreenDef[] = [
     label: "승인 대기",
     group: "지금 쓰는 것",
     hint: "일괄 검토",
+    stage: 1,
     render: () => <ApprovalsScreen />,
   },
   {
@@ -96,7 +118,208 @@ const SCREENS: ScreenDef[] = [
     label: "종합 현황",
     group: "지금 쓰는 것",
     hint: "확정도 배지",
+    stage: 1,
     render: () => <OverviewScreen />,
+  },
+  {
+    id: "ar",
+    label: "채권 관리",
+    group: "곧 붙일 것 (2차)",
+    hint: "미수 · 발행 대기 · DSO",
+    stage: 2,
+    render: () => <ArScreen />,
+  },
+  {
+    id: "debt",
+    label: "부채 원장",
+    group: "곧 붙일 것 (2차)",
+    hint: "차입 · 만기 알람",
+    stage: 2,
+    render: () => <DebtScreen variant="ledger" />,
+  },
+  {
+    id: "funding",
+    label: "부채 · 조달",
+    group: "곧 붙일 것 (2차)",
+    hint: "조달 게이트",
+    stage: 2,
+    render: () => <DebtScreen variant="funding" />,
+  },
+  {
+    id: "forecast",
+    label: "13주 자금계획",
+    group: "곧 붙일 것 (2차)",
+    hint: "Base · Stress · Upside",
+    stage: 2,
+    render: () => <Forecast13wScreen />,
+  },
+  {
+    id: "contracts",
+    label: "계약 원장",
+    group: "곧 붙일 것 (2차)",
+    hint: "입금예정일의 근거",
+    stage: 2,
+    render: () => <MastersScreen kind="contract" />,
+  },
+  {
+    id: "parties",
+    label: "거래처 마스터",
+    group: "곧 붙일 것 (2차)",
+    hint: "슬랙 매칭 · VAT 표기",
+    stage: 2,
+    render: () => <MastersScreen kind="party" />,
+  },
+  {
+    id: "projects",
+    label: "프로젝트 원장",
+    group: "곧 붙일 것 (2차)",
+    hint: "귀속 단위",
+    stage: 2,
+    render: () => <MastersScreen kind="project" />,
+  },
+  {
+    id: "journals",
+    label: "전표 · 분개장",
+    group: "곧 붙일 것 (2차)",
+    hint: "자동 분개 · 시산표",
+    stage: 2,
+    render: () => <JournalsScreen />,
+  },
+  {
+    id: "intake",
+    label: "수집 검수함",
+    group: "곧 붙일 것 (2차)",
+    hint: "슬랙 · 은행 · 카드",
+    stage: 2,
+    render: () => <IntakeScreen />,
+  },
+  {
+    id: "notifications",
+    label: "알림 규칙",
+    group: "곧 붙일 것 (2차)",
+    hint: "T0~T3 · 대표 3건 상한",
+    stage: 2,
+    render: () => <NotificationsScreen />,
+  },
+  {
+    id: "pnl-bu",
+    label: "사업부 손익",
+    group: "손익 · 재무제표 (3차)",
+    hint: "회계 계단 · 관리 계단",
+    stage: 3,
+    render: () => <PnlScreen variant="bu" />,
+  },
+  {
+    id: "pnl-project",
+    label: "프로젝트 마진",
+    group: "손익 · 재무제표 (3차)",
+    hint: "기여이익",
+    stage: 3,
+    render: () => <PnlScreen variant="project" />,
+  },
+  {
+    id: "cost",
+    label: "비용 구조",
+    group: "손익 · 재무제표 (3차)",
+    hint: "운영비 분해",
+    stage: 3,
+    render: () => <PnlScreen variant="cost" />,
+  },
+  {
+    id: "burnrate",
+    label: "번레이트 마스터",
+    group: "손익 · 재무제표 (3차)",
+    hint: "런웨이 3종",
+    stage: 3,
+    render: () => <BurnRateScreen />,
+  },
+  {
+    id: "fs",
+    label: "재무제표 5종",
+    group: "손익 · 재무제표 (3차)",
+    hint: "전표 누계에서 생성",
+    stage: 3,
+    render: () => <FinancialStatementsScreen />,
+  },
+  {
+    id: "vat",
+    label: "세금계산서 · 부가세",
+    group: "손익 · 재무제표 (3차)",
+    hint: "공급가액 · 세액",
+    stage: 3,
+    render: () => <OpsScreen variant="vat" />,
+  },
+  {
+    id: "hometax",
+    label: "홈택스 연동",
+    group: "손익 · 재무제표 (3차)",
+    hint: "연동 준비 상태",
+    stage: 3,
+    render: () => <OpsScreen variant="hometax" />,
+  },
+  {
+    id: "closing",
+    label: "월 마감",
+    group: "기준 · 통제 (3차)",
+    hint: "blockers가 비어야 성공",
+    stage: 3,
+    render: () => <ClosingScreen />,
+  },
+  {
+    id: "settings",
+    label: "기준값",
+    group: "기준 · 통제 (3차)",
+    hint: "임시값 · 기준선",
+    stage: 3,
+    render: () => <SettingsScreen />,
+  },
+  {
+    id: "budget",
+    label: "예산 대비 실적",
+    group: "기준 · 통제 (3차)",
+    hint: "예산 등록 단위만",
+    stage: 3,
+    render: () => <OpsScreen variant="budget" />,
+  },
+  {
+    id: "allocation",
+    label: "공통비 배부",
+    group: "기준 · 통제 (3차)",
+    hint: "두 계단 일치 검증",
+    stage: 3,
+    render: () => <OpsScreen variant="allocation" />,
+  },
+  {
+    id: "reliability",
+    label: "지표 신뢰도",
+    group: "기준 · 통제 (3차)",
+    hint: "확정 · 추정 · N",
+    stage: 3,
+    render: () => <GovernanceScreen variant="reliability" />,
+  },
+  {
+    id: "permissions",
+    label: "권한 · 내부통제",
+    group: "기준 · 통제 (3차)",
+    hint: "역할 매트릭스",
+    stage: 3,
+    render: () => <GovernanceScreen variant="permissions" />,
+  },
+  {
+    id: "audit",
+    label: "변경 이력",
+    group: "기준 · 통제 (3차)",
+    hint: "감사로그",
+    stage: 3,
+    render: () => <GovernanceScreen variant="audit" />,
+  },
+  {
+    id: "report",
+    label: "보고서 빌더",
+    group: "기준 · 통제 (3차)",
+    hint: "탭 구분 텍스트",
+    stage: 3,
+    render: () => <OpsScreen variant="report" />,
   },
 ];
 
@@ -146,7 +369,7 @@ export default function ErpApp() {
           <nav className="erp-rail" aria-label="화면">
             <div className="erp-rail-brand">
               DINOSTUDIO
-              <small>경영관리 시스템 · 1차 오픈 8화면</small>
+              <small>경영관리 시스템 · 33화면 (1~3차)</small>
             </div>
             {GROUPS.map(group => (
               <div className="erp-rail-group" key={group}>
@@ -157,8 +380,12 @@ export default function ErpApp() {
                     type="button"
                     aria-current={item.id === screenId ? "page" : undefined}
                     onClick={() => ui.goto(item.id)}
+                    title={item.hint}
                   >
                     <span>{item.label}</span>
+                    <span className="erp-null" style={{ fontSize: 10 }}>
+                      {item.stage}차
+                    </span>
                   </button>
                 ))}
               </div>
@@ -277,7 +504,10 @@ function CommandPalette({
           {matches.map((item, index) => (
             <li key={item.id} data-active={index === cursor}>
               <button type="button" onClick={() => onPick(item.id)}>
-                <span>{item.label}</span>
+                <span>
+                  {item.label}{" "}
+                  <span className="erp-null">· {item.stage}차</span>
+                </span>
                 <span className="erp-null">{item.hint}</span>
               </button>
             </li>

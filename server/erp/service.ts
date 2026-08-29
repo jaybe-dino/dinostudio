@@ -7,6 +7,20 @@
  *   · 승인 없이는 지표가 아니다 (원칙 7) · 모르면 계산불가 (원칙 8)
  */
 import {
+  NOTIFICATION_RULES,
+  applyCeoCap,
+  buildArReport,
+  buildDebtReport,
+  buildFinancialStatements,
+  buildForecast,
+  buildJournal,
+  buildPnl,
+  buildRunway,
+  closingBlockers,
+  evaluateNotifications,
+  opexBreakdown,
+  segmentPnl,
+  trialBalance,
   buildCashflow,
   canApproveAmount,
   cancelCode,
@@ -28,6 +42,13 @@ import {
   STATUS_RULES,
 } from "@shared/erp";
 import type {
+  Contract,
+  Debt,
+  DebtSchedule,
+  Party,
+  Period,
+  Project,
+  Scenario,
   CashflowUnit,
   Direction,
   Entry,
@@ -97,7 +118,11 @@ export class LedgerService {
       this.store.listSnapshots(),
     ]);
     const blocks = buildCashflow(entries, snapshots, unit);
-    const undecided = entries.filter(e => e.status === "undecided");
+    // 현금흐름표의 「n건 제외 중」은 이 화면의 모집단(입출금일이 있는 건)에 대한 것이다.
+    // 아직 들어오지 않은 채권처럼 입출금일이 없는 건은 애초에 어느 블록에도 없다.
+    const undecided = entries.filter(
+      e => e.status === "undecided" && e.cashDate != null
+    );
     return {
       unit,
       blocks,
@@ -164,6 +189,248 @@ export class LedgerService {
 
   async auditTrail(filter: { table?: string; rowId?: string }) {
     return this.store.listAudit(filter);
+  }
+
+  /**
+   * 오늘 — D-day · 연체 판정의 기준일.
+   * setting.today_override가 있으면 그것을 쓴다. 이관 시점(2026-08-27) 기준으로
+   * 사양서의 D-day를 재현·검증할 수 있어야 하기 때문이다.
+   */
+  private async today(): Promise<string> {
+    const settings = await this.store.listSettings();
+    return (
+      settingValue<string>(settings, "today_override") ??
+      new Date().toISOString().slice(0, 10)
+    );
+  }
+
+  /** GET /ar — 미수 / 발행 대기 / DSO (§9.3) */
+  async ar() {
+    const [entries, parties, contracts, today] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listParties(),
+      this.store.listContracts(),
+      this.today(),
+    ]);
+    return buildArReport(entries, parties, contracts, today);
+  }
+
+  /** GET /debt — 차입 원장 + D-day + 알람 상태 (§9.4) */
+  async debt() {
+    const [debts, settings, today] = await Promise.all([
+      this.store.listDebts(),
+      this.store.listSettings(),
+      this.today(),
+    ]);
+    return buildDebtReport(
+      debts,
+      today,
+      settingValue<number>(settings, "debt_long_term_total")
+    );
+  }
+
+  /** GET /forecast/13w — 주차별 잔액 · 예상런웨이 (§9.5) */
+  async forecast(scenario: Scenario = "Base") {
+    const [entries, schedules, settings, today] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listDebtSchedules(),
+      this.store.listSettings(),
+      this.today(),
+    ]);
+    return buildForecast(entries, schedules, {
+      today,
+      openingCash: settingValue<number>(settings, "cash_on_hand"),
+      scenario,
+      pipelineProbability: settingValue<Record<string, number>>(
+        settings,
+        "pipeline_probability"
+      ),
+    });
+  }
+
+  /** 전표 · 분개장 + 시산표 */
+  async journals() {
+    const [journals, entries] = await Promise.all([
+      this.store.listJournals(),
+      this.store.listEntries(),
+    ]);
+    const byId = new Map(entries.map(e => [e.id, e]));
+    return {
+      journals: journals.map(j => ({
+        ...j,
+        entryCode: byId.get(j.entryId)?.code ?? j.entryId,
+      })),
+      trialBalance: trialBalance(journals),
+    };
+  }
+
+  /** 마스터 — 거래처 · 프로젝트 · 계약 · 차입 · 검수함 */
+  async masters() {
+    const [parties, projects, contracts, debts, schedules, intakes, periods] =
+      await Promise.all([
+        this.store.listParties(),
+        this.store.listProjects(),
+        this.store.listContracts(),
+        this.store.listDebts(),
+        this.store.listDebtSchedules(),
+        this.store.listIntakes(),
+        this.store.listPeriods(),
+      ]);
+    return { parties, projects, contracts, debts, schedules, intakes, periods };
+  }
+
+  async upsertMaster(
+    kind: "party" | "project" | "contract" | "debt" | "debtSchedule",
+    payload: Party | Project | Contract | Debt | DebtSchedule,
+    actor: Actor
+  ) {
+    let saved: unknown;
+    if (kind === "party")
+      saved = await this.store.upsertParty(payload as Party);
+    else if (kind === "project")
+      saved = await this.store.upsertProject(payload as Project);
+    else if (kind === "contract")
+      saved = await this.store.upsertContract(payload as Contract);
+    else if (kind === "debt")
+      saved = await this.store.upsertDebt(payload as Debt);
+    else saved = await this.store.upsertDebtSchedule(payload as DebtSchedule);
+    await this.audit(
+      kind,
+      (payload as { id: string }).id,
+      "upsert",
+      null,
+      saved,
+      actor
+    );
+    return saved;
+  }
+
+  /** §12 알림 — 도착지가 없어도 알림함에는 남는다 (B7) */
+  async notifications(actor: Actor) {
+    const [cashPosition, ar, debt, today] = await Promise.all([
+      this.cashPosition({}, actor),
+      this.ar(),
+      this.debt(),
+      this.today(),
+    ]);
+    const evaluated = evaluateNotifications({ cashPosition, ar, debt, today });
+    const { delivered, capped } = applyCeoCap(evaluated, NOTIFICATION_RULES);
+    return { rules: NOTIFICATION_RULES, delivered, capped };
+  }
+
+  /** GET /metrics/runway — 단순 · 예상 · 예약 3종 (§9.6 · T15) */
+  async runway() {
+    const [entries, periods, settings, forecast, debts] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listPeriods(),
+      this.store.listSettings(),
+      this.forecast("Base"),
+      this.store.listDebts(),
+    ]);
+    const confirmedInterest = debts
+      .map(d => d.monthlyInterest)
+      .filter((v): v is number => v != null);
+    return {
+      ...buildRunway({
+        entries,
+        periods,
+        cashOnHand: settingValue<number>(settings, "cash_on_hand"),
+        payrollMonthly: settingValue<number>(
+          settings,
+          "payroll_monthly_actual"
+        ),
+        subscriptionsRegistered: settingValue<unknown[]>(
+          settings,
+          "subscriptions"
+        )?.length
+          ? true
+          : false,
+        // 약정서가 없으므로(B2) 이자 월액은 확정으로 보지 않는다
+        debtMonthlyInterest:
+          debts.every(d => d.maturityDate != null) &&
+          confirmedInterest.length > 0
+            ? confirmedInterest.reduce((a, b) => a + b, 0)
+            : null,
+        expectedRunwayWeeks: forecast.expectedRunwayWeeks,
+      }),
+      opex: opexBreakdown(entries),
+    };
+  }
+
+  /** GET /pnl — 회계 계단 + 관리 계단 동시 반환 (§9.7) */
+  async pnl(options: {
+    from?: string | null;
+    to?: string | null;
+    bu?: string | null;
+    project?: string | null;
+  }) {
+    const entries = await this.store.listEntries();
+    return {
+      total: buildPnl(entries, {
+        from: options.from,
+        to: options.to,
+        buCode: options.bu,
+        projectId: options.project,
+      }),
+      byBu: segmentPnl(entries, "buCode", {
+        from: options.from,
+        to: options.to,
+      }),
+      byProject: segmentPnl(entries, "projectId", {
+        from: options.from,
+        to: options.to,
+      }),
+    };
+  }
+
+  /** GET /fs/:kind — 재무제표 5종 (§9.8) */
+  async financialStatements(ym: string | null) {
+    const [entries, journals, periods, settings] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listJournals(),
+      this.store.listPeriods(),
+      this.store.listSettings(),
+    ]);
+    return buildFinancialStatements(entries, journals, {
+      ym,
+      periods,
+      openingEquity: settingValue<number>(settings, "opening_equity"),
+    });
+  }
+
+  /** POST /periods/:ym/close — blockers가 비어야만 성공 (T12) */
+  async closePeriod(ym: string, actor: Actor) {
+    const [entries, snapshots] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listSnapshots(),
+    ]);
+    const failures = runMigrationChecks(entries, snapshots)
+      .filter(c => c.verdict === "fail")
+      .map(c => `${c.id} ${c.name} — ${c.detail}`);
+    const blockers = closingBlockers(entries, ym, failures);
+    const period: Period = {
+      ym,
+      status: blockers.length === 0 ? "closed" : "open",
+      closedBy: blockers.length === 0 ? actor.id : null,
+      closedAt: blockers.length === 0 ? nowIso() : null,
+      blockers,
+    };
+    await this.store.upsertPeriod(period);
+    await this.audit(
+      "period",
+      ym,
+      blockers.length === 0 ? "close" : "close_rejected",
+      null,
+      period,
+      actor
+    );
+    if (blockers.length > 0)
+      throw erpError(
+        "period_closed",
+        { ym, blockers },
+        `${ym} 마감 불가 — ${blockers.length}건이 막고 있습니다`
+      );
+    return period;
   }
 
   // ── 입력 · 수정 ──────────────────────────────────────────────────────────
@@ -241,6 +508,7 @@ export class LedgerService {
       bankAccount: null,
       invoiceIssued: null,
       invoiceNo: null,
+      invoiceDate: null,
       source: input.source ?? "manual",
       sourceRef: input.sourceRef ?? null,
       undecidedReason,
@@ -692,44 +960,8 @@ export class LedgerService {
 
   /** 원장이 확정되는 순간 전표(분개)가 자동 생성된다. 사람이 분개를 만들지 않는다 (원칙 12). */
   private async createJournal(entry: Entry): Promise<Journal | null> {
-    if (entry.amount == null || !entry.accountCode) return null;
-    const journalId = randomUUID();
-    const counter = counterAccountFor(entry.payMethod);
-    const amount = Math.abs(entry.amount);
-    const sign = entry.amount < 0 ? -1 : 1;
-    // 지출: 비용/자산 차변 · 현금 대변. 수입: 현금 차변 · 수익/부채 대변.
-    const outward = entry.direction === "out";
-    const debitAccount = outward ? entry.accountCode : counter;
-    const creditAccount = outward ? counter : entry.accountCode;
-    const journal: Journal = {
-      id: journalId,
-      entryId: entry.id,
-      journalDate: entry.cashDate ?? entry.accrualDate ?? nowIso().slice(0, 10),
-      memo: entry.title || entry.noteRaw,
-      auto: true,
-      reversedBy: null,
-      lines: [
-        {
-          id: randomUUID(),
-          journalId,
-          accountCode: debitAccount,
-          debit: amount * sign,
-          credit: 0,
-          buCode: entry.buCode,
-          projectId: entry.projectId,
-        },
-        {
-          id: randomUUID(),
-          journalId,
-          accountCode: creditAccount,
-          debit: 0,
-          credit: amount * sign,
-          buCode: entry.buCode,
-          projectId: entry.projectId,
-        },
-      ],
-    };
-    await this.store.appendJournal(journal);
+    const journal = buildJournal(entry, () => randomUUID());
+    if (journal) await this.store.appendJournal(journal);
     return journal;
   }
 

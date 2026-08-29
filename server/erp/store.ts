@@ -9,17 +9,30 @@
  */
 import {
   ACCOUNTS,
+  SEED_AR_ENTRIES,
   SEED_DAY_SNAPSHOTS,
+  SEED_DEBTS,
   SEED_ENTRIES,
+  SEED_PARTIES,
+  SEED_PROJECTS,
   SEED_SETTINGS,
+  SEED_STAGE2_SETTINGS,
+  buildJournal,
 } from "@shared/erp";
 import type {
   Account,
   Approval,
   AuditLog,
+  Contract,
+  Debt,
+  DebtSchedule,
   Entry,
   EntryRevision,
+  Intake,
   Journal,
+  Party,
+  Period,
+  Project,
   Setting,
 } from "@shared/erp";
 import type { SeedDaySnapshot } from "@shared/erp/seed";
@@ -58,6 +71,21 @@ export interface LedgerStore {
   listAudit(filter?: { table?: string; rowId?: string }): Promise<AuditLog[]>;
   appendJournal(journal: Journal): Promise<void>;
   listJournals(entryId?: string): Promise<Journal[]>;
+  /* 2차 · 3차 마스터 */
+  listParties(): Promise<Party[]>;
+  upsertParty(party: Party): Promise<Party>;
+  listProjects(): Promise<Project[]>;
+  upsertProject(project: Project): Promise<Project>;
+  listContracts(): Promise<Contract[]>;
+  upsertContract(contract: Contract): Promise<Contract>;
+  listDebts(): Promise<Debt[]>;
+  upsertDebt(debt: Debt): Promise<Debt>;
+  listDebtSchedules(): Promise<DebtSchedule[]>;
+  upsertDebtSchedule(schedule: DebtSchedule): Promise<DebtSchedule>;
+  listIntakes(): Promise<Intake[]>;
+  upsertIntake(intake: Intake): Promise<Intake>;
+  listPeriods(): Promise<Period[]>;
+  upsertPeriod(period: Period): Promise<Period>;
 }
 
 function matches(entry: Entry, filter: EntryFilter): boolean {
@@ -85,6 +113,15 @@ function matches(entry: Entry, filter: EntryFilter): boolean {
 }
 
 /** §5.4 시드로 초기화된 메모리 저장소. DB 없이도 8화면이 실제로 동작한다. */
+
+/** 메모리 저장소용 upsert — 지정한 키 기준 */
+function upsertBy<T, K extends keyof T>(list: T[], item: T, key: K): T {
+  const index = list.findIndex(row => row[key] === item[key]);
+  if (index < 0) list.push({ ...item });
+  else list[index] = { ...item };
+  return { ...item };
+}
+
 export class InMemoryLedgerStore implements LedgerStore {
   private entries: Entry[];
   private snapshots: SeedDaySnapshot[];
@@ -93,17 +130,43 @@ export class InMemoryLedgerStore implements LedgerStore {
   private approvals: Approval[] = [];
   private audits: AuditLog[] = [];
   private journals: Journal[] = [];
+  private parties: Party[];
+  private projects: Project[];
+  private contracts: Contract[] = [];
+  private debts: Debt[];
+  private debtSchedules: DebtSchedule[] = [];
+  private intakes: Intake[] = [];
+  private periods: Period[] = [];
 
   constructor(seed?: {
     entries?: Entry[];
     snapshots?: SeedDaySnapshot[];
     settings?: Setting[];
   }) {
-    this.entries = (seed?.entries ?? SEED_ENTRIES).map(e => ({ ...e }));
+    // 1차 원장 27건 + 2차 채권·발행대기 7건. 채권은 미입금이라 확정 합계를 바꾸지 않는다.
+    this.entries = (seed?.entries ?? [...SEED_ENTRIES, ...SEED_AR_ENTRIES]).map(
+      e => ({ ...e })
+    );
     this.snapshots = (seed?.snapshots ?? SEED_DAY_SNAPSHOTS).map(s => ({
       ...s,
     }));
-    this.settings = (seed?.settings ?? SEED_SETTINGS).map(s => ({ ...s }));
+    this.settings = (
+      seed?.settings ?? [...SEED_SETTINGS, ...SEED_STAGE2_SETTINGS]
+    ).map(s => ({
+      ...s,
+    }));
+    this.parties = SEED_PARTIES.map(p => ({ ...p }));
+    this.projects = SEED_PROJECTS.map(p => ({ ...p }));
+    this.debts = SEED_DEBTS.map(d => ({ ...d }));
+
+    // 확정된 건은 전표가 있어야 한다 (§7.3) — 이관 확정분의 전표를 여기서 만들어 둔다.
+    let seq = 0;
+    const newId = () => `JRN-SEED-${String((seq += 1)).padStart(4, "0")}`;
+    for (const entry of this.entries) {
+      if (entry.status !== "confirmed") continue;
+      const journal = buildJournal(entry, newId);
+      if (journal) this.journals.push(journal);
+    }
   }
 
   async listEntries(filter: EntryFilter = {}): Promise<Entry[]> {
@@ -199,5 +262,48 @@ export class InMemoryLedgerStore implements LedgerStore {
     return entryId
       ? this.journals.filter(j => j.entryId === entryId)
       : [...this.journals];
+  }
+
+  async listParties(): Promise<Party[]> {
+    return this.parties.map(p => ({ ...p }));
+  }
+  async upsertParty(party: Party): Promise<Party> {
+    return upsertBy(this.parties, party, "id");
+  }
+  async listProjects(): Promise<Project[]> {
+    return this.projects.map(p => ({ ...p }));
+  }
+  async upsertProject(project: Project): Promise<Project> {
+    return upsertBy(this.projects, project, "id");
+  }
+  async listContracts(): Promise<Contract[]> {
+    return this.contracts.map(c => ({ ...c }));
+  }
+  async upsertContract(contract: Contract): Promise<Contract> {
+    return upsertBy(this.contracts, contract, "id");
+  }
+  async listDebts(): Promise<Debt[]> {
+    return this.debts.map(d => ({ ...d }));
+  }
+  async upsertDebt(debt: Debt): Promise<Debt> {
+    return upsertBy(this.debts, debt, "id");
+  }
+  async listDebtSchedules(): Promise<DebtSchedule[]> {
+    return this.debtSchedules.map(s => ({ ...s }));
+  }
+  async upsertDebtSchedule(schedule: DebtSchedule): Promise<DebtSchedule> {
+    return upsertBy(this.debtSchedules, schedule, "id");
+  }
+  async listIntakes(): Promise<Intake[]> {
+    return this.intakes.map(i => ({ ...i }));
+  }
+  async upsertIntake(intake: Intake): Promise<Intake> {
+    return upsertBy(this.intakes, intake, "id");
+  }
+  async listPeriods(): Promise<Period[]> {
+    return this.periods.map(p => ({ ...p }));
+  }
+  async upsertPeriod(period: Period): Promise<Period> {
+    return upsertBy(this.periods, period, "ym");
   }
 }

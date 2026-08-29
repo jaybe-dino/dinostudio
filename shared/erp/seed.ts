@@ -459,6 +459,7 @@ function toEntry(input: SeedEntryInput): Entry {
     bankAccount: null,
     invoiceIssued: null,
     invoiceNo: null,
+    invoiceDate: null,
     source: "migration",
     sourceRef: `sheet:${input.code}`,
     undecidedReason: input.undecidedReason ?? null,

@@ -20,6 +20,8 @@ import {
   StatusChip,
   Tile,
 } from "../components/Bits";
+import { EntryForm } from "../components/EntryForm";
+import { ExportModal } from "../components/ExportModal";
 import { DataTable, type Column } from "../components/DataTable";
 import { matchesQuery, useErpUi } from "../context";
 import { shortDate, won } from "../format";
@@ -51,6 +53,8 @@ export function LedgerScreen({
   const [priority, setPriority] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   const accounts = trpc.erp.accounts.useQuery();
   const list = trpc.erp.entries.list.useQuery({
@@ -197,6 +201,30 @@ export function LedgerScreen({
         />
       </div>
 
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <button
+          type="button"
+          className="erp-btn"
+          aria-pressed={showForm}
+          onClick={() => setShowForm(v => !v)}
+        >
+          {showForm ? "입력 닫기" : "원장에 직접 추가"}
+        </button>
+        <button
+          type="button"
+          className="erp-btn"
+          onClick={() => setShowExport(true)}
+        >
+          내보내기
+        </button>
+      </div>
+
+      {showForm ? (
+        <Card title="직접 추가" meta="어느 화면에서 넣어도 같은 원장입니다">
+          <EntryForm direction={direction} />
+        </Card>
+      ) : null}
+
       <Card title="필터 10종">
         <div className="erp-filters">
           <label className="erp-field">
@@ -316,6 +344,41 @@ export function LedgerScreen({
           }
         />
       </Card>
+
+      {showExport ? (
+        <ExportModal
+          title={title}
+          onClose={() => setShowExport(false)}
+          rows={[
+            [
+              "집행원장",
+              "입출금일",
+              "상태",
+              "항목",
+              "적요 원문",
+              "계정",
+              "원가성격",
+              "사업부",
+              "프로젝트",
+              "우선",
+              "금액",
+            ],
+            ...rows.map(e => [
+              e.code,
+              e.cashDate,
+              STATUS_RULES[e.status].label,
+              e.title,
+              e.noteRaw,
+              e.accountCode,
+              e.nature,
+              e.buCode,
+              e.projectId,
+              e.priorityOverride ?? e.priority,
+              e.amount,
+            ]),
+          ]}
+        />
+      ) : null}
 
       <Card title="원장 하나에서 갈라지는 화면">
         <p style={{ margin: 0 }}>

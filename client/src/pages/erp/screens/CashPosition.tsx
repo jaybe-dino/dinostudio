@@ -13,6 +13,8 @@ import {
   StatusChip,
   Tile,
 } from "../components/Bits";
+import { EntryForm } from "../components/EntryForm";
+import { ExportModal } from "../components/ExportModal";
 import { DataTable, type Column } from "../components/DataTable";
 import { matchesQuery, useErpUi } from "../context";
 import { shortDate, shortfallTone, signedWon, won } from "../format";
@@ -23,6 +25,8 @@ export function CashPositionScreen() {
   const { openEntry, query } = useErpUi();
   const [includeUndecided, setIncludeUndecided] = useState(true);
   const [overrides, setOverrides] = useState<SimOverride[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [draft, setDraft] = useState<{
     code: string;
     priority: Priority;
@@ -210,6 +214,33 @@ export function CashPositionScreen() {
       {live.error ? <Note tone="alert">{live.error.message}</Note> : null}
       {simulate.error ? (
         <Note tone="alert">{simulate.error.message}</Note>
+      ) : null}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <button
+          type="button"
+          className="erp-btn"
+          aria-pressed={showForm}
+          onClick={() => setShowForm(v => !v)}
+        >
+          {showForm ? "입력 닫기" : "지출 항목 직접 추가"}
+        </button>
+        <button
+          type="button"
+          className="erp-btn"
+          onClick={() => setShowExport(true)}
+        >
+          내보내기
+        </button>
+      </div>
+
+      {showForm ? (
+        <Card
+          title="지출 항목 직접 추가"
+          meta="추가된 건은 승인해야 지급 목록에 들어갑니다"
+        >
+          <EntryForm direction="out" />
+        </Card>
       ) : null}
 
       <Card title="지급 소요 목록" meta={`${lines.length}건`} body={false}>

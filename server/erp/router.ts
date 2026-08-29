@@ -325,6 +325,98 @@ export const erpRouter = router({
       ),
   }),
 
+  // ── 2차 파생 뷰 ──────────────────────────────────────────────────────────
+  ar: protectedProcedure.query(({ ctx }) => {
+    actorFrom(ctx);
+    return run(() => getLedgerService().ar());
+  }),
+
+  debt: protectedProcedure.query(({ ctx }) => {
+    actorFrom(ctx);
+    return run(() => getLedgerService().debt());
+  }),
+
+  forecast: protectedProcedure
+    .input(
+      z
+        .object({
+          scenario: z.enum(["Base", "Stress", "Upside"]).default("Base"),
+        })
+        .optional()
+    )
+    .query(({ ctx, input }) => {
+      actorFrom(ctx);
+      return run(() => getLedgerService().forecast(input?.scenario ?? "Base"));
+    }),
+
+  journals: protectedProcedure.query(({ ctx }) => {
+    actorFrom(ctx);
+    return run(() => getLedgerService().journals());
+  }),
+
+  masters: protectedProcedure.query(({ ctx }) => {
+    actorFrom(ctx);
+    return run(() => getLedgerService().masters());
+  }),
+
+  upsertMaster: protectedProcedure
+    .input(
+      z.object({
+        kind: z.enum(["party", "project", "contract", "debt", "debtSchedule"]),
+        payload: z.record(z.string(), z.unknown()),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      run(() =>
+        getLedgerService().upsertMaster(
+          input.kind,
+          input.payload as never,
+          actorFrom(ctx)
+        )
+      )
+    ),
+
+  notifications: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().notifications(actorFrom(ctx)))
+  ),
+
+  // ── 3차 파생 뷰 ──────────────────────────────────────────────────────────
+  runway: protectedProcedure.query(({ ctx }) => {
+    actorFrom(ctx);
+    return run(() => getLedgerService().runway());
+  }),
+
+  pnl: protectedProcedure
+    .input(
+      z
+        .object({
+          from: z.string().nullable().optional(),
+          to: z.string().nullable().optional(),
+          bu: z.string().nullable().optional(),
+          project: z.string().nullable().optional(),
+        })
+        .optional()
+    )
+    .query(({ ctx, input }) => {
+      actorFrom(ctx);
+      return run(() => getLedgerService().pnl(input ?? {}));
+    }),
+
+  financialStatements: protectedProcedure
+    .input(z.object({ ym: z.string().nullable().default(null) }).optional())
+    .query(({ ctx, input }) => {
+      actorFrom(ctx);
+      return run(() =>
+        getLedgerService().financialStatements(input?.ym ?? null)
+      );
+    }),
+
+  closePeriod: protectedProcedure
+    .input(z.object({ ym: z.string() }))
+    .mutation(({ ctx, input }) =>
+      run(() => getLedgerService().closePeriod(input.ym, actorFrom(ctx)))
+    ),
+
   // ── 마스터 · 운영 ────────────────────────────────────────────────────────
   accounts: protectedProcedure.query(({ ctx }) => {
     actorFrom(ctx);

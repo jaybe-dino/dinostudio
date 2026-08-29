@@ -4,9 +4,10 @@
  * 승인 대기는 블록마다 분리된 패널에서 그 자리에서 승인한다 (원칙 13).
  */
 import { accountLabel, type CashflowUnit } from "@shared/erp";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Money, Note, PriorityChip, Tile } from "../components/Bits";
+import { ExportModal } from "../components/ExportModal";
 import { useErpUi, matchesQuery } from "../context";
 import { blockLabel, nullReasonText, shortDate, won } from "../format";
 
@@ -25,6 +26,8 @@ export function CashflowScreen() {
   const [visible, setVisible] = useState(PAGE);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [showExport, setShowExport] = useState(false);
+  const sentinel = useRef<HTMLDivElement | null>(null);
 
   const cashflow = trpc.erp.views.cashflow.useQuery({ unit });
   const bulk = trpc.erp.approvals.bulk.useMutation({
@@ -58,6 +61,21 @@ export function CashflowScreen() {
     [cashflow.data]
   );
   const shown = blocks.slice(0, visible);
+
+  // 고정 기간 없이 최신순으로 3블록씩 추가 로드 (§9.1 무한 스크롤)
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(e => e.isIntersecting))
+          setVisible(v => Math.min(v + PAGE, blocks.length));
+      },
+      { rootMargin: "240px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [blocks.length]);
 
   return (
     <div className="erp-page">
@@ -102,6 +120,13 @@ export function CashflowScreen() {
           }
         >
           전체 펼치기
+        </button>
+        <button
+          type="button"
+          className="erp-btn"
+          onClick={() => setShowExport(true)}
+        >
+          내보내기
         </button>
         {cashflow.data ? (
           <span className="erp-chip" data-tone="alert">
@@ -336,6 +361,33 @@ export function CashflowScreen() {
           note="어느 화면에서 입력해도 같은 원장에 적재됩니다"
         />
       </div>
+
+      {showExport ? (
+        <ExportModal
+          title={`현금흐름표 · ${unit === "day" ? "일별" : unit === "month" ? "월별" : "연별"}`}
+          onClose={() => setShowExport(false)}
+          rows={[
+            [
+              "구간",
+              "시작",
+              "지출",
+              "입금",
+              "종료",
+              "계산 불가 사유",
+              "판정 대기",
+            ],
+            ...blocks.map(b => [
+              b.key,
+              b.open,
+              b.outSum,
+              b.inSum,
+              b.close,
+              b.close == null ? nullReasonText(b.nullReason) : "",
+              b.undecided.map(u => u.code).join(" "),
+            ]),
+          ]}
+        />
+      ) : null}
 
       <Card title="미확정 승계는 버그가 아니라 요구사항입니다">
         <p style={{ margin: 0 }}>

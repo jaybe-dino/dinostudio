@@ -125,6 +125,8 @@ export const erpEntries = mysqlTable(
     bankAccount: varchar("bankAccount", { length: 64 }),
     invoiceIssued: boolean("invoiceIssued"),
     invoiceNo: varchar("invoiceNo", { length: 64 }),
+    /** §9.3 입금예정일 산출의 기준일 */
+    invoiceDate: date("invoiceDate", { mode: "string" }),
     source: mysqlEnum("source", SOURCE_VALUES).notNull(),
     sourceRef: varchar("sourceRef", { length: 190 }),
     undecidedReason: varchar("undecidedReason", { length: 300 }),
@@ -287,6 +289,141 @@ export const erpRolePermissions = mysqlTable(
     uniqueIndex("erp_role_permission_uq").on(table.role, table.resource),
   ]
 );
+
+/* ─── 2차 · 3차 테이블 (§6.3) ────────────────────────────────────────────── */
+
+/** 거래처 — vatMode가 사업부별 VAT 표기 차이를 흡수한다 (B3) */
+export const erpParties = mysqlTable("erp_party", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  bizNo: varchar("bizNo", { length: 20 }),
+  bankAccount: varchar("bankAccount", { length: 64 }),
+  vatMode: varchar("vatMode", { length: 20 }),
+  contact: varchar("contact", { length: 120 }),
+  memo: text("memo"),
+});
+
+/** 계약 — 입금예정일 산출의 근거 (§9.3) */
+export const erpContracts = mysqlTable(
+  "erp_contract",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    code: varchar("code", { length: 32 }).notNull(),
+    partyId: varchar("partyId", { length: 36 }),
+    projectId: varchar("projectId", { length: 36 }),
+    amountTotal: bigint("amountTotal", { mode: "number" }),
+    installments: json("installments"),
+    /** null이면 입금예정일을 산출할 수 없다 — 화면에 「계약서 확인」 */
+    paymentTermsDays: int("paymentTermsDays"),
+    paymentTermsText: varchar("paymentTermsText", { length: 200 }),
+    driveUrl: text("driveUrl"),
+    isAgency: boolean("isAgency").notNull().default(false),
+  },
+  table => [uniqueIndex("erp_contract_code_uq").on(table.code)]
+);
+
+export const erpProjects = mysqlTable(
+  "erp_project",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    code: varchar("code", { length: 32 }).notNull(),
+    name: varchar("name", { length: 200 }).notNull(),
+    buCode: mysqlEnum("buCode", BU_VALUES),
+    status: varchar("status", { length: 40 }).notNull().default("진행"),
+    budget: bigint("budget", { mode: "number" }),
+    startDate: date("startDate", { mode: "string" }),
+    endDate: date("endDate", { mode: "string" }),
+  },
+  table => [uniqueIndex("erp_project_code_uq").on(table.code)]
+);
+
+/** 차입 — maturityDate가 null이면 만기 알람이 발동하지 않는다 (B2) */
+export const erpDebts = mysqlTable(
+  "erp_debt",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    code: varchar("code", { length: 32 }).notNull(),
+    creditor: varchar("creditor", { length: 200 }).notNull(),
+    /** null = 건별 잔액 미분해 */
+    principal: bigint("principal", { mode: "number" }),
+    rate: int("rate"),
+    maturityDate: date("maturityDate", { mode: "string" }),
+    repayType: varchar("repayType", { length: 60 }),
+    isRelatedParty: boolean("isRelatedParty").notNull().default(false),
+    monthlyInterest: bigint("monthlyInterest", { mode: "number" }),
+    term: mysqlEnum("term", ["단기", "장기"]).notNull(),
+    docUrl: text("docUrl"),
+  },
+  table => [uniqueIndex("erp_debt_code_uq").on(table.code)]
+);
+
+export const erpDebtSchedules = mysqlTable(
+  "erp_debt_schedule",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    debtId: varchar("debtId", { length: 36 }).notNull(),
+    dueDate: date("dueDate", { mode: "string" }).notNull(),
+    principal: bigint("principal", { mode: "number" }).notNull().default(0),
+    interest: bigint("interest", { mode: "number" }).notNull().default(0),
+  },
+  table => [index("erp_debt_schedule_debt_idx").on(table.debtId)]
+);
+
+/** 수집 검수함 — 원장 진입 전 대기열. 파싱 실패도 여기 남는다. */
+export const erpIntakes = mysqlTable(
+  "erp_intake",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    source: mysqlEnum("source", SOURCE_VALUES).notNull(),
+    sourceRef: varchar("sourceRef", { length: 190 }),
+    raw: text("raw").notNull(),
+    parsed: json("parsed"),
+    status: varchar("status", { length: 30 }).notNull().default("waiting"),
+    failReason: varchar("failReason", { length: 300 }),
+    entryId: varchar("entryId", { length: 36 }),
+    receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  },
+  table => [
+    uniqueIndex("erp_intake_source_uq").on(table.source, table.sourceRef),
+  ]
+);
+
+export const erpNotificationRules = mysqlTable("erp_notification_rule", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  trigger: varchar("trigger", { length: 120 }).notNull(),
+  tier: varchar("tier", { length: 10 }).notNull(),
+  recipients: json("recipients"),
+  channel: varchar("channel", { length: 40 }).notNull(),
+  active: boolean("active").notNull().default(true),
+  /** 만기 미확인처럼 규칙은 있으나 발동할 수 없는 상태 */
+  blockedReason: varchar("blockedReason", { length: 300 }),
+});
+
+export const erpNotifications = mysqlTable(
+  "erp_notification",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    ruleId: varchar("ruleId", { length: 36 }).notNull(),
+    title: varchar("title", { length: 300 }).notNull(),
+    body: text("body").notNull(),
+    screen: varchar("screen", { length: 60 }),
+    sentAt: timestamp("sentAt"),
+    readAt: timestamp("readAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => [index("erp_notification_rule_idx").on(table.ruleId)]
+);
+
+/** 월 마감 잠금 — closed면 그 기간 entry 수정을 거부한다 (3차) */
+export const erpPeriods = mysqlTable("erp_period", {
+  ym: varchar("ym", { length: 7 }).primaryKey(),
+  status: mysqlEnum("status", ["open", "closing", "closed"])
+    .notNull()
+    .default("open"),
+  closedBy: varchar("closedBy", { length: 64 }),
+  closedAt: timestamp("closedAt"),
+  blockers: json("blockers"),
+});
 
 export type ErpEntryRow = typeof erpEntries.$inferSelect;
 export type InsertErpEntry = typeof erpEntries.$inferInsert;

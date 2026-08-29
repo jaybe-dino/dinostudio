@@ -7,6 +7,13 @@ import type {
   Account,
   Approval,
   AuditLog,
+  Contract,
+  Debt,
+  DebtSchedule,
+  Intake,
+  Party,
+  Period,
+  Project,
   Entry,
   EntryRevision,
   Journal,
@@ -22,8 +29,15 @@ import {
   erpDaySnapshots,
   erpEntries,
   erpEntryRevisions,
+  erpContracts,
+  erpDebtSchedules,
+  erpDebts,
+  erpIntakes,
   erpJournalLines,
   erpJournals,
+  erpParties,
+  erpPeriods,
+  erpProjects,
   erpSettings,
   type ErpEntryRow,
 } from "../../drizzle/erpSchema";
@@ -66,6 +80,7 @@ function toEntry(row: ErpEntryRow): Entry {
     bankAccount: row.bankAccount,
     invoiceIssued: row.invoiceIssued,
     invoiceNo: row.invoiceNo,
+    invoiceDate: row.invoiceDate,
     source: row.source,
     sourceRef: row.sourceRef,
     undecidedReason: row.undecidedReason,
@@ -330,5 +345,139 @@ export class DrizzleLedgerStore implements LedgerStore {
       ...h,
       lines: lines.filter(l => l.journalId === h.id).map(l => ({ ...l })),
     }));
+  }
+
+  /* ─── 2차 · 3차 마스터 ─────────────────────────────────────────────────── */
+
+  async listParties(): Promise<Party[]> {
+    return (
+      await this.db.select().from(erpParties).orderBy(asc(erpParties.name))
+    ).map(r => ({ ...r }));
+  }
+
+  async upsertParty(party: Party): Promise<Party> {
+    await this.db
+      .insert(erpParties)
+      .values(party)
+      .onDuplicateKeyUpdate({ set: { ...party } });
+    return party;
+  }
+
+  async listProjects(): Promise<Project[]> {
+    return (
+      await this.db.select().from(erpProjects).orderBy(asc(erpProjects.code))
+    ).map(r => ({ ...r }));
+  }
+
+  async upsertProject(project: Project): Promise<Project> {
+    await this.db
+      .insert(erpProjects)
+      .values(project)
+      .onDuplicateKeyUpdate({ set: { ...project } });
+    return project;
+  }
+
+  async listContracts(): Promise<Contract[]> {
+    const rows = await this.db
+      .select()
+      .from(erpContracts)
+      .orderBy(asc(erpContracts.code));
+    return rows.map(r => ({
+      ...r,
+      installments: (r.installments ?? []) as Contract["installments"],
+    }));
+  }
+
+  async upsertContract(contract: Contract): Promise<Contract> {
+    await this.db
+      .insert(erpContracts)
+      .values({ ...contract, installments: contract.installments })
+      .onDuplicateKeyUpdate({
+        set: { ...contract, installments: contract.installments },
+      });
+    return contract;
+  }
+
+  async listDebts(): Promise<Debt[]> {
+    return (
+      await this.db.select().from(erpDebts).orderBy(asc(erpDebts.code))
+    ).map(r => ({ ...r }));
+  }
+
+  async upsertDebt(debt: Debt): Promise<Debt> {
+    await this.db
+      .insert(erpDebts)
+      .values(debt)
+      .onDuplicateKeyUpdate({ set: { ...debt } });
+    return debt;
+  }
+
+  async listDebtSchedules(): Promise<DebtSchedule[]> {
+    return (
+      await this.db
+        .select()
+        .from(erpDebtSchedules)
+        .orderBy(asc(erpDebtSchedules.dueDate))
+    ).map(r => ({
+      ...r,
+    }));
+  }
+
+  async upsertDebtSchedule(schedule: DebtSchedule): Promise<DebtSchedule> {
+    await this.db
+      .insert(erpDebtSchedules)
+      .values(schedule)
+      .onDuplicateKeyUpdate({ set: { ...schedule } });
+    return schedule;
+  }
+
+  async listIntakes(): Promise<Intake[]> {
+    const rows = await this.db
+      .select()
+      .from(erpIntakes)
+      .orderBy(asc(erpIntakes.receivedAt));
+    return rows.map(r => ({
+      ...r,
+      parsed: (r.parsed ?? null) as Record<string, unknown> | null,
+      receivedAt: r.receivedAt.toISOString(),
+    }));
+  }
+
+  async upsertIntake(intake: Intake): Promise<Intake> {
+    const row = { ...intake, receivedAt: new Date(intake.receivedAt) };
+    await this.db
+      .insert(erpIntakes)
+      .values(row)
+      .onDuplicateKeyUpdate({ set: row });
+    return intake;
+  }
+
+  async listPeriods(): Promise<Period[]> {
+    const rows = await this.db
+      .select()
+      .from(erpPeriods)
+      .orderBy(asc(erpPeriods.ym));
+    return rows.map(r => ({
+      ym: r.ym,
+      status: r.status,
+      closedBy: r.closedBy,
+      closedAt: r.closedAt ? r.closedAt.toISOString() : null,
+      blockers: (r.blockers ?? []) as string[],
+    }));
+  }
+
+  async upsertPeriod(period: Period): Promise<Period> {
+    const row = {
+      ym: period.ym,
+      status: period.status,
+      closedBy: period.closedBy,
+      closedAt: period.closedAt ? new Date(period.closedAt) : null,
+      blockers: period.blockers,
+    };
+    await this.db
+      .insert(erpPeriods)
+      .values(row)
+      .onDuplicateKeyUpdate({ set: row });
+    return period;
   }
 }

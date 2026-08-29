@@ -15,6 +15,20 @@
       "when": 1776929390667,
       "tag": "0001_cynical_slipstream",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1787966227773,
+      "tag": "0002_thin_goblin_queen",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1787967842540,
+      "tag": "0003_perfect_supreme_intelligence",
+      "breakpoints": true
     }
   ]
 }
