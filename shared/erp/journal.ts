@@ -98,3 +98,29 @@ export function trialBalance(journals: Journal[]): TrialBalance {
     difference: debitTotal - creditTotal,
   };
 }
+
+/**
+ * §7.3 — 대체됨(superseded)의 전표 처리는 「역분개」다.
+ * 원본 전표를 지우지 않고 차·대를 뒤집은 전표를 하나 더 만들어 상계한다 (원칙 9).
+ * 이걸 하지 않으면 -R1의 전표와 원본 전표가 재무제표에 이중 계상된다.
+ */
+export function buildReversal(journal: Journal, newId: IdFactory): Journal {
+  const reversalId = newId();
+  return {
+    id: reversalId,
+    entryId: journal.entryId,
+    journalDate: journal.journalDate,
+    memo: `역분개 — ${journal.memo ?? ""}`.trim(),
+    auto: true,
+    reversedBy: journal.id,
+    lines: journal.lines.map(line => ({
+      id: newId(),
+      journalId: reversalId,
+      accountCode: line.accountCode,
+      debit: line.credit,
+      credit: line.debit,
+      buCode: line.buCode,
+      projectId: line.projectId,
+    })),
+  };
+}

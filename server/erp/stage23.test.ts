@@ -242,3 +242,44 @@ describe("§12 알림", () => {
     expect(blocked).toBe(true);
   });
 });
+
+describe("§7.3 대체됨 — 전표는 역분개로 상계한다", () => {
+  it("확정 건을 수정하면 원본 전표가 역분개로 상계되어 시산표에 이중 계상되지 않는다", async () => {
+    const svc = service();
+    const before = await svc.journals();
+    const beforeNet =
+      before.trialBalance.rows.find(r => r.accountCode === "8110")?.balance ??
+      0;
+    expect(beforeNet).toBe(350_000); // EX-260826-01 이자비용
+
+    const { entry } = await svc.getEntry("EX-260826-01", CFO);
+    await svc.patchEntry(
+      "EX-260826-01",
+      { amount: 360_000 },
+      entry.version,
+      CFO,
+      "이자 재계산"
+    );
+
+    const after = await svc.journals();
+    // 원본 전표는 그대로 남고(원칙 9) 역분개가 하나 더 생겨 순액이 0이 된다
+    expect(after.journals.length).toBe(before.journals.length + 1);
+    expect(
+      after.trialBalance.rows.find(r => r.accountCode === "8110")?.balance ?? 0
+    ).toBe(0);
+    // 차변 합 == 대변 합은 계속 유지된다
+    expect(after.trialBalance.difference).toBe(0);
+    expect(after.journals.some(j => j.reversedBy != null)).toBe(true);
+  });
+
+  it("취소는 -C 상계 전표로 처리된다 (§7.3 상계 후 0)", async () => {
+    const svc = service();
+    const { entry } = await svc.getEntry("EX-260826-04", CFO);
+    await svc.cancelEntry("EX-260826-04", "중복 청구 확인", entry.version, CFO);
+    const after = await svc.journals();
+    expect(
+      after.trialBalance.rows.find(r => r.accountCode === "6520")?.balance ?? 0
+    ).toBe(0);
+    expect(after.trialBalance.difference).toBe(0);
+  });
+});

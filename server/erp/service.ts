@@ -14,6 +14,7 @@ import {
   buildFinancialStatements,
   buildForecast,
   buildJournal,
+  buildReversal,
   buildPnl,
   buildRunway,
   closingBlockers,
@@ -904,6 +905,13 @@ export class LedgerService {
           current: await this.store.getEntry(code),
         });
       await this.store.insertEntry(revision);
+      // §7.3 — 대체된 건의 전표는 역분개로 상계한다. 지우지 않는다 (원칙 9).
+      for (const journal of await this.store.listJournals(entry.id)) {
+        if (journal.reversedBy) continue; // 이미 역분개된 전표는 건너뛴다
+        await this.store.appendJournal(
+          buildReversal(journal, () => randomUUID())
+        );
+      }
       await this.store.appendRevision({
         id: randomUUID(),
         entryId: entry.id,
