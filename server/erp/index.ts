@@ -30,6 +30,19 @@ export function getLedgerService(): LedgerService {
   return cached;
 }
 
+/**
+ * 화면에서 배정한 역할 캐시 (§13.1 · G13).
+ * 매 요청마다 DB를 보지 않도록 들고 있고, 사용자 저장 시 갱신한다.
+ */
+const assignedRoles = new Map<string, Role>();
+
+export function setAssignedRoles(users: { email: string; role: Role; active: boolean }[]) {
+  assignedRoles.clear();
+  for (const user of users) {
+    if (user.active) assignedRoles.set(user.email.trim().toLowerCase(), user.role);
+  }
+}
+
 /** 테스트에서 저장소를 갈아끼울 때 사용 */
 export function setLedgerService(service: LedgerService | null) {
   cached = service;
@@ -46,6 +59,9 @@ function isRole(value: string): value is Role {
  *   ③ 개발 환경에서만 재무로 폴백. 프로덕션은 명시적 설정 없이는 접근 불가 (G10)
  */
 export function resolveErpRole(email: string | null | undefined): Role | null {
+  // 배정된 사용자가 있으면 그것이 우선한다. 환경변수는 첫 대표를 넣기 위한 부트스트랩이다.
+  const assigned = assignedRoles.get((email ?? "").trim().toLowerCase());
+  if (assigned) return assigned;
   const raw = process.env.ERP_ROLE_MAP;
   if (raw && email) {
     try {

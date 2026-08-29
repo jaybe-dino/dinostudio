@@ -7,6 +7,19 @@
 import { kstToday } from "@shared/erp";
 import { useState } from "react";
 
+/** XML 특수문자 이스케이프 */
+function xmlCell(cell: string | number | null): string {
+  if (cell == null) return '<Cell><Data ss:Type="String"></Data></Cell>';
+  if (typeof cell === "number") {
+    return `<Cell><Data ss:Type="Number">${cell}</Data></Cell>`;
+  }
+  const escaped = cell
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return `<Cell><Data ss:Type="String">${escaped}</Data></Cell>`;
+}
+
 /** 쉼표·따옴표·줄바꿈이 든 셀은 따옴표로 감싼다 */
 function csvCell(cell: string | number | null): string {
   if (cell == null) return "";
@@ -28,16 +41,34 @@ export function ExportModal({
     .map(row => row.map(cell => (cell == null ? "" : String(cell))).join("\t"))
     .join("\n");
 
-  const downloadCsv = () => {
-    const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
-    // BOM — 엑셀이 UTF-8로 열도록
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const download = (blob: Blob, extension: string) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${title.replace(/[^가-힣A-Za-z0-9]+/g, "_")}_${kstToday()}.csv`;
+    link.download = `${title.replace(/[^가-힣A-Za-z0-9]+/g, "_")}_${kstToday()}.${extension}`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  /**
+   * XLSX — SpreadsheetML 2003. 라이브러리 없이 엑셀·넘버스·구글시트에서 열리고,
+   * 숫자가 문자열로 들어가지 않아 바로 합계를 낼 수 있다 (§14).
+   */
+  const downloadXlsx = () => {
+    const body = rows.map(row => `<Row>${row.map(xmlCell).join("")}</Row>`).join("");
+    const xml =
+      `<?xml version="1.0" encoding="UTF-8"?>` +
+      `<?mso-application progid="Excel.Sheet"?>` +
+      `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
+      `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">` +
+      `<Worksheet ss:Name="원장"><Table>${body}</Table></Worksheet></Workbook>`;
+    download(new Blob([xml], { type: "application/vnd.ms-excel" }), "xls");
+  };
+
+  const downloadCsv = () => {
+    const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
+    // BOM — 엑셀이 UTF-8로 열도록
+    download(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), "csv");
   };
 
   return (
@@ -64,9 +95,12 @@ export function ExportModal({
               type="button"
               className="erp-btn"
               data-variant="primary"
-              onClick={downloadCsv}
+              onClick={downloadXlsx}
             >
-              CSV 내려받기
+              엑셀 내려받기
+            </button>
+            <button type="button" className="erp-btn" onClick={downloadCsv}>
+              CSV
             </button>
             <button
               type="button"

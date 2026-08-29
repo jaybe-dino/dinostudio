@@ -21,7 +21,9 @@ import {
 } from "@shared/erp";
 import type {
   Account,
+  AppUser,
   Approval,
+  Attachment,
   AuditLog,
   Contract,
   Debt,
@@ -30,6 +32,7 @@ import type {
   EntryRevision,
   Intake,
   Journal,
+  Notification,
   Party,
   Period,
   Project,
@@ -87,6 +90,14 @@ export interface LedgerStore {
   upsertIntake(intake: Intake): Promise<Intake>;
   listPeriods(): Promise<Period[]>;
   upsertPeriod(period: Period): Promise<Period>;
+  /** 증빙 — 삭제는 없다. 잘못 올린 것은 kind를 「기타」로 두고 사유를 적는다 (원칙 9) */
+  listAttachments(entryId?: string): Promise<Attachment[]>;
+  appendAttachment(attachment: Attachment): Promise<Attachment>;
+  /** §12 알림 — 미발송이어도 적재된다 (B7) */
+  listNotifications(): Promise<Notification[]>;
+  upsertNotification(notification: Notification): Promise<Notification>;
+  listAppUsers(): Promise<AppUser[]>;
+  upsertAppUser(user: AppUser): Promise<AppUser>;
 }
 
 function matches(entry: Entry, filter: EntryFilter): boolean {
@@ -139,6 +150,9 @@ export class InMemoryLedgerStore implements LedgerStore {
   private debtSchedules: DebtSchedule[] = [];
   private intakes: Intake[] = [];
   private periods: Period[] = [];
+  private attachments: Attachment[] = [];
+  private notifications: Notification[] = [];
+  private appUsers: AppUser[] = [];
 
   constructor(seed?: {
     entries?: Entry[];
@@ -312,4 +326,26 @@ export class InMemoryLedgerStore implements LedgerStore {
   async upsertPeriod(period: Period): Promise<Period> {
     return upsertBy(this.periods, period, "ym");
   }
+
+  async listAttachments(entryId?: string): Promise<Attachment[]> {
+    const rows = entryId ? this.attachments.filter(a => a.entryId === entryId) : this.attachments;
+    return rows.map(a => ({ ...a }));
+  }
+  async appendAttachment(attachment: Attachment): Promise<Attachment> {
+    this.attachments.push({ ...attachment });
+    return { ...attachment };
+  }
+  async listNotifications(): Promise<Notification[]> {
+    return this.notifications.map(n => ({ ...n }));
+  }
+  async upsertNotification(notification: Notification): Promise<Notification> {
+    return upsertBy(this.notifications, notification, "id");
+  }
+  async listAppUsers(): Promise<AppUser[]> {
+    return this.appUsers.map(u => ({ ...u }));
+  }
+  async upsertAppUser(user: AppUser): Promise<AppUser> {
+    return upsertBy(this.appUsers, user, "id");
+  }
+
 }

@@ -9,7 +9,11 @@ import { useErpUi } from "../context";
 
 export function NotificationsScreen() {
   const { goto } = useErpUi();
+  const utils = trpc.useUtils();
   const data = trpc.erp.notifications.useQuery();
+  const markRead = trpc.erp.markNotificationRead.useMutation({
+    onSuccess: () => utils.erp.notifications.invalidate(),
+  });
 
   const rules = data.data?.rules ?? [];
   const blocked = rules.filter(r => r.blockedReason);
@@ -44,10 +48,20 @@ export function NotificationsScreen() {
           tone={blocked.length ? "alert" : "ok"}
         />
         <Tile
+          label="읽지 않음"
+          value={`${data.data?.unread ?? 0}건`}
+          note="알림함은 새로고침해도 남습니다"
+          tone={data.data?.unread ? "warn" : "ok"}
+        />
+        <Tile
           label="도착지"
-          value="미정"
-          note="슬랙 휴면 · 이메일/노션 어댑터 대기 (B7)"
-          tone="null"
+          value={data.data?.destination ?? "미정"}
+          note={
+            data.data?.destination
+              ? "발송 실패도 알림함에는 남습니다"
+              : "SLACK_NOTIFY_CHANNEL 미설정 — 알림함에만 적재 (B7)"
+          }
+          tone={data.data?.destination ? "ok" : "null"}
         />
       </div>
 
@@ -60,12 +74,13 @@ export function NotificationsScreen() {
                 <th>내용</th>
                 <th>화면</th>
                 <th>발송</th>
+                <th>확인</th>
               </tr>
             </thead>
             <tbody>
               {(data.data?.delivered ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ color: "var(--muted)" }}>
+                  <td colSpan={5} style={{ color: "var(--muted)" }}>
                     지금 울려야 할 알림이 없습니다
                   </td>
                 </tr>
@@ -88,9 +103,29 @@ export function NotificationsScreen() {
                       )}
                     </td>
                     <td>
-                      <span className="erp-chip" data-tone="warn">
-                        미발송 (도착지 미정)
-                      </span>
+                      {n.sentAt ? (
+                        <span className="erp-chip" data-tone="ok">
+                          발송됨
+                        </span>
+                      ) : (
+                        <span className="erp-chip" data-tone="warn">
+                          미발송 (도착지 미정)
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {n.readAt ? (
+                        <span className="erp-null">읽음</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="erp-btn"
+                          disabled={markRead.isPending}
+                          onClick={() => markRead.mutate({ id: n.id })}
+                        >
+                          읽음 표시
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))

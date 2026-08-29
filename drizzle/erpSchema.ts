@@ -203,7 +203,12 @@ export const erpAttachments = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     entryId: varchar("entryId", { length: 36 }).notNull(),
     kind: varchar("kind", { length: 40 }).notNull(),
+    fileName: varchar("fileName", { length: 300 }),
     url: text("url").notNull(),
+    /** file = 이 시스템에 올린 파일 · link = 드라이브 등 외부 링크 (§11.2) */
+    storage: mysqlEnum("storage", ["file", "link"]).notNull().default("link"),
+    sizeBytes: bigint("sizeBytes", { mode: "number" }),
+    contentType: varchar("contentType", { length: 120 }),
     uploadedBy: varchar("uploadedBy", { length: 64 }).notNull(),
     at: timestamp("at").defaultNow().notNull(),
   },

@@ -7,7 +7,9 @@ import {
   ROLES,
   rolesAllowedToApprove,
   type Resource,
+  type Role,
 } from "@shared/erp";
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile } from "../components/Bits";
 import { matchesQuery, useErpUi } from "../context";
@@ -43,7 +45,19 @@ export function GovernanceScreen({
   variant: "permissions" | "audit" | "reliability";
 }) {
   const { query } = useErpUi();
+  const utils = trpc.useUtils();
   const me = trpc.erp.me.useQuery();
+  const users = trpc.erp.users.list.useQuery(undefined, { retry: false });
+  const [draft, setDraft] = useState({ email: "", name: "", role: "담당자" as Role });
+  const [message, setMessage] = useState<string | null>(null);
+  const putUser = trpc.erp.users.put.useMutation({
+    onSuccess: async saved => {
+      setMessage(`${saved.email} → ${saved.role} 로 저장했습니다.`);
+      setDraft({ email: "", name: "", role: "담당자" });
+      await utils.erp.users.invalidate();
+    },
+    onError: e => setMessage(e.message),
+  });
   const audit = trpc.erp.audit.useQuery({});
   const ledger = trpc.erp.entries.list.useQuery({});
   const runway = trpc.erp.runway.useQuery();
@@ -144,6 +158,122 @@ export function GovernanceScreen({
                 </tr>
               </tbody>
             </table>
+          </div>
+        </Card>
+
+        <Card
+          title="사용자 · 역할"
+          meta={`${users.data?.length ?? 0}명 · 역할 지정은 대표만`}
+          body={false}
+        >
+          <div className="erp-scroll">
+            <table className="erp-table">
+              <thead>
+                <tr>
+                  <th>이메일</th>
+                  <th>이름</th>
+                  <th>역할</th>
+                  <th>상태</th>
+                  <th>변경</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.error ? (
+                  <tr>
+                    <td colSpan={5} style={{ color: "var(--muted)" }}>
+                      {users.error.message}
+                    </td>
+                  </tr>
+                ) : (users.data ?? []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ color: "var(--muted)" }}>
+                      아직 배정된 계정이 없습니다 — 배정 전에는 환경변수 ERP_ROLE_MAP이 쓰입니다
+                    </td>
+                  </tr>
+                ) : (
+                  (users.data ?? []).map(user => (
+                    <tr key={user.id}>
+                      <td>{user.email}</td>
+                      <td>{user.name}</td>
+                      <td>
+                        <span className="erp-chip" data-tone={user.role === "대표" ? "alert" : "info"}>
+                          {user.role}
+                        </span>
+                      </td>
+                      <td>{user.active ? "사용" : "정지"}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="erp-btn"
+                          disabled={me.data?.role !== "대표" || putUser.isPending}
+                          onClick={() => putUser.mutate({ ...user, active: !user.active })}
+                        >
+                          {user.active ? "정지" : "사용"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="erp-card-body">
+            <div className="erp-filters">
+              <label className="erp-field" style={{ flex: "1 1 220px" }}>
+                <span>이메일 (회사 구글 계정)</span>
+                <input
+                  value={draft.email}
+                  onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
+                />
+              </label>
+              <label className="erp-field">
+                <span>이름</span>
+                <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} />
+              </label>
+              <label className="erp-field">
+                <span>역할</span>
+                <select
+                  value={draft.role}
+                  onChange={e => setDraft(d => ({ ...d, role: e.target.value as Role }))}
+                >
+                  {ROLES.map(role => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="erp-btn"
+                data-variant="primary"
+                disabled={
+                  me.data?.role !== "대표" ||
+                  !draft.email.includes("@") ||
+                  !draft.name.trim() ||
+                  putUser.isPending
+                }
+                onClick={() =>
+                  putUser.mutate({
+                    id: draft.email.trim().toLowerCase(),
+                    email: draft.email.trim().toLowerCase(),
+                    name: draft.name.trim(),
+                    role: draft.role,
+                    active: true,
+                  })
+                }
+              >
+                계정 발급
+              </button>
+            </div>
+            {message ? (
+              <div style={{ marginTop: 8 }}>
+                <Note>{message}</Note>
+              </div>
+            ) : null}
+            <p className="erp-null" style={{ marginTop: 6 }}>
+              권한을 나눠주는 일은 위임하지 않습니다 — 역할 지정은 대표만 할 수 있고 감사로그에 남습니다 (G13).
+            </p>
           </div>
         </Card>
 

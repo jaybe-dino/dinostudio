@@ -5,7 +5,9 @@
 import { ACCOUNTS } from "@shared/erp";
 import type {
   Account,
+  AppUser,
   Approval,
+  Attachment,
   AuditLog,
   Contract,
   Debt,
@@ -17,6 +19,7 @@ import type {
   Entry,
   EntryRevision,
   Journal,
+  Notification,
   Setting,
 } from "@shared/erp";
 import type { SeedDaySnapshot } from "@shared/erp/seed";
@@ -29,15 +32,18 @@ import {
   erpDaySnapshots,
   erpEntries,
   erpEntryRevisions,
+  erpAttachments,
   erpContracts,
   erpDebtSchedules,
   erpDebts,
   erpIntakes,
   erpJournalLines,
   erpJournals,
+  erpNotifications,
   erpParties,
   erpPeriods,
   erpProjects,
+  erpUsers,
   erpSettings,
   type ErpEntryRow,
 } from "../../drizzle/erpSchema";
@@ -490,4 +496,47 @@ export class DrizzleLedgerStore implements LedgerStore {
       .onDuplicateKeyUpdate({ set: row });
     return period;
   }
+
+  async listAttachments(entryId?: string): Promise<Attachment[]> {
+    const rows = await (entryId
+      ? this.db.select().from(erpAttachments).where(eq(erpAttachments.entryId, entryId))
+      : this.db.select().from(erpAttachments));
+    return rows.map(r => ({ ...r, at: r.at.toISOString() }));
+  }
+
+  async appendAttachment(attachment: Attachment): Promise<Attachment> {
+    await this.db.insert(erpAttachments).values({ ...attachment, at: new Date(attachment.at) });
+    return attachment;
+  }
+
+  async listNotifications(): Promise<Notification[]> {
+    const rows = await this.db.select().from(erpNotifications).orderBy(asc(erpNotifications.createdAt));
+    return rows.map(r => ({
+      ...r,
+      sentAt: r.sentAt ? r.sentAt.toISOString() : null,
+      readAt: r.readAt ? r.readAt.toISOString() : null,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async upsertNotification(notification: Notification): Promise<Notification> {
+    const row = {
+      ...notification,
+      sentAt: notification.sentAt ? new Date(notification.sentAt) : null,
+      readAt: notification.readAt ? new Date(notification.readAt) : null,
+      createdAt: new Date(notification.createdAt),
+    };
+    await this.db.insert(erpNotifications).values(row).onDuplicateKeyUpdate({ set: row });
+    return notification;
+  }
+
+  async listAppUsers(): Promise<AppUser[]> {
+    return (await this.db.select().from(erpUsers).orderBy(asc(erpUsers.email))).map(r => ({ ...r }));
+  }
+
+  async upsertAppUser(user: AppUser): Promise<AppUser> {
+    await this.db.insert(erpUsers).values(user).onDuplicateKeyUpdate({ set: { ...user } });
+    return user;
+  }
+
 }

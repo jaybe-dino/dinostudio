@@ -15,6 +15,7 @@ import {
   buildForecast,
   buildJournal,
   buildReversal,
+  isPayrollAccount,
   buildPnl,
   buildRunway,
   closingBlockers,
@@ -50,6 +51,8 @@ import {
 } from "@shared/erp";
 import type {
   Account,
+  AppUser,
+  Attachment,
   Contract,
   Debt,
   DebtSchedule,
@@ -68,6 +71,8 @@ import type {
 } from "@shared/erp";
 import { randomUUID } from "node:crypto";
 import { aiParseExpense } from "../integrations/aiParser";
+import { postSlackMessage, slackConfigured } from "../integrations/slack";
+import { createUploadTicket, storageConfigured, validateUpload, viewPath } from "./attachments";
 import { erpError } from "./errors";
 import type { EntryFilter, LedgerStore } from "./store";
 
@@ -87,9 +92,24 @@ export class LedgerService {
   // ── 조회 ────────────────────────────────────────────────────────────────
 
   /** GET /entries — 마스킹은 응답 단계에서 한다 (§13.3) */
-  async listEntries(filter: EntryFilter, actor: Actor) {
+  async listEntries(filter: EntryFilter, actor: Actor, page?: { cursor?: string | null; limit?: number }) {
     const entries = await this.store.listEntries(filter);
+    // §13.3 — 급여·부채는 조회도 감사로그에 남긴다
+    await this.recordSensitiveRead(entries, actor, "entries");
+
+    // §14 — offset 금지. 코드는 불변이므로 커서로 쓰기에 안전하다 (승인으로 순서가 바뀌지 않음)
+    const ordered = [...entries].sort((a, b) =>
+      `${a.cashDate ?? ""}${a.code}` < `${b.cashDate ?? ""}${b.code}` ? -1 : 1
+    );
+    const limit = page?.limit ?? ordered.length;
+    const start = page?.cursor ? ordered.findIndex(e => e.code === page.cursor) + 1 : 0;
+    const slice = ordered.slice(start, start + limit);
+    const nextCursor = start + limit < ordered.length ? (slice.at(-1)?.code ?? null) : null;
+
     return {
+      page: slice.map(e => maskEntryForRole(e, actor.role)),
+      nextCursor,
+      total: ordered.length,
       entries: entries.map(e => maskEntryForRole(e, actor.role)),
       /** 개인 금액을 못 보는 역할도 총액은 본다 (원칙 10) */
       payrollTotal: payrollTotal(entries),
@@ -329,17 +349,56 @@ export class LedgerService {
     return saved;
   }
 
-  /** §12 알림 — 도착지가 없어도 알림함에는 남는다 (B7) */
+  /**
+   * §12 알림 — 지금 울려야 할 것을 계산해 **알림함에 적재**하고, 도착지가 설정돼 있으면 발송한다.
+   * 발송 실패도 알림함에는 남는다 — 도착지가 죽어 있어도 경보가 사라지면 안 된다 (B7).
+   */
   async notifications(actor: Actor) {
-    const [cashPosition, ar, debt, today] = await Promise.all([
+    const [cashPosition, ar, debt, today, stored] = await Promise.all([
       this.cashPosition({}, actor),
       this.ar(),
       this.debt(),
       this.today(),
+      this.store.listNotifications(),
     ]);
+
     const evaluated = evaluateNotifications({ cashPosition, ar, debt, today });
     const { delivered, capped } = applyCeoCap(evaluated, NOTIFICATION_RULES);
-    return { rules: NOTIFICATION_RULES, delivered, capped };
+    const byId = new Map(stored.map(item => [item.id, item]));
+
+    for (const notification of delivered) {
+      const existing = byId.get(notification.id);
+      // 이미 적재된 알림은 읽음 표시를 지우지 않는다
+      if (existing) continue;
+      const channel = process.env.SLACK_NOTIFY_CHANNEL;
+      let sentAt: string | null = null;
+      if (channel && slackConfigured()) {
+        const result = await postSlackMessage(channel, `*${notification.title}*\n${notification.body}`);
+        if (result.sent) sentAt = nowIso();
+      }
+      const saved = { ...notification, sentAt };
+      await this.store.upsertNotification(saved);
+      byId.set(saved.id, saved);
+    }
+
+    const inbox = Array.from(byId.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    return {
+      rules: NOTIFICATION_RULES,
+      delivered: inbox,
+      capped,
+      unread: inbox.filter(item => item.readAt == null).length,
+      /** 도착지가 설정돼 있는가 — 아니면 알림함에만 쌓인다 */
+      destination: process.env.SLACK_NOTIFY_CHANNEL && slackConfigured() ? "슬랙" : null,
+    };
+  }
+
+  async markNotificationRead(id: string, actor: Actor) {
+    const stored = await this.store.listNotifications();
+    const found = stored.find(item => item.id === id);
+    if (!found) throw erpError("not_found", { id });
+    const saved = await this.store.upsertNotification({ ...found, readAt: nowIso() });
+    await this.audit("notification", id, "read", found, saved, actor);
+    return saved;
   }
 
   /** GET /metrics/runway — 단순 · 예상 · 예약 3종 (§9.6 · T15) */
@@ -715,6 +774,113 @@ export class LedgerService {
       ) ?? null;
     const saved = await this.store.upsertAccount(account);
     await this.audit("account", account.code, "put", before, saved, actor);
+    return saved;
+  }
+
+  // ── 증빙 (§6.3 attachment · §13.2) ──────────────────────────────────────
+
+  /** 파일 업로드 티켓 — 스토리지가 없으면 링크 등록만 열어 둔다 */
+  async requestEvidenceUpload(
+    code: string,
+    fileName: string,
+    contentType: string,
+    sizeBytes: number,
+    actor: Actor
+  ) {
+    const entry = await this.store.getEntry(code);
+    if (!entry) throw erpError("not_found", { code });
+    if (!storageConfigured()) {
+      throw erpError(
+        "evidence_required",
+        {},
+        "파일 스토리지가 설정되지 않았습니다 — 드라이브 링크로 등록하십시오"
+      );
+    }
+    const problem = validateUpload(fileName, contentType, sizeBytes);
+    if (problem) throw erpError("evidence_required", { fileName }, problem);
+    const id = randomUUID();
+    const ticket = await createUploadTicket(entry.code, fileName, contentType, id);
+    await this.audit("attachment", id, "upload_ticket", null, { code, fileName }, actor);
+    return { ...ticket, attachmentId: id };
+  }
+
+  /**
+   * 증빙 등록 — 업로드가 끝난 파일이거나 외부 링크.
+   * 증빙이 하나라도 붙으면 hasEvidence가 켜져 확정이 가능해진다 (§13.2).
+   */
+  async addEvidence(
+    input: {
+      code: string;
+      kind: string;
+      storage: "file" | "link";
+      url: string;
+      fileName?: string | null;
+      sizeBytes?: number | null;
+      contentType?: string | null;
+      attachmentId?: string | null;
+    },
+    actor: Actor
+  ) {
+    const entry = await this.store.getEntry(input.code);
+    if (!entry) throw erpError("not_found", { code: input.code });
+    if (input.storage === "link" && !/^https?:\/\//i.test(input.url)) {
+      throw erpError("evidence_required", {}, "http(s) 로 시작하는 링크만 등록할 수 있습니다");
+    }
+
+    const attachment: Attachment = {
+      id: input.attachmentId ?? randomUUID(),
+      entryId: entry.id,
+      kind: input.kind,
+      fileName: input.fileName ?? null,
+      url: input.storage === "file" ? viewPath(input.url) : input.url,
+      storage: input.storage,
+      sizeBytes: input.sizeBytes ?? null,
+      contentType: input.contentType ?? null,
+      uploadedBy: actor.id,
+      at: nowIso(),
+    };
+    await this.store.appendAttachment(attachment);
+
+    if (!entry.hasEvidence) {
+      // 증빙이 붙었으므로 확정을 막던 사유가 사라진다
+      await this.store.replaceEntry(
+        { ...entry, hasEvidence: true, version: entry.version + 1 },
+        entry.version
+      );
+    }
+    await this.audit("attachment", attachment.id, "add", null, attachment, actor);
+    return attachment;
+  }
+
+  async evidence(code: string) {
+    const entry = await this.store.getEntry(code);
+    if (!entry) throw erpError("not_found", { code });
+    return {
+      attachments: await this.store.listAttachments(entry.id),
+      storageConfigured: storageConfigured(),
+    };
+  }
+
+  // ── 사용자 · 역할 (§13.1 · G13) ─────────────────────────────────────────
+
+  async appUsers(actor: Actor) {
+    if (!permissionFor(actor.role, "setting").read) {
+      throw erpError("forbidden_field", {}, "사용자 목록을 볼 권한이 없습니다");
+    }
+    return this.store.listAppUsers();
+  }
+
+  /** 계정 발급 · 역할 지정 — 대표만. 권한을 나눠주는 일은 위임하지 않는다 */
+  async putAppUser(user: AppUser, actor: Actor) {
+    if (actor.role !== "대표") {
+      throw erpError("forbidden_field", {}, "역할 지정은 대표만 할 수 있습니다");
+    }
+    const before = (await this.store.listAppUsers()).find(u => u.id === user.id) ?? null;
+    const saved = await this.store.upsertAppUser(user);
+    // 배정이 바뀌면 역할 해석 캐시를 즉시 갱신한다
+    const { setAssignedRoles } = await import(".");
+    setAssignedRoles(await this.store.listAppUsers());
+    await this.audit("app_user", user.id, "put", before, saved, actor);
     return saved;
   }
 
@@ -1236,6 +1402,23 @@ export class LedgerService {
       "version_conflict",
       { current: entry },
       `다른 사람이 먼저 처리했습니다 — 현재 상태는 ${STATUS_RULES[entry.status].label}입니다`
+    );
+  }
+
+  /**
+   * §13.3 — 급여·부채 테이블은 조회도 감사로그에 남긴다.
+   * 누가 언제 인건비를 들여다봤는지가 남아야 마스킹이 통제로 성립한다.
+   */
+  private async recordSensitiveRead(entries: Entry[], actor: Actor, scope: string) {
+    const sensitive = entries.filter(e => isPayrollAccount(e.accountCode) || e.accountCode === "2210" || e.accountCode === "2310");
+    if (sensitive.length === 0) return;
+    await this.audit(
+      "entry",
+      scope,
+      "read_sensitive",
+      null,
+      { n: sensitive.length, codes: sensitive.map(e => e.code) },
+      actor
     );
   }
 

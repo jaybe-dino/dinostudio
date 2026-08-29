@@ -57,6 +57,15 @@ export type PayMethod = "계좌" | "법인카드" | "개인카드선결제" | "�
 /** §6.2 bu_code (B11 — 사업부 구분 기준 미결) */
 export type BuCode = "IP" | "NET" | "COM" | "GLV" | "CMN";
 
+/** §6.3 app_user — 사람↔역할 배정. 환경변수가 아니라 화면에서 관리한다 (G13). */
+export interface AppUser {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  active: boolean;
+}
+
 /** §13.1 역할 매트릭스 */
 export const ROLES = [
   "대표",
@@ -198,6 +207,24 @@ export interface EntryRevision {
   after: Partial<Entry> | null;
   reason: string | null;
   actor: string;
+  at: string;
+}
+
+/** §6.3 attachment — 증빙. 파일 업로드분과 드라이브 링크를 함께 받는다 (§11.2). */
+export interface Attachment {
+  id: string;
+  entryId: string;
+  /** 계산서 · 영수증 · 계약서 · 기타 */
+  kind: string;
+  /** 원본 파일명 (링크만 등록한 경우 null) */
+  fileName: string | null;
+  /** 열람 주소 — 업로드분은 스토리지 키, 링크 등록분은 원본 URL */
+  url: string;
+  /** file = 이 시스템에 올린 파일 · link = 드라이브 등 외부 링크 */
+  storage: "file" | "link";
+  sizeBytes: number | null;
+  contentType: string | null;
+  uploadedBy: string;
   at: string;
 }
 

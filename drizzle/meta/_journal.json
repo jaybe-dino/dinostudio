@@ -36,6 +36,13 @@
       "when": 1787984956186,
       "tag": "0004_loose_rocket_raccoon",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1787993159533,
+      "tag": "0005_furry_colonel_america",
+      "breakpoints": true
     }
   ]
 }

@@ -8,6 +8,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { shortDate } from "../format";
 import { Money, PriorityChip, StatusChip } from "./Bits";
+import { Evidence } from "./Evidence";
 
 export function EntryDrawer({
   code,
@@ -306,6 +307,8 @@ export function EntryDrawer({
                   {error}
                 </p>
               ) : null}
+
+              <Evidence code={code} onChanged={refresh} />
 
               <div>
                 <h4

@@ -71,9 +71,22 @@ export const erpRouter = router({
   // ── 원장 ────────────────────────────────────────────────────────────────
   entries: router({
     list: protectedProcedure
-      .input(entryFilter.optional())
+      .input(
+        entryFilter
+          .extend({
+            // §14 offset 금지 — 코드는 불변이라 커서로 안전하다
+            cursor: z.string().nullable().default(null),
+            limit: z.number().int().min(1).max(500).optional(),
+          })
+          .optional()
+      )
       .query(({ ctx, input }) =>
-        run(() => getLedgerService().listEntries(input ?? {}, actorFrom(ctx)))
+        run(() =>
+          getLedgerService().listEntries(input ?? {}, actorFrom(ctx), {
+            cursor: input?.cursor ?? null,
+            limit: input?.limit,
+          })
+        )
       ),
 
     get: protectedProcedure
@@ -426,6 +439,72 @@ export const erpRouter = router({
     .input(z.object({ ym: z.string() }))
     .mutation(({ ctx, input }) =>
       run(() => getLedgerService().closePeriod(input.ym, actorFrom(ctx)))
+    ),
+
+  /** 증빙 (§6.3 · §13.2) — 증빙을 올릴 수 있어야 「증빙 없으면 확정 불가」가 규칙이 된다 */
+  evidence: router({
+    list: protectedProcedure
+      .input(z.object({ code: z.string() }))
+      .query(({ ctx, input }) => {
+        actorFrom(ctx);
+        return run(() => getLedgerService().evidence(input.code));
+      }),
+    requestUpload: protectedProcedure
+      .input(
+        z.object({
+          code: z.string(),
+          fileName: z.string().min(1),
+          contentType: z.string().min(1),
+          sizeBytes: z.number().int().positive(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        run(() =>
+          getLedgerService().requestEvidenceUpload(
+            input.code,
+            input.fileName,
+            input.contentType,
+            input.sizeBytes,
+            actorFrom(ctx)
+          )
+        )
+      ),
+    add: protectedProcedure
+      .input(
+        z.object({
+          code: z.string(),
+          kind: z.enum(["계산서", "영수증", "계약서", "이체확인증", "기타"]),
+          storage: z.enum(["file", "link"]),
+          url: z.string().min(1),
+          fileName: z.string().nullable().optional(),
+          sizeBytes: z.number().int().nullable().optional(),
+          contentType: z.string().nullable().optional(),
+          attachmentId: z.string().nullable().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) => run(() => getLedgerService().addEvidence(input, actorFrom(ctx)))),
+  }),
+
+  /** 사용자 · 역할 (§13.1 · G13) — 환경변수가 아니라 화면에서 관리한다 */
+  users: router({
+    list: protectedProcedure.query(({ ctx }) => run(() => getLedgerService().appUsers(actorFrom(ctx)))),
+    put: protectedProcedure
+      .input(
+        z.object({
+          id: z.string().min(1),
+          email: z.string().email(),
+          name: z.string().min(1),
+          role: z.enum(["대표", "부대표", "재무", "사업부리더", "담당자", "외부세무"]),
+          active: z.boolean().default(true),
+        })
+      )
+      .mutation(({ ctx, input }) => run(() => getLedgerService().putAppUser(input, actorFrom(ctx)))),
+  }),
+
+  markNotificationRead: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(({ ctx, input }) =>
+      run(() => getLedgerService().markNotificationRead(input.id, actorFrom(ctx)))
     ),
 
   /** §11.1 수집 검수함 — 검수 통과해야 원장으로 올라간다 */
