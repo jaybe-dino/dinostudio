@@ -4,6 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import { registerGoogleAuthRoutes } from "../auth/routes";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -36,6 +37,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  // 경영관리 시스템은 구글 워크스페이스 SSO를 쓴다
+  registerGoogleAuthRoutes(app);
 
   // IP-based country detection endpoint
   app.get("/api/geo", (req, res) => {

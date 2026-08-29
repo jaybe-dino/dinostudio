@@ -159,6 +159,11 @@
   font: inherit;
 }
 
+a.erp-btn {
+  display: inline-block;
+  text-decoration: none;
+}
+
 .erp-btn {
   padding: 6px 10px;
   border: 1px solid var(--rule);

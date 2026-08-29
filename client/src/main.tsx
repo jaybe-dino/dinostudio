@@ -19,6 +19,9 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
+  // 경영관리 시스템은 구글 워크스페이스 SSO를 쓰므로 화면 안에서 로그인 카드를 보여준다.
+  if (window.location.pathname.startsWith("/erp")) return;
+
   window.location.href = getLoginUrl();
 };
 

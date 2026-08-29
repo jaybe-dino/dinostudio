@@ -1,99 +1,86 @@
 /**
- * Vercel Serverless Function backing the site's tRPC API (/api/trpc/*).
+ * Vercel Serverless Function — 사이트 tRPC API (/api/trpc/*).
  *
- * Self-contained on purpose: the original Express/Manus server (server/) needs a
- * long-running process, MySQL, and Manus platform APIs, none of which exist on
- * Vercel by default. This handler covers everything the client actually calls:
- *   - contact.submit  → stores the inquiry (MySQL if DATABASE_URL is set,
- *                       always logged; optional webhook via CONTACT_WEBHOOK_URL)
- *   - auth.me         → anonymous visitor (null)
- *   - auth.logout     → no-op success
+ * 경영관리 시스템(erp.*)을 포함한 실제 appRouter를 그대로 서빙한다.
+ * Express 전용 객체(req/res)는 이 어댑터에서 최소 형태로 채워 넣고,
+ * 사용자는 구글 SSO 세션 쿠키에서 읽는다 — 익명 접근은 protectedProcedure가 막는다.
  */
-import { initTRPC } from "@trpc/server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import superjson from "superjson";
-import { z } from "zod";
+import type { User } from "../../drizzle/schema";
+import { appRouter } from "../../server/routers";
+import type { TrpcContext } from "../../server/_core/context";
+import {
+  SESSION_COOKIE,
+  parseCookies,
+  serializeCookie,
+  verifySessionToken,
+} from "../../server/auth/session";
 
-const t = initTRPC.create({ transformer: superjson });
+/** Express Request/Response 중 라우터가 실제로 건드리는 부분만 흉내낸다. */
+function shim(req: Request, cookies: string[]) {
+  const url = new URL(req.url);
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  const request = {
+    ip: forwardedFor?.split(",")[0]?.trim() ?? null,
+    protocol: url.protocol.replace(":", ""),
+    hostname: url.hostname,
+    headers: Object.fromEntries(req.headers.entries()),
+  } as unknown as TrpcContext["req"];
 
-const contactInput = z.object({
-  name: z.string().min(1).max(100),
-  company: z.string().min(1).max(200),
-  solution: z.string().optional(),
-  message: z.string().optional(),
-});
+  const response = {
+    clearCookie: (name: string) => {
+      cookies.push(
+        serializeCookie(name, "", {
+          maxAge: 0,
+          secure: url.protocol === "https:",
+        })
+      );
+    },
+    cookie: (name: string, value: string) => {
+      cookies.push(
+        serializeCookie(name, value, { secure: url.protocol === "https:" })
+      );
+    },
+  } as unknown as TrpcContext["res"];
 
-type ContactInput = z.infer<typeof contactInput>;
-
-async function saveToDatabase(input: ContactInput): Promise<boolean> {
-  const url = process.env.DATABASE_URL;
-  if (!url) return false;
-  const mysql = await import("mysql2/promise");
-  const conn = await mysql.createConnection(url);
-  try {
-    await conn.execute(
-      `CREATE TABLE IF NOT EXISTS contacts (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        company VARCHAR(200) NOT NULL,
-        solution VARCHAR(100),
-        message TEXT,
-        createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )`
-    );
-    await conn.execute(
-      "INSERT INTO contacts (name, company, solution, message) VALUES (?, ?, ?, ?)",
-      [input.name, input.company, input.solution ?? null, input.message ?? null]
-    );
-    return true;
-  } finally {
-    await conn.end();
-  }
+  return { request, response };
 }
 
-async function forwardToWebhook(input: ContactInput): Promise<void> {
-  const webhook = process.env.CONTACT_WEBHOOK_URL;
-  if (!webhook) return;
-  await fetch(webhook, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      text: `[디노스튜디오] 새 파트너십 문의\n이름: ${input.name}\n회사: ${input.company}\n솔루션: ${input.solution ?? "-"}\n내용: ${input.message ?? "-"}`,
-      ...input,
-    }),
-  });
+async function sessionUser(req: Request): Promise<User | null> {
+  const token = parseCookies(req.headers.get("cookie"))[SESSION_COOKIE];
+  if (!token) return null;
+  const session = await verifySessionToken(token);
+  if (!session) return null;
+  // 세션이 곧 사용자다 — 별도 사용자 테이블 조회 없이 역할은 이메일로 해석한다 (§13.1)
+  return {
+    id: 0,
+    openId: session.sub,
+    name: session.name,
+    email: session.email,
+    loginMethod: "google",
+    role: "user",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    lastSignedIn: new Date(),
+  } as User;
 }
 
-const appRouter = t.router({
-  auth: t.router({
-    me: t.procedure.query(() => null),
-    logout: t.procedure.mutation(() => ({ success: true }) as const),
-  }),
-  contact: t.router({
-    submit: t.procedure.input(contactInput).mutation(async ({ input }) => {
-      // Always visible in Vercel function logs even without a database.
-      console.log("[Contact] New inquiry:", JSON.stringify(input));
-      try {
-        await saveToDatabase(input);
-      } catch (e) {
-        console.error("[Contact] DB save failed:", e);
-      }
-      try {
-        await forwardToWebhook(input);
-      } catch (e) {
-        console.error("[Contact] Webhook failed:", e);
-      }
-      return { success: true };
-    }),
-  }),
-});
+async function handler(req: Request): Promise<Response> {
+  const cookies: string[] = [];
+  const { request, response } = shim(req, cookies);
+  const user = await sessionUser(req);
 
-const handler = (req: Request) =>
-  fetchRequestHandler({
+  const result = await fetchRequestHandler({
     endpoint: "/api/trpc",
     req,
     router: appRouter,
-    createContext: () => ({}),
+    createContext: () => ({ req: request, res: response, user }),
   });
+
+  if (cookies.length === 0) return result;
+  const headers = new Headers(result.headers);
+  for (const cookie of cookies) headers.append("Set-Cookie", cookie);
+  return new Response(result.body, { status: result.status, headers });
+}
 
 export { handler as GET, handler as POST };

@@ -5,9 +5,10 @@
 
 ## 접근
 
-`/erp` — 로그인 필요, `noindex`. 첫 진입 화면은 **현금흐름표**입니다.
+`/erp` — 회사 구글 워크스페이스 계정으로 로그인, `noindex`. 첫 진입 화면은 **현금흐름표**입니다.
+배포와 환경변수는 [erp-deploy.md](./erp-deploy.md)를 보십시오.
 
-관련 문서 — [사양서와 어긋난 곳](./erp-spec-gaps.md) · [대표님이 하실 일](./erp-todo.md)
+관련 문서 — [배포 · 시트 전환](./erp-deploy.md) · [사양서와 어긋난 곳](./erp-spec-gaps.md) · [대표님이 하실 일](./erp-todo.md)
 
 ## 화면 (33)
 

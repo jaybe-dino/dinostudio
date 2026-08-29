@@ -29,6 +29,7 @@ import { OpsScreen } from "./screens/Ops";
 import { OverviewScreen } from "./screens/Overview";
 import { PnlScreen } from "./screens/Pnl";
 import { SettingsScreen } from "./screens/Settings";
+import { SheetImportScreen } from "./screens/SheetImport";
 
 interface ScreenDef {
   id: string;
@@ -314,6 +315,14 @@ const SCREENS: ScreenDef[] = [
     render: () => <GovernanceScreen variant="audit" />,
   },
   {
+    id: "sheet-import",
+    label: "시트 이관",
+    group: "기준 · 통제 (3차)",
+    hint: "시트 → 원장 1회",
+    stage: 3,
+    render: () => <SheetImportScreen />,
+  },
+  {
     id: "report",
     label: "보고서 빌더",
     group: "기준 · 통제 (3차)",
@@ -369,7 +378,7 @@ export default function ErpApp() {
           <nav className="erp-rail" aria-label="화면">
             <div className="erp-rail-brand">
               DINOSTUDIO
-              <small>경영관리 시스템 · 33화면 (1~3차)</small>
+              <small>경영관리 시스템 · 34화면</small>
             </div>
             {GROUPS.map(group => (
               <div className="erp-rail-group" key={group}>
@@ -425,15 +434,7 @@ export default function ErpApp() {
               ) : null}
             </div>
 
-            {me.error ? (
-              <div className="erp-page">
-                <p className="erp-note" data-tone="alert">
-                  {me.error.message}
-                </p>
-              </div>
-            ) : (
-              screen.render()
-            )}
+            {me.error ? <SignIn message={me.error.message} /> : screen.render()}
           </main>
         </div>
 
@@ -452,6 +453,59 @@ export default function ErpApp() {
         ) : null}
       </div>
     </ErpUiContext.Provider>
+  );
+}
+
+/**
+ * 로그인 · 접근 안내 — 급여·부채를 다루므로 익명 접근을 허용하지 않는다 (§14).
+ * 역할이 아직 배정되지 않은 사람은 로그인해도 화면이 열리지 않는다 (§13.1 · G10).
+ */
+function SignIn({ message }: { message: string }) {
+  const needsRole = message.includes("역할");
+  return (
+    <div className="erp-page">
+      <header>
+        <h1>
+          {needsRole ? "역할이 지정되지 않았습니다" : "로그인이 필요합니다"}
+        </h1>
+        <p>
+          {needsRole
+            ? "로그인은 되었지만 이 계정에 경영관리 시스템 역할이 배정되지 않았습니다. 대표님께 역할 지정을 요청하십시오 — 급여·부채는 역할이 있어야 보입니다."
+            : "회사 구글 계정으로 로그인하십시오. 승인·수정 이력이 사람 신원에 묶여 감사로그에 남습니다."}
+        </p>
+      </header>
+
+      <section className="erp-card">
+        <div
+          className="erp-card-body"
+          style={{ display: "flex", flexDirection: "column", gap: 10 }}
+        >
+          <p
+            className="erp-note"
+            data-tone={needsRole ? "warn" : undefined}
+            style={{ margin: 0 }}
+          >
+            {message}
+          </p>
+          {needsRole ? null : (
+            <div>
+              <a
+                className="erp-btn"
+                data-variant="primary"
+                href="/api/auth/google/start?next=/erp"
+              >
+                구글 워크스페이스 계정으로 로그인
+              </a>
+            </div>
+          )}
+          <p className="erp-null" style={{ margin: 0 }}>
+            허용된 도메인·계정만 들어올 수 있습니다. 로그인 후 역할(대표 ·
+            부대표 · 재무 · 사업부 리더 · 담당자 · 외부 세무)에 따라 보이는
+            화면과 승인 한도가 달라집니다.
+          </p>
+        </div>
+      </section>
+    </div>
   );
 }
 

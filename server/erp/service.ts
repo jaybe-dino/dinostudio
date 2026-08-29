@@ -18,6 +18,7 @@ import {
   buildRunway,
   closingBlockers,
   evaluateNotifications,
+  importSheet,
   opexBreakdown,
   segmentPnl,
   trialBalance,
@@ -431,6 +432,51 @@ export class LedgerService {
         `${ym} 마감 불가 — ${blockers.length}건이 막고 있습니다`
       );
     return period;
+  }
+
+  /**
+   * 시트 이관 — 구글 시트에서 복사한 표를 미리보기하고, 확인 후에만 적재한다.
+   * 적요칸 숫자를 금액으로 승격하지 않고, 단위 불명은 후보로도 올리지 않는다 (§5.2 · 원칙 8).
+   */
+  async previewSheetImport(text: string, from: string | null, actor: Actor) {
+    const existing = await this.store.listEntries();
+    return importSheet(text, {
+      existingCodes: existing.map(e => e.code),
+      from,
+      actor: actor.id,
+    });
+  }
+
+  async commitSheetImport(text: string, from: string | null, actor: Actor) {
+    const existing = await this.store.listEntries();
+    const seen = new Set(existing.map(e => `${e.source}:${e.sourceRef}`));
+    const result = importSheet(text, {
+      existingCodes: existing.map(e => e.code),
+      from,
+      actor: actor.id,
+    });
+
+    let inserted = 0;
+    let skipped = 0;
+    for (const item of result.entries) {
+      // 같은 줄을 두 번 들여오지 않는다 — UNIQUE (source, source_ref)
+      if (seen.has(`${item.entry.source}:${item.entry.sourceRef}`)) {
+        skipped += 1;
+        continue;
+      }
+      await this.store.insertEntry(item.entry);
+      seen.add(`${item.entry.source}:${item.entry.sourceRef}`);
+      inserted += 1;
+    }
+    await this.audit(
+      "entry",
+      "sheet-import",
+      "import",
+      null,
+      { inserted, skipped, from },
+      actor
+    );
+    return { ...result, inserted, skipped };
   }
 
   // ── 입력 · 수정 ──────────────────────────────────────────────────────────

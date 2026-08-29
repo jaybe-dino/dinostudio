@@ -417,6 +417,42 @@ export const erpRouter = router({
       run(() => getLedgerService().closePeriod(input.ym, actorFrom(ctx)))
     ),
 
+  /** 시트 이관 — 미리보기 후 확인해야 적재된다 */
+  sheetImport: router({
+    preview: protectedProcedure
+      .input(
+        z.object({
+          text: z.string().min(1),
+          from: z.string().nullable().default(null),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        run(() =>
+          getLedgerService().previewSheetImport(
+            input.text,
+            input.from,
+            actorFrom(ctx)
+          )
+        )
+      ),
+    commit: protectedProcedure
+      .input(
+        z.object({
+          text: z.string().min(1),
+          from: z.string().nullable().default(null),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        run(() =>
+          getLedgerService().commitSheetImport(
+            input.text,
+            input.from,
+            actorFrom(ctx)
+          )
+        )
+      ),
+  }),
+
   // ── 마스터 · 운영 ────────────────────────────────────────────────────────
   accounts: protectedProcedure.query(({ ctx }) => {
     actorFrom(ctx);
