@@ -4,7 +4,7 @@
  * 중복 의심은 경고 후 강행할 수 있고 강행 사유가 감사로그에 남는다 (§13.2).
  */
 import type { Direction, Nature, PayMethod } from "@shared/erp";
-import { defaultPriorityOf } from "@shared/erp";
+import { defaultPriorityOf, kstToday } from "@shared/erp";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Note, PriorityChip } from "./Bits";
@@ -20,7 +20,8 @@ const NATURES: Nature[] = [
 const PAY_METHODS: PayMethod[] = ["계좌", "법인카드", "개인카드선결제", "현금"];
 const BUS = ["IP", "NET", "COM", "GLV", "CMN"] as const;
 
-const today = () => new Date().toISOString().slice(0, 10);
+// §14 — 일자 경계는 00:00 KST
+const today = () => kstToday();
 
 interface Draft {
   direction: Direction;

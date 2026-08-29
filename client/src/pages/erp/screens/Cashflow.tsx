@@ -7,6 +7,7 @@ import { accountLabel, type CashflowUnit } from "@shared/erp";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Money, Note, PriorityChip, Tile } from "../components/Bits";
+import type { ErpOutputs } from "../api";
 import { ExportModal } from "../components/ExportModal";
 import { useErpUi, matchesQuery } from "../context";
 import { blockLabel, nullReasonText, shortDate, won } from "../format";
@@ -23,13 +24,22 @@ export function CashflowScreen() {
   const { openEntry, query } = useErpUi();
   const utils = trpc.useUtils();
   const [unit, setUnit] = useState<CashflowUnit>("month");
-  const [visible, setVisible] = useState(PAGE);
+  // 커서 페이징 — 받은 페이지를 누적한다. offset을 쓰면 승인으로 순서가 바뀔 때
+  // 같은 블록이 두 번 나오거나 건너뛴다 (§14).
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [pages, setPages] = useState<
+    Record<string, ErpOutputs["views"]["cashflow"]["page"]>
+  >({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
   const sentinel = useRef<HTMLDivElement | null>(null);
 
-  const cashflow = trpc.erp.views.cashflow.useQuery({ unit });
+  const cashflow = trpc.erp.views.cashflow.useQuery({
+    unit,
+    cursor,
+    limit: PAGE,
+  });
   const bulk = trpc.erp.approvals.bulk.useMutation({
     onSuccess: async result => {
       setError(
@@ -56,11 +66,15 @@ export function CashflowScreen() {
   });
 
   // 최신순으로 3블록씩 — 스크롤 끝에서 더 불러온다 (§9.1 무한 스크롤)
-  const blocks = useMemo(
-    () => (cashflow.data ? [...cashflow.data.blocks].reverse() : []),
-    [cashflow.data]
-  );
-  const shown = blocks.slice(0, visible);
+  // 응답이 오면 커서별로 쌓아 둔다 (같은 커서는 덮어써서 중복이 생기지 않는다)
+  useEffect(() => {
+    if (!cashflow.data) return;
+    setPages(prev => ({ ...prev, [cursor ?? "__head__"]: cashflow.data.page }));
+  }, [cashflow.data, cursor]);
+
+  const shown = useMemo(() => Object.values(pages).flat(), [pages]);
+  const totalBlocks = cashflow.data?.totalBlocks ?? 0;
+  const nextCursor = cashflow.data?.nextCursor ?? null;
 
   // 고정 기간 없이 최신순으로 3블록씩 추가 로드 (§9.1 무한 스크롤)
   useEffect(() => {
@@ -68,14 +82,19 @@ export function CashflowScreen() {
     if (!node) return;
     const observer = new IntersectionObserver(
       entries => {
-        if (entries.some(e => e.isIntersecting))
-          setVisible(v => Math.min(v + PAGE, blocks.length));
+        if (
+          entries.some(e => e.isIntersecting) &&
+          nextCursor &&
+          !cashflow.isFetching
+        ) {
+          setCursor(nextCursor);
+        }
       },
       { rootMargin: "240px" }
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [blocks.length]);
+  }, [nextCursor, cashflow.isFetching]);
 
   return (
     <div className="erp-page">
@@ -103,7 +122,8 @@ export function CashflowScreen() {
             aria-pressed={unit === u.key}
             onClick={() => {
               setUnit(u.key);
-              setVisible(PAGE);
+              setCursor(null);
+              setPages({});
             }}
           >
             {u.label}
@@ -334,15 +354,21 @@ export function CashflowScreen() {
         })}
       </section>
 
-      {visible < blocks.length ? (
+      <div ref={sentinel} />
+      {nextCursor ? (
         <button
           type="button"
           className="erp-btn"
-          onClick={() => setVisible(v => v + PAGE)}
+          disabled={cashflow.isFetching}
+          onClick={() => setCursor(nextCursor)}
         >
-          이전 {PAGE}블록 더 보기 ({blocks.length - visible}블록 남음)
+          이전 {PAGE}블록 더 보기 ({totalBlocks - shown.length}블록 남음)
         </button>
-      ) : null}
+      ) : (
+        <p className="erp-null" style={{ margin: 0 }}>
+          블록 {shown.length}개 전부 표시됨
+        </p>
+      )}
 
       <div className="erp-tiles">
         <Tile
@@ -376,7 +402,7 @@ export function CashflowScreen() {
               "계산 불가 사유",
               "판정 대기",
             ],
-            ...blocks.map(b => [
+            ...shown.map(b => [
               b.key,
               b.open,
               b.outSum,

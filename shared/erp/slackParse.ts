@@ -6,6 +6,7 @@
  *
  * 승인은 슬랙에서 하지 않는다. 👍는 참고 이력일 뿐이고 원장의 승인은 시스템 안에서만 이뤄진다.
  */
+import { kstToday } from "./time";
 
 export interface SlackExpenseFields {
   /** 기업명 → party 매칭 */

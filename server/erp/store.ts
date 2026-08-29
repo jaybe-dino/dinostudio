@@ -61,6 +61,7 @@ export interface LedgerStore {
   ): Promise<Entry | undefined>;
   listSnapshots(): Promise<SeedDaySnapshot[]>;
   listAccounts(): Promise<Account[]>;
+  upsertAccount(account: Account): Promise<Account>;
   listSettings(): Promise<Setting[]>;
   putSetting(setting: Setting): Promise<Setting>;
   appendRevision(revision: EntryRevision): Promise<void>;
@@ -130,6 +131,7 @@ export class InMemoryLedgerStore implements LedgerStore {
   private approvals: Approval[] = [];
   private audits: AuditLog[] = [];
   private journals: Journal[] = [];
+  private accounts: Account[] = ACCOUNTS.map(a => ({ ...a }));
   private parties: Party[];
   private projects: Project[];
   private contracts: Contract[] = [];
@@ -210,7 +212,11 @@ export class InMemoryLedgerStore implements LedgerStore {
   }
 
   async listAccounts(): Promise<Account[]> {
-    return ACCOUNTS.map(a => ({ ...a }));
+    return this.accounts.map(a => ({ ...a }));
+  }
+
+  async upsertAccount(account: Account): Promise<Account> {
+    return upsertBy(this.accounts, account, "code");
   }
 
   async listSettings(): Promise<Setting[]> {

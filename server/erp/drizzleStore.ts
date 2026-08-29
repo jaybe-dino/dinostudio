@@ -197,6 +197,14 @@ export class DrizzleLedgerStore implements LedgerStore {
       : ACCOUNTS.map(a => ({ ...a }));
   }
 
+  async upsertAccount(account: Account): Promise<Account> {
+    await this.db
+      .insert(erpAccounts)
+      .values(account)
+      .onDuplicateKeyUpdate({ set: { ...account } });
+    return account;
+  }
+
   async listSettings(): Promise<Setting[]> {
     const rows = await this.db.select().from(erpSettings);
     return rows.map(r => ({

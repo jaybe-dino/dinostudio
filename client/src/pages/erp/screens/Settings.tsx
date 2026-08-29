@@ -2,6 +2,7 @@
  * 기준값 — 임시 기본값과 기준값이 전부 여기 있다.
  * is_provisional이면 화면에 「임시」 배지가 붙고, 변경은 감사로그에 남는다.
  */
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile } from "../components/Bits";
 import { matchesQuery, useErpUi } from "../context";
@@ -19,9 +20,60 @@ const LABELS: Record<string, string> = {
   subscriptions: "구독 목록",
 };
 
+/** 값의 모양 — 숫자·날짜·목록을 구분해 입력칸을 맞춘다 */
+const KINDS: Record<string, "number" | "date" | "json"> = {
+  cash_on_hand: "number",
+  payroll_monthly_actual: "number",
+  approval_single_limit: "number",
+  debt_long_term_total: "number",
+  opening_equity: "number",
+  cash_requirement_horizon: "date",
+  today_override: "date",
+  pipeline_probability: "json",
+  subscriptions: "json",
+  vat_display_basis: "json",
+  closed_periods: "json",
+};
+
 export function SettingsScreen() {
   const { query } = useErpUi();
+  const utils = trpc.useUtils();
   const settings = trpc.erp.settings.useQuery();
+  const me = trpc.erp.me.useQuery();
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState<string | null>(null);
+
+  const put = trpc.erp.putSetting.useMutation({
+    onSuccess: async saved => {
+      setMessage(
+        `${saved.key} 저장했습니다 — 변경 이력이 감사로그에 남았습니다.`
+      );
+      setDraft(prev => {
+        const next = { ...prev };
+        delete next[saved.key];
+        return next;
+      });
+      await utils.erp.invalidate();
+    },
+    onError: error => setMessage(error.message),
+  });
+
+  const canWrite = me.data?.role === "대표" || me.data?.role === "재무";
+
+  const parseValue = (key: string, raw: string): unknown => {
+    if (raw.trim() === "") return null;
+    const kind = KINDS[key] ?? "json";
+    if (kind === "number") {
+      const digits = raw.replace(/[^0-9-]/g, "");
+      return digits === "" ? null : Number(digits);
+    }
+    if (kind === "date") return raw.trim();
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  };
   const rows = (settings.data ?? []).filter(s =>
     matchesQuery(query, s.key, LABELS[s.key])
   );
@@ -58,6 +110,14 @@ export function SettingsScreen() {
         />
       </div>
 
+      {message ? <Note>{message}</Note> : null}
+      {canWrite ? null : (
+        <Note tone="warn">
+          {me.data?.role ?? "이"} 역할은 기준값을 변경할 수 없습니다 — 대표 또는
+          재무만 가능합니다 (§13.1).
+        </Note>
+      )}
+
       <Note tone="warn">
         임계선 · 손익분기 · 커버리지는 번레이트가 확정된 뒤 이 화면에서 대표
         승인을 거쳐 다시 세웁니다. 추정 분모에서 파생된 기준선은 전부
@@ -75,6 +135,7 @@ export function SettingsScreen() {
                 <th>확정도</th>
                 <th>담당</th>
                 <th>갱신</th>
+                <th>변경</th>
               </tr>
             </thead>
             <tbody>
@@ -102,6 +163,47 @@ export function SettingsScreen() {
                   <td>{setting.ownerRole ?? "—"}</td>
                   <td className="erp-null">
                     {setting.updatedAt ? setting.updatedAt.slice(0, 10) : "—"}
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <input
+                        type={KINDS[setting.key] === "date" ? "date" : "text"}
+                        value={
+                          draft[setting.key] ??
+                          (setting.value == null
+                            ? ""
+                            : typeof setting.value === "object"
+                              ? JSON.stringify(setting.value)
+                              : String(setting.value))
+                        }
+                        onChange={e =>
+                          setDraft(prev => ({ ...prev, [setting.key]: e.target.value }))
+                        }
+                        disabled={!canWrite}
+                        style={{
+                          width: 150,
+                          padding: "3px 6px",
+                          border: "1px solid var(--rule)",
+                          borderRadius: 4,
+                          font: "inherit",
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="erp-btn"
+                        disabled={!canWrite || draft[setting.key] === undefined || put.isPending}
+                        onClick={() =>
+                          put.mutate({
+                            key: setting.key,
+                            value: parseValue(setting.key, draft[setting.key] ?? ""),
+                            // 사람이 확정한 값이므로 임시 배지를 뗀다
+                            isProvisional: false,
+                          })
+                        }
+                      >
+                        저장
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -12,6 +12,7 @@
  */
 import { defaultPriorityOf } from "./accounts";
 import { nextCode } from "./codes";
+import { kstIso, kstToday } from "./time";
 import type { DaySnapshot, Direction, Entry } from "./types";
 
 /** 이 금액 미만이 적요 칸에만 있으면 단위(원/만원)를 판정할 수 없다고 본다 */
@@ -186,7 +187,7 @@ export function importSheet(
         dayOpen: 5,
         dayClose: 6,
       } as const);
-  const fallbackYear = options.fallbackYear ?? new Date().getFullYear();
+  const fallbackYear = options.fallbackYear ?? Number(kstToday().slice(0, 4));
 
   const codes = [...options.existingCodes];
   const entries: ImportedEntry[] = [];
@@ -304,7 +305,7 @@ export function importSheet(
         hasEvidence: false,
         isPersonal: false,
         version: 1,
-        createdAt: new Date().toISOString(),
+        createdAt: kstIso(),
         createdBy: options.actor,
       },
     });

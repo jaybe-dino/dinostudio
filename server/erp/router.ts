@@ -283,12 +283,23 @@ export const erpRouter = router({
     cashflow: protectedProcedure
       .input(
         z
-          .object({ unit: z.enum(["day", "month", "year"]).default("month") })
+          .object({
+            unit: z.enum(["day", "month", "year"]).default("month"),
+            // offset 금지 — 승인으로 순서가 바뀌므로 커서로만 이어 받는다 (§14)
+            cursor: z.string().nullable().default(null),
+            limit: z.number().int().min(1).max(24).default(3),
+          })
           .optional()
       )
       .query(({ ctx, input }) => {
         actorFrom(ctx);
-        return run(() => getLedgerService().cashflow(input?.unit ?? "month"));
+        return run(() =>
+          getLedgerService().cashflow(
+            input?.unit ?? "month",
+            input?.cursor ?? null,
+            input?.limit ?? 3
+          )
+        );
       }),
 
     cashPosition: protectedProcedure
@@ -478,6 +489,47 @@ export const erpRouter = router({
     actorFrom(ctx);
     return run(() => getLedgerService().accounts());
   }),
+
+  putSetting: protectedProcedure
+    .input(
+      z.object({
+        key: z.string().min(1),
+        value: z.unknown(),
+        isProvisional: z.boolean().default(false),
+        reason: z.string().optional(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      run(() =>
+        getLedgerService().putSetting(
+          input.key,
+          input.value ?? null,
+          input.isProvisional,
+          actorFrom(ctx),
+          input.reason
+        )
+      )
+    ),
+
+  putAccount: protectedProcedure
+    .input(
+      z.object({
+        code: z.string().min(1),
+        name: z.string().min(1),
+        type: z.string().min(1),
+        parentCode: z.string().nullable().default(null),
+        cfSection: z.enum(["영업", "투자", "재무", "현금유출없음", "판정불가"]),
+        isOpex: z.boolean(),
+        defaultPriority: z
+          .enum(["P0", "P1", "P2", "P3"])
+          .nullable()
+          .default(null),
+        active: z.boolean().default(true),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      run(() => getLedgerService().putAccount(input, actorFrom(ctx)))
+    ),
 
   settings: protectedProcedure.query(({ ctx }) => {
     actorFrom(ctx);

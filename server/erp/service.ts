@@ -22,6 +22,9 @@ import {
   looksLikeExpenseRequest,
   opexBreakdown,
   parseSlackExpense,
+  kstIso,
+  kstToday,
+  permissionFor,
   segmentPnl,
   trialBalance,
   buildCashflow,
@@ -45,6 +48,7 @@ import {
   STATUS_RULES,
 } from "@shared/erp";
 import type {
+  Account,
   Contract,
   Debt,
   DebtSchedule,
@@ -73,7 +77,8 @@ export interface Actor {
   ip?: string | null;
 }
 
-const nowIso = () => new Date().toISOString();
+// §14 — 모든 시각·일자는 KST 기준으로 만든다
+const nowIso = () => kstIso();
 
 export class LedgerService {
   constructor(private readonly store: LedgerStore) {}
@@ -115,13 +120,26 @@ export class LedgerService {
     };
   }
 
-  /** GET /cashflow?unit=day|month|year */
-  async cashflow(unit: CashflowUnit) {
+  /**
+   * GET /cashflow?unit=day|month|year&cursor=&limit=
+   *
+   * 커서 페이징이다. offset을 쓰면 스크롤 중에 승인이 일어나 순서가 바뀔 때
+   * 같은 블록이 두 번 나오거나 건너뛴다 (§14). 커서는 마지막으로 받은 블록 키다.
+   */
+  async cashflow(unit: CashflowUnit, cursor: string | null = null, limit = 3) {
     const [entries, snapshots] = await Promise.all([
       this.store.listEntries(),
       this.store.listSnapshots(),
     ]);
     const blocks = buildCashflow(entries, snapshots, unit);
+    // 최신순으로 내려간다 — 커서보다 오래된 블록만
+    const descending = [...blocks].reverse();
+    const start = cursor
+      ? descending.findIndex(block => block.key === cursor) + 1
+      : 0;
+    const page = descending.slice(start, start + limit);
+    const nextCursor =
+      start + limit < descending.length ? (page.at(-1)?.key ?? null) : null;
     // 현금흐름표의 「n건 제외 중」은 이 화면의 모집단(입출금일이 있는 건)에 대한 것이다.
     // 아직 들어오지 않은 채권처럼 입출금일이 없는 건은 애초에 어느 블록에도 없다.
     const undecided = entries.filter(
@@ -129,6 +147,10 @@ export class LedgerService {
     );
     return {
       unit,
+      /** 이 페이지의 블록 (최신순) — 커서로 이어 받는다 */
+      page,
+      nextCursor,
+      totalBlocks: descending.length,
       blocks,
       /** T4 — 화면에 「n건 제외 중」 */
       excludedUndecided: {
@@ -202,10 +224,7 @@ export class LedgerService {
    */
   private async today(): Promise<string> {
     const settings = await this.store.listSettings();
-    return (
-      settingValue<string>(settings, "today_override") ??
-      new Date().toISOString().slice(0, 10)
-    );
+    return settingValue<string>(settings, "today_override") ?? kstToday();
   }
 
   /** GET /ar — 미수 / 발행 대기 / DSO (§9.3) */
@@ -643,6 +662,59 @@ export class LedgerService {
     });
     await this.audit("intake", intake.id, "reject", intake, { reason }, actor);
     return { ok: true };
+  }
+
+  /**
+   * PUT /settings/:key — 임시 기본값·기준값 교체. 변경 시 감사로그 필수 (§10.1).
+   * 급여 실액(B1) · 보유현금 · 소요 지평 같은 차단 항목이 여기서 풀린다.
+   */
+  async putSetting(
+    key: string,
+    value: unknown,
+    isProvisional: boolean,
+    actor: Actor,
+    reason?: string
+  ) {
+    const settings = await this.store.listSettings();
+    const before = settings.find(item => item.key === key) ?? null;
+
+    // §13.1 기준값 — 대표는 승인(RWA), 재무는 제안(W). 그 외 역할은 손대지 못한다.
+    const permission = permissionFor(actor.role, "setting");
+    if (!permission.write)
+      throw erpError(
+        "forbidden_field",
+        { key },
+        "기준값을 변경할 권한이 없습니다"
+      );
+
+    const saved = await this.store.putSetting({
+      key,
+      value,
+      isProvisional,
+      ownerRole: before?.ownerRole ?? actor.role,
+      updatedBy: actor.id,
+      updatedAt: nowIso(),
+    });
+    await this.audit("setting", key, "put", before, saved, actor, reason);
+    return saved;
+  }
+
+  /** PUT /accounts — 계정과목 마스터. 자동 판정 3종이 전부 이 컬럼에서 나온다 (§8) */
+  async putAccount(account: Account, actor: Actor) {
+    const permission = permissionFor(actor.role, "account");
+    if (!permission.write)
+      throw erpError(
+        "forbidden_field",
+        { code: account.code },
+        "계정과목 마스터를 변경할 권한이 없습니다"
+      );
+    const before =
+      (await this.store.listAccounts()).find(
+        item => item.code === account.code
+      ) ?? null;
+    const saved = await this.store.upsertAccount(account);
+    await this.audit("account", account.code, "put", before, saved, actor);
+    return saved;
   }
 
   // ── 입력 · 수정 ──────────────────────────────────────────────────────────

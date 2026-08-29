@@ -121,3 +121,21 @@ describe("§5.2 시트 이관", () => {
     });
   });
 });
+
+describe("§14 시간대 — KST 고정", () => {
+  it("일자 경계는 00:00 KST다 — UTC로 계산하면 오전 9시 이전이 전날로 밀린다", async () => {
+    const { kstToday, kstIso, kstMonth } = await import("@shared/erp");
+    // 2026-08-29 08:00 KST = 2026-08-28 23:00 UTC
+    const beforeNine = new Date("2026-08-28T23:00:00Z");
+    expect(beforeNine.toISOString().slice(0, 10)).toBe("2026-08-28"); // UTC로는 전날
+    expect(kstToday(beforeNine)).toBe("2026-08-29"); // KST로는 당일
+    expect(kstMonth(beforeNine)).toBe("2026-08");
+    expect(kstIso(beforeNine)).toBe("2026-08-29T08:00:00+09:00");
+  });
+
+  it("자정 직후도 같은 날로 잡힌다", async () => {
+    const { kstToday } = await import("@shared/erp");
+    expect(kstToday(new Date("2026-08-31T15:00:00Z"))).toBe("2026-09-01");
+    expect(kstToday(new Date("2026-08-31T14:59:00Z"))).toBe("2026-08-31");
+  });
+});
