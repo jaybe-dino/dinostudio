@@ -83,6 +83,8 @@ function toEntry(row: ErpEntryRow): Entry {
     invoiceDate: row.invoiceDate,
     source: row.source,
     sourceRef: row.sourceRef,
+    roundNo: row.roundNo,
+    linkedRevenueCode: row.linkedRevenueCode,
     undecidedReason: row.undecidedReason,
     hasEvidence: row.hasEvidence,
     isPersonal: row.isPersonal,

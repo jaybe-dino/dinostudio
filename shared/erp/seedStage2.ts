@@ -238,6 +238,8 @@ function toArEntry(input: ArInput): Entry {
     invoiceDate: input.invoiceDate ?? null,
     source: "migration",
     sourceRef: `ar:${input.code}`,
+    roundNo: null,
+    linkedRevenueCode: null,
     undecidedReason: input.amount == null ? "단위 불명" : null,
     hasEvidence: input.invoiceIssued,
     isPersonal: false,

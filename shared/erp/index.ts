@@ -18,3 +18,4 @@ export * from "./financialStatements";
 export * from "./seed";
 export * from "./seedStage2";
 export * from "./sheetImport";
+export * from "./slackParse";

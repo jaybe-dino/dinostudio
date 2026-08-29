@@ -2,6 +2,7 @@
  * 수집 검수함 — 원장 진입 전 대기열. 파싱 실패도 여기 남는다 (§11.1).
  * 승인은 슬랙에서 하지 않는다. 슬랙의 👍는 참고 이력이고 승인은 시스템 안에서만 이뤄진다.
  */
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile } from "../components/Bits";
 import { useErpUi } from "../context";
@@ -32,9 +33,39 @@ const SLACK_FIELDS: [string, string, string][] = [
 ];
 
 export function IntakeScreen() {
-  const { goto } = useErpUi();
+  const { goto, openEntry } = useErpUi();
+  const utils = trpc.useUtils();
   const masters = trpc.erp.masters.useQuery();
   const intakes = masters.data?.intakes ?? [];
+  const [message, setMessage] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+
+  const refresh = async () => {
+    await Promise.all([
+      utils.erp.masters.invalidate(),
+      utils.erp.entries.invalidate(),
+    ]);
+  };
+  const promote = trpc.erp.intake.promote.useMutation({
+    onSuccess: async result => {
+      setMessage(
+        `${result.entry.code} 로 적재했습니다 — 승인 대기 상태입니다.` +
+          (result.partyCandidate
+            ? ` 거래처 「${result.partyCandidate}」는 마스터에 없어 신규 후보입니다.`
+            : "")
+      );
+      await refresh();
+    },
+    onError: e => setMessage(e.message),
+  });
+  const reject = trpc.erp.intake.reject.useMutation({
+    onSuccess: async () => {
+      setMessage("반려했습니다 — 기록은 검수함에 남습니다.");
+      setReason("");
+      await refresh();
+    },
+    onError: e => setMessage(e.message),
+  });
 
   return (
     <div className="erp-page">

@@ -133,6 +133,10 @@ export interface Entry {
   source: EntrySource;
   /** 슬랙 ts · 계산서 번호 등 — UNIQUE(source, sourceRef) */
   sourceRef: string | null;
+  /** 회차 — IP 사업부의 원가 귀속 단위 (§11.1 신규 필드) */
+  roundNo: number | null;
+  /** 대응 매출 코드 — 통과원가 판정의 근거 (§11.1 신규 필드) */
+  linkedRevenueCode: string | null;
   /** "적요칸 금액" · "단위 불명" · "항목명 없음" · "중복 의심" */
   undecidedReason: string | null;
   /** 증빙 유무 — 없으면 확정 불가 (§13.2) */

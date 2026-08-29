@@ -298,6 +298,8 @@ export function importSheet(
         invoiceDate: null,
         source: "migration",
         sourceRef: `sheet:${date}:${line}`,
+        roundNo: null,
+        linkedRevenueCode: null,
         undecidedReason,
         hasEvidence: false,
         isPersonal: false,

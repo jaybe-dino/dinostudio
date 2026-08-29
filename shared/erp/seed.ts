@@ -462,6 +462,8 @@ function toEntry(input: SeedEntryInput): Entry {
     invoiceDate: null,
     source: "migration",
     sourceRef: `sheet:${input.code}`,
+    roundNo: null,
+    linkedRevenueCode: null,
     undecidedReason: input.undecidedReason ?? null,
     hasEvidence: input.hasEvidence ?? true,
     isPersonal: input.isPersonal ?? false,

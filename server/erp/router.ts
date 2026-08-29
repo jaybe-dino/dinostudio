@@ -417,6 +417,26 @@ export const erpRouter = router({
       run(() => getLedgerService().closePeriod(input.ym, actorFrom(ctx)))
     ),
 
+  /** §11.1 수집 검수함 — 검수 통과해야 원장으로 올라간다 */
+  intake: router({
+    promote: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(({ ctx, input }) =>
+        run(() => getLedgerService().promoteIntake(input.id, actorFrom(ctx)))
+      ),
+    reject: protectedProcedure
+      .input(z.object({ id: z.string(), reason: z.string().min(1) }))
+      .mutation(({ ctx, input }) =>
+        run(() =>
+          getLedgerService().rejectIntake(
+            input.id,
+            input.reason,
+            actorFrom(ctx)
+          )
+        )
+      ),
+  }),
+
   /** 시트 이관 — 미리보기 후 확인해야 적재된다 */
   sheetImport: router({
     preview: protectedProcedure

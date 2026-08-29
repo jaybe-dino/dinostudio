@@ -19,7 +19,9 @@ import {
   closingBlockers,
   evaluateNotifications,
   importSheet,
+  looksLikeExpenseRequest,
   opexBreakdown,
+  parseSlackExpense,
   segmentPnl,
   trialBalance,
   buildCashflow,
@@ -60,6 +62,7 @@ import type {
   Role,
 } from "@shared/erp";
 import { randomUUID } from "node:crypto";
+import { aiParseExpense } from "../integrations/aiParser";
 import { erpError } from "./errors";
 import type { EntryFilter, LedgerStore } from "./store";
 
@@ -479,6 +482,169 @@ export class LedgerService {
     return { ...result, inserted, skipped };
   }
 
+  /**
+   * §11.1 슬랙 수집 — 규칙 파서를 먼저 돌리고, 못 읽은 것만 AI에 넘긴다.
+   * 어느 쪽이든 결과는 원장이 아니라 **검수함**에 선다. 사람이 확인해야 원장으로 올라간다 (원칙 7).
+   */
+  async collectSlackMessage(
+    message: { channel: string; ts: string; text: string; user: string | null },
+    actor: Actor
+  ) {
+    const existing = await this.store.listIntakes();
+    if (
+      existing.some(
+        item => item.source === "slack" && item.sourceRef === message.ts
+      )
+    ) {
+      // 같은 스레드 ts는 두 번 들어오지 않는다 (§6.2 UNIQUE · T9)
+      return { status: "duplicate" as const, id: null };
+    }
+    if (!looksLikeExpenseRequest(message.text)) {
+      return { status: "ignored" as const, id: null };
+    }
+
+    const today = await this.today();
+    const rule = parseSlackExpense(message.text, Number(today.slice(0, 4)));
+
+    let parsed: Record<string, unknown> | null = null;
+    let status = "waiting";
+    let failReason: string | null = null;
+
+    if (rule.matchedFields > 0) {
+      parsed = {
+        by: "rule",
+        ...rule.fields,
+        warnings: rule.warnings,
+        missing: rule.missingRequired,
+      };
+      if (rule.missingRequired.length > 0) {
+        failReason = `필수 항목 누락 — ${rule.missingRequired.join(" · ")}`;
+      }
+    } else {
+      // 비정형(수기) 메시지 — 파싱 실패를 허용하고 AI에 넘긴다 (§11.1)
+      try {
+        const ai = await aiParseExpense(message.text, today);
+        if (ai && ai.isExpenseRequest) {
+          parsed = {
+            by: "ai",
+            model: ai.model,
+            ...ai.fields,
+            uncertain: ai.uncertain,
+          };
+          if (ai.uncertain.length > 0) failReason = ai.uncertain.join(" · ");
+        } else if (ai) {
+          return { status: "ignored" as const, id: null };
+        } else {
+          status = "failed";
+          failReason =
+            "규칙 파서가 읽지 못했고 AI 파서가 설정되지 않았습니다 — 수기 입력이 필요합니다";
+        }
+      } catch (error) {
+        status = "failed";
+        failReason = error instanceof Error ? error.message : "AI 파싱 실패";
+      }
+    }
+
+    const id = randomUUID();
+    await this.store.upsertIntake({
+      id,
+      source: "slack",
+      sourceRef: message.ts,
+      raw: message.text,
+      parsed,
+      status,
+      failReason,
+      entryId: null,
+      receivedAt: nowIso(),
+    });
+    await this.audit(
+      "intake",
+      id,
+      "collect",
+      null,
+      { channel: message.channel, status },
+      actor
+    );
+    return { status: status as "waiting" | "failed", id };
+  }
+
+  /** POST /intake/:id/promote — 검수 통과 → entry 생성 (§10.1) */
+  async promoteIntake(intakeId: string, actor: Actor) {
+    const intakes = await this.store.listIntakes();
+    const intake = intakes.find(item => item.id === intakeId);
+    if (!intake) throw erpError("not_found", { intakeId });
+    if (intake.entryId)
+      throw erpError(
+        "duplicate_suspected",
+        { entryId: intake.entryId },
+        "이미 원장에 적재된 건입니다"
+      );
+
+    const parsed = (intake.parsed ?? {}) as Record<string, unknown>;
+    const str = (key: string) =>
+      typeof parsed[key] === "string" ? (parsed[key] as string) : null;
+    const num = (key: string) =>
+      typeof parsed[key] === "number" ? (parsed[key] as number) : null;
+    const parties = await this.store.listParties();
+    const partyName = str("partyName");
+    const party = partyName
+      ? parties.find(p => p.name === partyName)
+      : undefined;
+
+    const created = await this.createEntry(
+      {
+        direction: "out",
+        title: str("title") ?? "",
+        amount: num("amount"),
+        cashDate: str("requestDate") ?? (await this.today()),
+        accountCode: null,
+        nature: "미지정",
+        buCode: (str("buCode") ?? null) as never,
+        hasEvidence: false,
+        noteRaw: intake.raw,
+        source: "slack",
+        sourceRef: intake.sourceRef,
+        // 검수함을 통과한 건은 사람이 이미 중복을 봤다
+        duplicateOverrideReason: "검수함에서 확인 후 적재",
+      },
+      actor
+    );
+
+    await this.store.upsertIntake({
+      ...intake,
+      status: "promoted",
+      entryId: created.entry.id,
+    });
+    await this.audit(
+      "intake",
+      intake.id,
+      "promote",
+      intake,
+      { entryCode: created.entry.code },
+      actor
+    );
+    return {
+      entry: created.entry,
+      /** 거래처가 마스터에 없으면 신규 후보로 남긴다 (§11.1) */
+      partyMatched: party ? party.name : null,
+      partyCandidate: party ? null : partyName,
+    };
+  }
+
+  async rejectIntake(intakeId: string, reason: string, actor: Actor) {
+    const intakes = await this.store.listIntakes();
+    const intake = intakes.find(item => item.id === intakeId);
+    if (!intake) throw erpError("not_found", { intakeId });
+    if (!reason.trim()) throw erpError("reason_required");
+    await this.store.upsertIntake({
+      ...intake,
+      status: "rejected",
+      failReason: reason,
+    });
+    await this.audit("intake", intake.id, "reject", intake, { reason }, actor);
+    return { ok: true };
+  }
+
   // ── 입력 · 수정 ──────────────────────────────────────────────────────────
 
   /** POST /entries — code는 서버가 부여한다 */
@@ -557,6 +723,8 @@ export class LedgerService {
       invoiceDate: null,
       source: input.source ?? "manual",
       sourceRef: input.sourceRef ?? null,
+      roundNo: null,
+      linkedRevenueCode: null,
       undecidedReason,
       hasEvidence: input.hasEvidence ?? false,
       isPersonal: false,

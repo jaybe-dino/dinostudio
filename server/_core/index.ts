@@ -59,7 +59,7 @@ async function startServer() {
     }
     // Use ip-api.com free tier (no key needed, 45 req/min)
     fetch(`http://ip-api.com/json/${ip}?fields=countryCode`)
-      .then((r) => r.json())
+      .then(r => r.json())
       .then((data: any) => {
         res.json({ country: data.countryCode || "KR", ip });
       })

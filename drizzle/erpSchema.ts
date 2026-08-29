@@ -129,6 +129,9 @@ export const erpEntries = mysqlTable(
     invoiceDate: date("invoiceDate", { mode: "string" }),
     source: mysqlEnum("source", SOURCE_VALUES).notNull(),
     sourceRef: varchar("sourceRef", { length: 190 }),
+    /** §11.1 슬랙 양식에 추가가 필요한 필드 */
+    roundNo: int("roundNo"),
+    linkedRevenueCode: varchar("linkedRevenueCode", { length: 32 }),
     undecidedReason: varchar("undecidedReason", { length: 300 }),
     hasEvidence: boolean("hasEvidence").notNull().default(false),
     /** 개인이 식별되는 인건비 건 — 응답 단계 마스킹 대상 (§13.3) */
@@ -376,6 +379,9 @@ export const erpIntakes = mysqlTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     source: mysqlEnum("source", SOURCE_VALUES).notNull(),
     sourceRef: varchar("sourceRef", { length: 190 }),
+    /** §11.1 슬랙 양식에 추가가 필요한 필드 */
+    roundNo: int("roundNo"),
+    linkedRevenueCode: varchar("linkedRevenueCode", { length: 32 }),
     raw: text("raw").notNull(),
     parsed: json("parsed"),
     status: varchar("status", { length: 30 }).notNull().default("waiting"),
