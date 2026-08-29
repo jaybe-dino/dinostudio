@@ -3,7 +3,7 @@
  * server/db.ts의 graceful degradation과 같은 방식이다.
  */
 import { ROLES, type Role } from "@shared/erp";
-import { drizzle } from "drizzle-orm/mysql2";
+import { createDb } from "../dbPool";
 import { DrizzleLedgerStore } from "./drizzleStore";
 import { LedgerService } from "./service";
 import { InMemoryLedgerStore, type LedgerStore } from "./store";
@@ -15,7 +15,7 @@ export function getLedgerService(): LedgerService {
   let store: LedgerStore;
   if (process.env.DATABASE_URL) {
     try {
-      store = new DrizzleLedgerStore(drizzle(process.env.DATABASE_URL));
+      store = new DrizzleLedgerStore(createDb(process.env.DATABASE_URL));
     } catch (error) {
       console.warn(
         "[ERP] MySQL 연결 실패 — 시드 메모리 저장소로 대체합니다:",
