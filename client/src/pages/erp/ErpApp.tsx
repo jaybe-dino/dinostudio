@@ -492,7 +492,7 @@ function SignIn({ message }: { message: string }) {
               <a
                 className="erp-btn"
                 data-variant="primary"
-                href="/api/auth/google/start?next=/erp"
+                href={`/api/auth/google/start?next=${encodeURIComponent(window.location.pathname || "/")}`}
               >
                 구글 워크스페이스 계정으로 로그인
               </a>

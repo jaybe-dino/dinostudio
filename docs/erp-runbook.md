@@ -26,10 +26,10 @@
 
 [Cloud Console](https://console.cloud.google.com/apis/credentials) → OAuth 클라이언트 ID → 웹 애플리케이션
 
-| 항목         | 값                                            |
-| ------------ | --------------------------------------------- |
-| 리디렉션 URI | `https://<배포주소>/api/auth/google/callback` |
-| 동의 화면    | **내부(Internal)** — 워크스페이스 구성원만    |
+| 항목         | 값                                                     |
+| ------------ | ------------------------------------------------------ |
+| 리디렉션 URI | `https://admin.dinostudio.kr/api/auth/google/callback` |
+| 동의 화면    | **내부(Internal)** — 워크스페이스 구성원만             |
 
 ### ② DB 고르기 (대표 판단 · 재무 실행)
 
@@ -68,7 +68,10 @@ pnpm erp:seed     # 시드 27건 + 일계 7행 + V1~V8 검증 리포트
 
 ### ⑤ 확인
 
-`https://<배포주소>/erp` → 구글 로그인 → 현금 현황에서 **P0 부족액 −272,110** 이 나오면 성공.
+Vercel Settings → Domains 에 `admin.dinostudio.kr` 추가 → 안내되는 CNAME을 DNS에 등록.
+
+`https://admin.dinostudio.kr` → 구글 로그인 → 현금 현황에서 **P0 부족액 −272,110** 이 나오면 성공.
+이 호스트는 루트가 곧 경영관리 시스템입니다 (마케팅 사이트는 보이지 않습니다).
 
 ---
 
@@ -103,7 +106,7 @@ pnpm erp:seed     # 시드 27건 + 일계 7행 + V1~V8 검증 리포트
 
 ### 슬랙 (§11.1)
 
-1. 슬랙 앱 → Event Subscriptions → `https://<배포주소>/api/integrations/slack/events`
+1. 슬랙 앱 → Event Subscriptions → `https://admin.dinostudio.kr/api/integrations/slack/events`
 2. `message.channels` 이벤트 구독 · 대상 채널에 봇 초대
 3. 환경변수 `SLACK_SIGNING_SECRET` · `SLACK_EXPENSE_CHANNELS`(채널 ID 두 개)
 

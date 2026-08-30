@@ -88,7 +88,14 @@ export async function exchangeCode(
   };
 }
 
-/** 배포 주소를 요청에서 도출한다 — 미리보기 배포마다 리다이렉트 URI가 달라지기 때문 */
+/**
+ * 배포 주소를 요청에서 도출한다 — 미리보기 배포마다 리다이렉트 URI가 달라지기 때문.
+ *
+ * 구글 콘솔에는 실제로 쓰는 주소를 전부 등록해야 한다. 최소 두 개 —
+ *   https://admin.dinostudio.kr/api/auth/google/callback   (운영)
+ *   http://localhost:3000/api/auth/google/callback         (로컬)
+ * 미리보기 배포에서도 로그인하려면 그 주소도 등록하거나, 운영 도메인에서만 시험한다.
+ */
 export function redirectUriFrom(origin: string): string {
   return `${origin.replace(/\/$/, "")}/api/auth/google/callback`;
 }
