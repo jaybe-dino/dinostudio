@@ -468,6 +468,12 @@ export default function ErpApp() {
  * 이메일 + 지정 비밀번호가 임시 경로이고, 구글 SSO가 켜지면 버튼이 함께 나온다.
  * 역할이 아직 배정되지 않은 사람은 로그인해도 화면이 열리지 않는다 (§13.1 · G10).
  */
+interface LoginReply {
+  ok?: boolean;
+  reason?: string;
+  next?: string;
+}
+
 function SignIn({ message }: { message: string }) {
   const needsRole = message.includes("역할");
   const [methods, setMethods] = useState<{
@@ -484,13 +490,24 @@ function SignIn({ message }: { message: string }) {
   useEffect(() => {
     let alive = true;
     fetch("/api/auth/methods", { credentials: "same-origin" })
-      .then(response => (response.ok ? response.json() : null))
-      .then(data => {
-        if (alive && data) setMethods(data);
+      .then(async response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return (await response.json()) as {
+          google: boolean;
+          password: boolean;
+        };
       })
-      // 조회 자체가 실패하면 두 수단을 모두 보여 준다 — 아무것도 못 누르는 것보다 낫다
-      .catch(() => {
-        if (alive) setMethods({ google: true, password: true });
+      .then(data => {
+        if (alive) setMethods(data);
+      })
+      // 조회가 실패하면 두 수단을 모두 보여 주되, 실패했다는 사실을 감추지 않는다 —
+      // 이 조회가 안 되면 로그인 요청도 십중팔구 안 된다.
+      .catch((cause: Error) => {
+        if (!alive) return;
+        setMethods({ google: true, password: true });
+        setError(
+          `서버 함수에 연결하지 못했습니다 (${cause.message}). 배포 상태를 확인하십시오.`
+        );
       });
     return () => {
       alive = false;
@@ -513,21 +530,40 @@ function SignIn({ message }: { message: string }) {
           next: window.location.pathname || "/",
         }),
       });
-      const data = (await response.json()) as {
-        ok?: boolean;
-        reason?: string;
-        next?: string;
-      };
+      // 본문을 먼저 글자로 받는다 — 404 안내 페이지처럼 JSON이 아닌 응답이 와도
+      // "서버에 연결하지 못했습니다"로 뭉뚱그리지 않고 진짜 원인을 보여주기 위해서다.
+      const raw = await response.text();
+      let data: LoginReply | null = null;
+      try {
+        data = JSON.parse(raw) as LoginReply;
+      } catch {
+        data = null;
+      }
+
+      if (data == null) {
+        setError(
+          response.status === 404
+            ? "로그인 API를 찾을 수 없습니다 (404). 배포에 서버 함수가 포함되지 않았습니다."
+            : `서버가 예상과 다른 응답을 보냈습니다 (HTTP ${response.status}). ${raw.slice(0, 120)}`
+        );
+        setPassword("");
+        return;
+      }
       if (!response.ok || !data.ok) {
-        setError(data.reason ?? "로그인에 실패했습니다.");
+        setError(
+          data.reason ?? `로그인에 실패했습니다 (HTTP ${response.status}).`
+        );
         setPassword("");
         return;
       }
       // 다음에 이메일을 다시 치지 않도록 남긴다. 비밀번호는 절대 남기지 않는다.
       window.localStorage.setItem("erp:lastEmail", email.trim().toLowerCase());
       window.location.replace(data.next ?? "/");
-    } catch {
-      setError("서버에 연결하지 못했습니다. 잠시 뒤 다시 시도하십시오.");
+    } catch (cause) {
+      // 여기까지 오면 요청 자체가 나가지 못한 것이다 (네트워크·CORS·차단)
+      setError(
+        `서버에 연결하지 못했습니다 — ${cause instanceof Error ? cause.message : "원인 불명"}`
+      );
     } finally {
       setBusy(false);
     }
