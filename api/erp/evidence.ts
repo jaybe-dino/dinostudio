@@ -6,7 +6,11 @@
  */
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { SESSION_COOKIE, parseCookies, verifySessionToken } from "../../server/auth/session";
+import {
+  SESSION_COOKIE,
+  parseCookies,
+  verifySessionToken,
+} from "../../server/auth/session";
 import { resolveErpRole } from "../../server/erp";
 import { storageConfigured } from "../../server/erp/attachments";
 
@@ -14,11 +18,14 @@ export async function GET(req: Request): Promise<Response> {
   const token = parseCookies(req.headers.get("cookie"))[SESSION_COOKIE];
   const session = token ? await verifySessionToken(token) : null;
   if (!session) return new Response("로그인이 필요합니다", { status: 401 });
-  if (!resolveErpRole(session.email)) return new Response("역할이 지정되지 않았습니다", { status: 403 });
+  if (!resolveErpRole(session.email))
+    return new Response("역할이 지정되지 않았습니다", { status: 403 });
 
   const key = new URL(req.url).searchParams.get("key");
-  if (!key || !key.startsWith("erp/evidence/")) return new Response("잘못된 요청", { status: 400 });
-  if (!storageConfigured()) return new Response("스토리지가 설정되지 않았습니다", { status: 503 });
+  if (!key || !key.startsWith("erp/evidence/"))
+    return new Response("잘못된 요청", { status: 400 });
+  if (!storageConfigured())
+    return new Response("스토리지가 설정되지 않았습니다", { status: 503 });
 
   const client = new S3Client({
     region: process.env.ERP_S3_REGION,

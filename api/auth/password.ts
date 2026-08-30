@@ -21,7 +21,12 @@ function json(body: unknown, status: number, extra: [string, string][] = []) {
   });
 }
 
-async function handler(req: Request): Promise<Response> {
+/*
+ * Vercel 서버리스 런타임은 이 파일을 정적으로 훑어 어떤 HTTP 메서드를 다루는지 정한다.
+ * `export { handler as GET }` 같은 별칭 재export 는 그 탐지에 잡히지 않아
+ * FUNCTION_INVOCATION_FAILED 로 죽는다 — 그래서 메서드마다 선언형으로 내보낸다.
+ */
+export async function POST(req: Request): Promise<Response> {
   if (req.method !== "POST")
     return json({ ok: false, reason: "POST 로만 호출합니다." }, 405);
 
@@ -57,5 +62,3 @@ async function handler(req: Request): Promise<Response> {
     ],
   ]);
 }
-
-export { handler as POST };

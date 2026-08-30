@@ -6,7 +6,12 @@
 import { googleConfigured } from "../../server/auth/google";
 import { passwordLoginConfigured } from "../../server/auth/password";
 
-function handler(): Response {
+/*
+ * Vercel 서버리스 런타임은 이 파일을 정적으로 훑어 어떤 HTTP 메서드를 다루는지 정한다.
+ * `export { handler as GET }` 같은 별칭 재export 는 그 탐지에 잡히지 않아
+ * FUNCTION_INVOCATION_FAILED 로 죽는다 — 그래서 메서드마다 선언형으로 내보낸다.
+ */
+export function GET(): Response {
   return new Response(
     JSON.stringify({
       google: googleConfigured(),
@@ -21,5 +26,3 @@ function handler(): Response {
     }
   );
 }
-
-export { handler as GET };
