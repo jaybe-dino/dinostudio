@@ -6,10 +6,10 @@
  * 차액을 「기초 미설정」 행으로 그대로 노출한다 (B6). 억지로 맞추지 않는다.
  * 현금흐름표는 직접법이고 §8.3의 3구간 자동 판정을 그대로 쓴다.
  */
-import { cashflowSection, findAccount } from "./accounts";
-import { trialBalance } from "./journal";
-import { buildPnl } from "./pnl";
-import type { Entry, Journal, Period } from "./types";
+import { cashflowSection, findAccount } from "./accounts.js";
+import { trialBalance } from "./journal.js";
+import { buildPnl } from "./pnl.js";
+import type { Entry, Journal, Period } from "./types.js";
 
 export interface StatementRow {
   label: string;

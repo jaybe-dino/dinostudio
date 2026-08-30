@@ -3,7 +3,7 @@
  *
  * §7.3 표가 이 시스템의 모든 합계의 근거다. 어떤 화면도 이 표를 우회해서 집계하지 않는다.
  */
-import type { EntryStatus } from "./types";
+import type { EntryStatus } from "./types.js";
 
 export interface StatusRule {
   /** 현금흐름 계 */

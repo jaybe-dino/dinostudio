@@ -8,8 +8,8 @@ import {
   exchangeCode,
   googleConfigured,
   redirectUriFrom,
-} from "./google";
-import { passwordLoginConfigured, verifyPasswordLogin } from "./password";
+} from "./google.js";
+import { passwordLoginConfigured, verifyPasswordLogin } from "./password.js";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
@@ -17,7 +17,7 @@ import {
   createSessionToken,
   isAllowedIdentity,
   serializeCookie,
-} from "./session";
+} from "./session.js";
 
 function originOf(req: Request): string {
   const proto =

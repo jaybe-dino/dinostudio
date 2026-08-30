@@ -2,7 +2,7 @@
  * GET /api/auth/google/callback — 구글이 돌려보낸 code를 세션 쿠키로 바꾼다.
  * 허용 도메인·계정이 아니면 세션을 만들지 않는다. 열어두는 것이 기본값이면 안 된다.
  */
-import { exchangeCode, redirectUriFrom } from "../../../server/auth/google";
+import { exchangeCode, redirectUriFrom } from "../../../server/auth/google.js";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
@@ -11,7 +11,7 @@ import {
   isAllowedIdentity,
   parseCookies,
   serializeCookie,
-} from "../../../server/auth/session";
+} from "../../../server/auth/session.js";
 
 function deny(message: string, status = 403): Response {
   return new Response(

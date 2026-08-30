@@ -10,9 +10,9 @@ import {
   SESSION_COOKIE,
   parseCookies,
   verifySessionToken,
-} from "../../server/auth/session";
-import { resolveErpRole } from "../../server/erp";
-import { storageConfigured } from "../../server/erp/attachments";
+} from "../../server/auth/session.js";
+import { resolveErpRole } from "../../server/erp/index.js";
+import { storageConfigured } from "../../server/erp/attachments.js";
 
 export async function GET(req: Request): Promise<Response> {
   const token = parseCookies(req.headers.get("cookie"))[SESSION_COOKIE];

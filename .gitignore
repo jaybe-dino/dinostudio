@@ -112,3 +112,6 @@ temp/
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
 .project-config.json
+
+# Vercel 런타임 재현 테스트가 쓰는 임시 출력
+.tmp-esm-check/

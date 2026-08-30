@@ -2,11 +2,11 @@
  * 서비스 팩토리 — DATABASE_URL이 있으면 MySQL, 없으면 §5.4 시드 메모리 저장소.
  * server/db.ts의 graceful degradation과 같은 방식이다.
  */
-import { ROLES, type Role } from "@shared/erp";
-import { createDb } from "../dbPool";
-import { DrizzleLedgerStore } from "./drizzleStore";
-import { LedgerService } from "./service";
-import { InMemoryLedgerStore, type LedgerStore } from "./store";
+import { ROLES, type Role } from "../../shared/erp/index.js";
+import { createDb } from "../dbPool.js";
+import { DrizzleLedgerStore } from "./drizzleStore.js";
+import { LedgerService } from "./service.js";
+import { InMemoryLedgerStore, type LedgerStore } from "./store.js";
 
 let cached: LedgerService | null = null;
 
@@ -36,10 +36,13 @@ export function getLedgerService(): LedgerService {
  */
 const assignedRoles = new Map<string, Role>();
 
-export function setAssignedRoles(users: { email: string; role: Role; active: boolean }[]) {
+export function setAssignedRoles(
+  users: { email: string; role: Role; active: boolean }[]
+) {
   assignedRoles.clear();
   for (const user of users) {
-    if (user.active) assignedRoles.set(user.email.trim().toLowerCase(), user.role);
+    if (user.active)
+      assignedRoles.set(user.email.trim().toLowerCase(), user.role);
   }
 }
 
@@ -78,10 +81,10 @@ export function resolveErpRole(email: string | null | undefined): Role | null {
   return null;
 }
 
-export { LedgerService } from "./service";
-export type { Actor } from "./service";
-export { InMemoryLedgerStore } from "./store";
-export type { LedgerStore, EntryFilter } from "./store";
-export { DrizzleLedgerStore } from "./drizzleStore";
-export { ErpError, erpError } from "./errors";
-export type { ErpErrorCode } from "./errors";
+export { LedgerService } from "./service.js";
+export type { Actor } from "./service.js";
+export { InMemoryLedgerStore } from "./store.js";
+export type { LedgerStore, EntryFilter } from "./store.js";
+export { DrizzleLedgerStore } from "./drizzleStore.js";
+export { ErpError, erpError } from "./errors.js";
+export type { ErpErrorCode } from "./errors.js";

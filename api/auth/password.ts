@@ -2,13 +2,13 @@
  * POST /api/auth/password — 이메일 + 지정 비밀번호로 세션 쿠키를 만든다.
  * 구글 SSO를 붙이기 전까지 쓰는 임시 경로이고, 발급하는 쿠키는 SSO와 완전히 같다.
  */
-import { verifyPasswordLogin } from "../../server/auth/password";
+import { verifyPasswordLogin } from "../../server/auth/password.js";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
   createSessionToken,
   serializeCookie,
-} from "../../server/auth/session";
+} from "../../server/auth/session.js";
 
 function json(body: unknown, status: number, extra: [string, string][] = []) {
   return new Response(JSON.stringify(body), {

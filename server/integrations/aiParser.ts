@@ -10,7 +10,7 @@
  *   · 단위가 불명한 숫자는 금액으로 올리지 않는다 (§5.2)
  */
 import Anthropic from "@anthropic-ai/sdk";
-import type { SlackExpenseFields } from "@shared/erp";
+import type { SlackExpenseFields } from "../../shared/erp/index.js";
 
 export const AI_MODEL = "claude-opus-5";
 

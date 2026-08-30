@@ -6,9 +6,12 @@ import {
   looksLikeExpenseRequest,
   parseKoreanAmount,
   parseSlackExpense,
-} from "@shared/erp";
+} from "../../shared/erp/index.js";
 import { describe, expect, it } from "vitest";
-import { verifySlackSignature, isWatchedChannel } from "../integrations/slack";
+import {
+  verifySlackSignature,
+  isWatchedChannel,
+} from "../integrations/slack.js";
 
 const BOT_MESSAGE = `기업명: 액티브스
 지출 내용: 액티브스 운영수수료 (엔지니어TV)

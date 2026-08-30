@@ -21,14 +21,16 @@ async function probe(load: () => Promise<unknown>): Promise<string> {
 export async function GET(): Promise<Response> {
   const modules: Record<string, string> = {
     jose: await probe(() => import("jose")),
-    "server/auth/session": await probe(() => import("../server/auth/session")),
-    "server/auth/google": await probe(() => import("../server/auth/google")),
-    "server/auth/password": await probe(
-      () => import("../server/auth/password")
+    "server/auth/session": await probe(
+      () => import("../server/auth/session.js")
     ),
-    "shared/erp": await probe(() => import("../shared/erp")),
-    "server/erp/router": await probe(() => import("../server/erp/router")),
-    "server/routers": await probe(() => import("../server/routers")),
+    "server/auth/google": await probe(() => import("../server/auth/google.js")),
+    "server/auth/password": await probe(
+      () => import("../server/auth/password.js")
+    ),
+    "shared/erp": await probe(() => import("../shared/erp/index.js")),
+    "server/erp/router": await probe(() => import("../server/erp/router.js")),
+    "server/routers": await probe(() => import("../server/routers.js")),
   };
 
   // 값이 아니라 설정 여부만 — 비밀번호·비밀키가 밖으로 나가면 안 된다

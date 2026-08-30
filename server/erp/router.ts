@@ -2,13 +2,13 @@
  * §10.1 엔드포인트 — 1차 오픈 범위. tRPC로 노출한다.
  * DELETE는 제공하지 않는다 (원칙 9).
  */
-import { ENTRY_STATUSES, PRIORITIES } from "@shared/erp";
+import { ENTRY_STATUSES, PRIORITIES } from "../../shared/erp/index.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
-import { getLedgerService, resolveErpRole } from ".";
-import { ErpError } from "./errors";
-import type { Actor } from "./service";
+import { protectedProcedure, router } from "../_core/trpc.js";
+import { getLedgerService, resolveErpRole } from "./index.js";
+import { ErpError } from "./errors.js";
+import type { Actor } from "./service.js";
 
 /** 세션 사용자를 §13.1 역할로 옮긴다. 역할이 없으면 접근 불가. */
 function actorFrom(ctx: {
@@ -482,29 +482,44 @@ export const erpRouter = router({
           attachmentId: z.string().nullable().optional(),
         })
       )
-      .mutation(({ ctx, input }) => run(() => getLedgerService().addEvidence(input, actorFrom(ctx)))),
+      .mutation(({ ctx, input }) =>
+        run(() => getLedgerService().addEvidence(input, actorFrom(ctx)))
+      ),
   }),
 
   /** 사용자 · 역할 (§13.1 · G13) — 환경변수가 아니라 화면에서 관리한다 */
   users: router({
-    list: protectedProcedure.query(({ ctx }) => run(() => getLedgerService().appUsers(actorFrom(ctx)))),
+    list: protectedProcedure.query(({ ctx }) =>
+      run(() => getLedgerService().appUsers(actorFrom(ctx)))
+    ),
     put: protectedProcedure
       .input(
         z.object({
           id: z.string().min(1),
           email: z.string().email(),
           name: z.string().min(1),
-          role: z.enum(["대표", "부대표", "재무", "사업부리더", "담당자", "외부세무"]),
+          role: z.enum([
+            "대표",
+            "부대표",
+            "재무",
+            "사업부리더",
+            "담당자",
+            "외부세무",
+          ]),
           active: z.boolean().default(true),
         })
       )
-      .mutation(({ ctx, input }) => run(() => getLedgerService().putAppUser(input, actorFrom(ctx)))),
+      .mutation(({ ctx, input }) =>
+        run(() => getLedgerService().putAppUser(input, actorFrom(ctx)))
+      ),
   }),
 
   markNotificationRead: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(({ ctx, input }) =>
-      run(() => getLedgerService().markNotificationRead(input.id, actorFrom(ctx)))
+      run(() =>
+        getLedgerService().markNotificationRead(input.id, actorFrom(ctx))
+      )
     ),
 
   /** §11.1 수집 검수함 — 검수 통과해야 원장으로 올라간다 */

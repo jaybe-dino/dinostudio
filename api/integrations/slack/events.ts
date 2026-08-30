@@ -4,12 +4,12 @@
  * 승인은 슬랙에서 하지 않는다 (§11.1). 여기서는 수집만 하고, 원장 적재는
  * 검수함에서 사람이 확인한 뒤에 이뤄진다.
  */
-import { getLedgerService, resolveErpRole } from "../../../server/erp";
+import { getLedgerService, resolveErpRole } from "../../../server/erp/index.js";
 import {
   isWatchedChannel,
   verifySlackSignature,
   type SlackEventEnvelope,
-} from "../../../server/integrations/slack";
+} from "../../../server/integrations/slack.js";
 
 export async function POST(req: Request): Promise<Response> {
   const raw = await req.text();

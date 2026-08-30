@@ -4,10 +4,10 @@
  * V1·V6은 「고쳐서 통과시키는」 항목이 아니다. 잔액이 안 맞으면 차액을 조정 전표로 만들어
  * 억지로 맞추지 않고, 불일치를 그대로 노출하고 8월 마감을 잠그지 않는다 (원칙 8).
  */
-import { buildDailyBlocks } from "./cashflow";
-import { findDuplicateCandidates } from "./duplicates";
-import type { SeedDaySnapshot } from "./seed";
-import type { Entry } from "./types";
+import { buildDailyBlocks } from "./cashflow.js";
+import { findDuplicateCandidates } from "./duplicates.js";
+import type { SeedDaySnapshot } from "./seed.js";
+import type { Entry } from "./types.js";
 
 export interface CheckResult {
   id: string;

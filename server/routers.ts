@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
-import { createContact, listContacts } from "./db";
-import { notifyOwner } from "./_core/notification";
-import { erpRouter } from "./erp/router";
+import { COOKIE_NAME } from "../shared/const.js";
+import { getSessionCookieOptions } from "./_core/cookies.js";
+import { systemRouter } from "./_core/systemRouter.js";
+import { publicProcedure, router, protectedProcedure } from "./_core/trpc.js";
+import { createContact, listContacts } from "./db.js";
+import { notifyOwner } from "./_core/notification.js";
+import { erpRouter } from "./erp/router.js";
 
 export const appRouter = router({
   system: systemRouter,

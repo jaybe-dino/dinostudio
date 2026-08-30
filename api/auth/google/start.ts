@@ -6,8 +6,8 @@ import {
   authorizeUrl,
   googleConfigured,
   redirectUriFrom,
-} from "../../../server/auth/google";
-import { STATE_COOKIE, serializeCookie } from "../../../server/auth/session";
+} from "../../../server/auth/google.js";
+import { STATE_COOKIE, serializeCookie } from "../../../server/auth/session.js";
 
 export function GET(req: Request): Response {
   if (!googleConfigured()) {

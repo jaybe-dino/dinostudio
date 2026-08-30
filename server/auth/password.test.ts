@@ -9,7 +9,7 @@ import {
   passwordLoginConfigured,
   resetAttempts,
   verifyPasswordLogin,
-} from "./password";
+} from "./password.js";
 
 const GOOD = "dino-2026-management!";
 

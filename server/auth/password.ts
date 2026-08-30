@@ -11,7 +11,7 @@
  *   · 서버리스라 시도 횟수 제한이 인스턴스별로만 걸린다 (아래 주석 참고)
  * 그래서 이것은 구글 SSO가 붙기 전까지의 임시 수단이고, docs/erp-deploy.md 에 회수 절차를 적어 둔다.
  */
-import { isAllowedIdentity, type SessionPayload } from "./session";
+import { isAllowedIdentity, type SessionPayload } from "./session.js";
 
 /** 너무 짧은 비밀번호는 아예 켜지지 않게 한다 — 약한 값이 기본이 되면 안 된다 */
 export const MIN_PASSWORD_LENGTH = 10;

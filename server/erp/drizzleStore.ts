@@ -2,7 +2,7 @@
  * MySQL(Drizzle) 저장소. DATABASE_URL이 설정된 환경에서 InMemoryLedgerStore를 대체한다.
  * DELETE는 어디에도 없다 (원칙 9) — 취소는 -C 상계 전표로만 한다.
  */
-import { ACCOUNTS } from "@shared/erp";
+import { ACCOUNTS } from "../../shared/erp/index.js";
 import type {
   Account,
   AppUser,
@@ -21,8 +21,8 @@ import type {
   Journal,
   Notification,
   Setting,
-} from "@shared/erp";
-import type { SeedDaySnapshot } from "@shared/erp/seed";
+} from "../../shared/erp/index.js";
+import type { SeedDaySnapshot } from "../../shared/erp/seed.js";
 import { and, asc, eq, gte, inArray, lte, like, or } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import {
@@ -46,8 +46,8 @@ import {
   erpUsers,
   erpSettings,
   type ErpEntryRow,
-} from "../../drizzle/erpSchema";
-import type { EntryFilter, LedgerStore } from "./store";
+} from "../../drizzle/erpSchema.js";
+import type { EntryFilter, LedgerStore } from "./store.js";
 
 type Db = MySql2Database<Record<string, never>>;
 
@@ -499,18 +499,26 @@ export class DrizzleLedgerStore implements LedgerStore {
 
   async listAttachments(entryId?: string): Promise<Attachment[]> {
     const rows = await (entryId
-      ? this.db.select().from(erpAttachments).where(eq(erpAttachments.entryId, entryId))
+      ? this.db
+          .select()
+          .from(erpAttachments)
+          .where(eq(erpAttachments.entryId, entryId))
       : this.db.select().from(erpAttachments));
     return rows.map(r => ({ ...r, at: r.at.toISOString() }));
   }
 
   async appendAttachment(attachment: Attachment): Promise<Attachment> {
-    await this.db.insert(erpAttachments).values({ ...attachment, at: new Date(attachment.at) });
+    await this.db
+      .insert(erpAttachments)
+      .values({ ...attachment, at: new Date(attachment.at) });
     return attachment;
   }
 
   async listNotifications(): Promise<Notification[]> {
-    const rows = await this.db.select().from(erpNotifications).orderBy(asc(erpNotifications.createdAt));
+    const rows = await this.db
+      .select()
+      .from(erpNotifications)
+      .orderBy(asc(erpNotifications.createdAt));
     return rows.map(r => ({
       ...r,
       sentAt: r.sentAt ? r.sentAt.toISOString() : null,
@@ -526,17 +534,24 @@ export class DrizzleLedgerStore implements LedgerStore {
       readAt: notification.readAt ? new Date(notification.readAt) : null,
       createdAt: new Date(notification.createdAt),
     };
-    await this.db.insert(erpNotifications).values(row).onDuplicateKeyUpdate({ set: row });
+    await this.db
+      .insert(erpNotifications)
+      .values(row)
+      .onDuplicateKeyUpdate({ set: row });
     return notification;
   }
 
   async listAppUsers(): Promise<AppUser[]> {
-    return (await this.db.select().from(erpUsers).orderBy(asc(erpUsers.email))).map(r => ({ ...r }));
+    return (
+      await this.db.select().from(erpUsers).orderBy(asc(erpUsers.email))
+    ).map(r => ({ ...r }));
   }
 
   async upsertAppUser(user: AppUser): Promise<AppUser> {
-    await this.db.insert(erpUsers).values(user).onDuplicateKeyUpdate({ set: { ...user } });
+    await this.db
+      .insert(erpUsers)
+      .values(user)
+      .onDuplicateKeyUpdate({ set: { ...user } });
     return user;
   }
-
 }

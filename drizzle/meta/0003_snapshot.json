@@ -56,9 +56,7 @@
       "compositePrimaryKeys": {
         "contacts_id": {
           "name": "contacts_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -141,17 +139,13 @@
       "compositePrimaryKeys": {
         "users_id": {
           "name": "users_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "users_openId_unique": {
           "name": "users_openId_unique",
-          "columns": [
-            "openId"
-          ]
+          "columns": ["openId"]
         }
       },
       "checkConstraint": {}
@@ -223,9 +217,7 @@
       "compositePrimaryKeys": {
         "erp_account_code": {
           "name": "erp_account_code",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "uniqueConstraints": {},
@@ -296,9 +288,7 @@
       "indexes": {
         "erp_approval_entry_idx": {
           "name": "erp_approval_entry_idx",
-          "columns": [
-            "entryId"
-          ],
+          "columns": ["entryId"],
           "isUnique": false
         }
       },
@@ -306,9 +296,7 @@
       "compositePrimaryKeys": {
         "erp_approval_id": {
           "name": "erp_approval_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -364,9 +352,7 @@
       "indexes": {
         "erp_attachment_entry_idx": {
           "name": "erp_attachment_entry_idx",
-          "columns": [
-            "entryId"
-          ],
+          "columns": ["entryId"],
           "isUnique": false
         }
       },
@@ -374,9 +360,7 @@
       "compositePrimaryKeys": {
         "erp_attachment_id": {
           "name": "erp_attachment_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -453,10 +437,7 @@
       "indexes": {
         "erp_audit_log_row_idx": {
           "name": "erp_audit_log_row_idx",
-          "columns": [
-            "tableName",
-            "rowId"
-          ],
+          "columns": ["tableName", "rowId"],
           "isUnique": false
         }
       },
@@ -464,9 +445,7 @@
       "compositePrimaryKeys": {
         "erp_audit_log_id": {
           "name": "erp_audit_log_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -550,9 +529,7 @@
       "indexes": {
         "erp_contract_code_uq": {
           "name": "erp_contract_code_uq",
-          "columns": [
-            "code"
-          ],
+          "columns": ["code"],
           "isUnique": true
         }
       },
@@ -560,9 +537,7 @@
       "compositePrimaryKeys": {
         "erp_contract_id": {
           "name": "erp_contract_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -643,9 +618,7 @@
       "compositePrimaryKeys": {
         "erp_day_snapshot_date": {
           "name": "erp_day_snapshot_date",
-          "columns": [
-            "date"
-          ]
+          "columns": ["date"]
         }
       },
       "uniqueConstraints": {},
@@ -695,9 +668,7 @@
       "indexes": {
         "erp_debt_schedule_debt_idx": {
           "name": "erp_debt_schedule_debt_idx",
-          "columns": [
-            "debtId"
-          ],
+          "columns": ["debtId"],
           "isUnique": false
         }
       },
@@ -705,9 +676,7 @@
       "compositePrimaryKeys": {
         "erp_debt_schedule_id": {
           "name": "erp_debt_schedule_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -798,9 +767,7 @@
       "indexes": {
         "erp_debt_code_uq": {
           "name": "erp_debt_code_uq",
-          "columns": [
-            "code"
-          ],
+          "columns": ["code"],
           "isUnique": true
         }
       },
@@ -808,9 +775,7 @@
       "compositePrimaryKeys": {
         "erp_debt_id": {
           "name": "erp_debt_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1123,31 +1088,22 @@
       "indexes": {
         "erp_entry_code_uq": {
           "name": "erp_entry_code_uq",
-          "columns": [
-            "code"
-          ],
+          "columns": ["code"],
           "isUnique": true
         },
         "erp_entry_source_ref_uq": {
           "name": "erp_entry_source_ref_uq",
-          "columns": [
-            "source",
-            "sourceRef"
-          ],
+          "columns": ["source", "sourceRef"],
           "isUnique": true
         },
         "erp_entry_cash_date_idx": {
           "name": "erp_entry_cash_date_idx",
-          "columns": [
-            "cashDate"
-          ],
+          "columns": ["cashDate"],
           "isUnique": false
         },
         "erp_entry_status_idx": {
           "name": "erp_entry_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -1155,9 +1111,7 @@
       "compositePrimaryKeys": {
         "erp_entry_id": {
           "name": "erp_entry_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1227,9 +1181,7 @@
       "indexes": {
         "erp_entry_revision_entry_idx": {
           "name": "erp_entry_revision_entry_idx",
-          "columns": [
-            "entryId"
-          ],
+          "columns": ["entryId"],
           "isUnique": false
         }
       },
@@ -1237,9 +1189,7 @@
       "compositePrimaryKeys": {
         "erp_entry_revision_id": {
           "name": "erp_entry_revision_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1317,10 +1267,7 @@
       "indexes": {
         "erp_intake_source_uq": {
           "name": "erp_intake_source_uq",
-          "columns": [
-            "source",
-            "sourceRef"
-          ],
+          "columns": ["source", "sourceRef"],
           "isUnique": true
         }
       },
@@ -1328,9 +1275,7 @@
       "compositePrimaryKeys": {
         "erp_intake_id": {
           "name": "erp_intake_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1394,9 +1339,7 @@
       "indexes": {
         "erp_journal_line_journal_idx": {
           "name": "erp_journal_line_journal_idx",
-          "columns": [
-            "journalId"
-          ],
+          "columns": ["journalId"],
           "isUnique": false
         }
       },
@@ -1404,9 +1347,7 @@
       "compositePrimaryKeys": {
         "erp_journal_line_id": {
           "name": "erp_journal_line_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1462,9 +1403,7 @@
       "indexes": {
         "erp_journal_entry_idx": {
           "name": "erp_journal_entry_idx",
-          "columns": [
-            "entryId"
-          ],
+          "columns": ["entryId"],
           "isUnique": false
         }
       },
@@ -1472,9 +1411,7 @@
       "compositePrimaryKeys": {
         "erp_journal_id": {
           "name": "erp_journal_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1539,9 +1476,7 @@
       "compositePrimaryKeys": {
         "erp_notification_rule_id": {
           "name": "erp_notification_rule_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1611,9 +1546,7 @@
       "indexes": {
         "erp_notification_rule_idx": {
           "name": "erp_notification_rule_idx",
-          "columns": [
-            "ruleId"
-          ],
+          "columns": ["ruleId"],
           "isUnique": false
         }
       },
@@ -1621,9 +1554,7 @@
       "compositePrimaryKeys": {
         "erp_notification_id": {
           "name": "erp_notification_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1687,9 +1618,7 @@
       "compositePrimaryKeys": {
         "erp_party_id": {
           "name": "erp_party_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1740,9 +1669,7 @@
       "compositePrimaryKeys": {
         "erp_period_ym": {
           "name": "erp_period_ym",
-          "columns": [
-            "ym"
-          ]
+          "columns": ["ym"]
         }
       },
       "uniqueConstraints": {},
@@ -1812,9 +1739,7 @@
       "indexes": {
         "erp_project_code_uq": {
           "name": "erp_project_code_uq",
-          "columns": [
-            "code"
-          ],
+          "columns": ["code"],
           "isUnique": true
         }
       },
@@ -1822,9 +1747,7 @@
       "compositePrimaryKeys": {
         "erp_project_id": {
           "name": "erp_project_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1882,10 +1805,7 @@
       "indexes": {
         "erp_role_permission_uq": {
           "name": "erp_role_permission_uq",
-          "columns": [
-            "role",
-            "resource"
-          ],
+          "columns": ["role", "resource"],
           "isUnique": true
         }
       },
@@ -1893,9 +1813,7 @@
       "compositePrimaryKeys": {
         "erp_role_permission_id": {
           "name": "erp_role_permission_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1955,9 +1873,7 @@
       "compositePrimaryKeys": {
         "erp_setting_key": {
           "name": "erp_setting_key",
-          "columns": [
-            "key"
-          ]
+          "columns": ["key"]
         }
       },
       "uniqueConstraints": {},
@@ -2008,17 +1924,13 @@
       "compositePrimaryKeys": {
         "erp_user_id": {
           "name": "erp_user_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "erp_user_email_unique": {
           "name": "erp_user_email_unique",
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "checkConstraint": {}

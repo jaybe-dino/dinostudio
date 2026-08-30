@@ -3,11 +3,16 @@
  *
  * §9.7은 "두 계단의 영업이익 일치 검증을 자동 테스트로 두십시오"라고 명시하고 있어 여기 있습니다.
  */
-import { SEED_DEBTS, buildForecast, buildPnl, trialBalance } from "@shared/erp";
+import {
+  SEED_DEBTS,
+  buildForecast,
+  buildPnl,
+  trialBalance,
+} from "../../shared/erp/index.js";
 import { describe, expect, it } from "vitest";
-import { LedgerService } from "./service";
-import { InMemoryLedgerStore } from "./store";
-import type { Actor } from "./service";
+import { LedgerService } from "./service.js";
+import { InMemoryLedgerStore } from "./store.js";
+import type { Actor } from "./service.js";
 
 const CFO: Actor = { id: "cfo@dinostudio.kr", role: "재무" };
 const service = () => new LedgerService(new InMemoryLedgerStore());

@@ -48,7 +48,7 @@ import {
   runMigrationChecks,
   settingValue,
   STATUS_RULES,
-} from "@shared/erp";
+} from "../../shared/erp/index.js";
 import type {
   Account,
   AppUser,
@@ -68,13 +68,18 @@ import type {
   Priority,
   PriorityOverrideInput,
   Role,
-} from "@shared/erp";
+} from "../../shared/erp/index.js";
 import { randomUUID } from "node:crypto";
-import { aiParseExpense } from "../integrations/aiParser";
-import { postSlackMessage, slackConfigured } from "../integrations/slack";
-import { createUploadTicket, storageConfigured, validateUpload, viewPath } from "./attachments";
-import { erpError } from "./errors";
-import type { EntryFilter, LedgerStore } from "./store";
+import { aiParseExpense } from "../integrations/aiParser.js";
+import { postSlackMessage, slackConfigured } from "../integrations/slack.js";
+import {
+  createUploadTicket,
+  storageConfigured,
+  validateUpload,
+  viewPath,
+} from "./attachments.js";
+import { erpError } from "./errors.js";
+import type { EntryFilter, LedgerStore } from "./store.js";
 
 export interface Actor {
   /** 감사로그·본인 승인 금지 판정에 쓰는 식별자 */
@@ -92,7 +97,11 @@ export class LedgerService {
   // ── 조회 ────────────────────────────────────────────────────────────────
 
   /** GET /entries — 마스킹은 응답 단계에서 한다 (§13.3) */
-  async listEntries(filter: EntryFilter, actor: Actor, page?: { cursor?: string | null; limit?: number }) {
+  async listEntries(
+    filter: EntryFilter,
+    actor: Actor,
+    page?: { cursor?: string | null; limit?: number }
+  ) {
     const entries = await this.store.listEntries(filter);
     // §13.3 — 급여·부채는 조회도 감사로그에 남긴다
     await this.recordSensitiveRead(entries, actor, "entries");
@@ -102,9 +111,12 @@ export class LedgerService {
       `${a.cashDate ?? ""}${a.code}` < `${b.cashDate ?? ""}${b.code}` ? -1 : 1
     );
     const limit = page?.limit ?? ordered.length;
-    const start = page?.cursor ? ordered.findIndex(e => e.code === page.cursor) + 1 : 0;
+    const start = page?.cursor
+      ? ordered.findIndex(e => e.code === page.cursor) + 1
+      : 0;
     const slice = ordered.slice(start, start + limit);
-    const nextCursor = start + limit < ordered.length ? (slice.at(-1)?.code ?? null) : null;
+    const nextCursor =
+      start + limit < ordered.length ? (slice.at(-1)?.code ?? null) : null;
 
     return {
       page: slice.map(e => maskEntryForRole(e, actor.role)),
@@ -373,7 +385,10 @@ export class LedgerService {
       const channel = process.env.SLACK_NOTIFY_CHANNEL;
       let sentAt: string | null = null;
       if (channel && slackConfigured()) {
-        const result = await postSlackMessage(channel, `*${notification.title}*\n${notification.body}`);
+        const result = await postSlackMessage(
+          channel,
+          `*${notification.title}*\n${notification.body}`
+        );
         if (result.sent) sentAt = nowIso();
       }
       const saved = { ...notification, sentAt };
@@ -381,14 +396,17 @@ export class LedgerService {
       byId.set(saved.id, saved);
     }
 
-    const inbox = Array.from(byId.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const inbox = Array.from(byId.values()).sort((a, b) =>
+      a.createdAt < b.createdAt ? 1 : -1
+    );
     return {
       rules: NOTIFICATION_RULES,
       delivered: inbox,
       capped,
       unread: inbox.filter(item => item.readAt == null).length,
       /** 도착지가 설정돼 있는가 — 아니면 알림함에만 쌓인다 */
-      destination: process.env.SLACK_NOTIFY_CHANNEL && slackConfigured() ? "슬랙" : null,
+      destination:
+        process.env.SLACK_NOTIFY_CHANNEL && slackConfigured() ? "슬랙" : null,
     };
   }
 
@@ -396,7 +414,10 @@ export class LedgerService {
     const stored = await this.store.listNotifications();
     const found = stored.find(item => item.id === id);
     if (!found) throw erpError("not_found", { id });
-    const saved = await this.store.upsertNotification({ ...found, readAt: nowIso() });
+    const saved = await this.store.upsertNotification({
+      ...found,
+      readAt: nowIso(),
+    });
     await this.audit("notification", id, "read", found, saved, actor);
     return saved;
   }
@@ -799,8 +820,20 @@ export class LedgerService {
     const problem = validateUpload(fileName, contentType, sizeBytes);
     if (problem) throw erpError("evidence_required", { fileName }, problem);
     const id = randomUUID();
-    const ticket = await createUploadTicket(entry.code, fileName, contentType, id);
-    await this.audit("attachment", id, "upload_ticket", null, { code, fileName }, actor);
+    const ticket = await createUploadTicket(
+      entry.code,
+      fileName,
+      contentType,
+      id
+    );
+    await this.audit(
+      "attachment",
+      id,
+      "upload_ticket",
+      null,
+      { code, fileName },
+      actor
+    );
     return { ...ticket, attachmentId: id };
   }
 
@@ -824,7 +857,11 @@ export class LedgerService {
     const entry = await this.store.getEntry(input.code);
     if (!entry) throw erpError("not_found", { code: input.code });
     if (input.storage === "link" && !/^https?:\/\//i.test(input.url)) {
-      throw erpError("evidence_required", {}, "http(s) 로 시작하는 링크만 등록할 수 있습니다");
+      throw erpError(
+        "evidence_required",
+        {},
+        "http(s) 로 시작하는 링크만 등록할 수 있습니다"
+      );
     }
 
     const attachment: Attachment = {
@@ -848,7 +885,14 @@ export class LedgerService {
         entry.version
       );
     }
-    await this.audit("attachment", attachment.id, "add", null, attachment, actor);
+    await this.audit(
+      "attachment",
+      attachment.id,
+      "add",
+      null,
+      attachment,
+      actor
+    );
     return attachment;
   }
 
@@ -873,12 +917,17 @@ export class LedgerService {
   /** 계정 발급 · 역할 지정 — 대표만. 권한을 나눠주는 일은 위임하지 않는다 */
   async putAppUser(user: AppUser, actor: Actor) {
     if (actor.role !== "대표") {
-      throw erpError("forbidden_field", {}, "역할 지정은 대표만 할 수 있습니다");
+      throw erpError(
+        "forbidden_field",
+        {},
+        "역할 지정은 대표만 할 수 있습니다"
+      );
     }
-    const before = (await this.store.listAppUsers()).find(u => u.id === user.id) ?? null;
+    const before =
+      (await this.store.listAppUsers()).find(u => u.id === user.id) ?? null;
     const saved = await this.store.upsertAppUser(user);
     // 배정이 바뀌면 역할 해석 캐시를 즉시 갱신한다
-    const { setAssignedRoles } = await import(".");
+    const { setAssignedRoles } = await import("./index.js");
     setAssignedRoles(await this.store.listAppUsers());
     await this.audit("app_user", user.id, "put", before, saved, actor);
     return saved;
@@ -1409,8 +1458,17 @@ export class LedgerService {
    * §13.3 — 급여·부채 테이블은 조회도 감사로그에 남긴다.
    * 누가 언제 인건비를 들여다봤는지가 남아야 마스킹이 통제로 성립한다.
    */
-  private async recordSensitiveRead(entries: Entry[], actor: Actor, scope: string) {
-    const sensitive = entries.filter(e => isPayrollAccount(e.accountCode) || e.accountCode === "2210" || e.accountCode === "2310");
+  private async recordSensitiveRead(
+    entries: Entry[],
+    actor: Actor,
+    scope: string
+  ) {
+    const sensitive = entries.filter(
+      e =>
+        isPayrollAccount(e.accountCode) ||
+        e.accountCode === "2210" ||
+        e.accountCode === "2310"
+    );
     if (sensitive.length === 0) return;
     await this.audit(
       "entry",

@@ -4,7 +4,7 @@
  * §13.1 역할 매트릭스는 초안이지만, 권한 적용 자체는 1차 오픈의 필수 항목이다 (G10).
  * 프로토타입은 매트릭스만 있고 적용이 없어 급여·부채가 전원에게 노출돼 있었다.
  */
-import type { Entry, Role } from "./types";
+import type { Entry, Role } from "./types.js";
 
 export type Resource =
   | "entry"

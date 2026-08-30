@@ -3,7 +3,7 @@
  *
  * 경고 후 강행은 가능하되 강행 사유가 감사로그에 남는다.
  */
-import type { Entry } from "./types";
+import type { Entry } from "./types.js";
 
 export const DUPLICATE_WINDOW_DAYS = 7;
 

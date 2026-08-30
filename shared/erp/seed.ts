@@ -5,7 +5,7 @@
  *   확정 지출 33,630,000 (10건) · 확정 수입 22,000,000 · 승인 대기 59,785,000 (8건) · 판정 대기 8건
  *   원장 전건 27 · 이관 구간 일계 7행
  */
-import { defaultPriorityOf } from "./accounts";
+import { defaultPriorityOf } from "./accounts.js";
 import type {
   BuCode,
   DaySnapshot,
@@ -15,7 +15,7 @@ import type {
   Nature,
   PayMethod,
   Setting,
-} from "./types";
+} from "./types.js";
 
 /** 이관 구간 일계에는 시트에 기록돼 있던 값도 함께 남긴다 — V1 대조용 (§5.5) */
 export interface SeedDaySnapshot extends DaySnapshot {

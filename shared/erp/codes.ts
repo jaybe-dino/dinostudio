@@ -9,7 +9,7 @@
  * 코드는 불변이다. 금액이 바뀌어도 코드는 남고 -R1이 새로 생기며,
  * 취소는 -C가 반대 부호로 상계한다. 취소된 번호는 재사용하지 않고 결번으로 남긴다.
  */
-import type { Direction } from "./types";
+import type { Direction } from "./types.js";
 
 export type CodePrefix = "EX" | "IN" | "DB" | "CT";
 

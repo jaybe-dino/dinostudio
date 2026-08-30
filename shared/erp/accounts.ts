@@ -4,7 +4,7 @@
  * 일반기업회계기준(K-GAAP). 계정과목 하나를 정하면 나머지 세 가지가 자동으로 정해진다 —
  * 지급 우선순위(§8.2) · 현금흐름 3구간(§8.3) · 운영비 포함 여부(§8.4). 사람은 계정만 고른다.
  */
-import type { Account, CashflowSection, Entry, Priority } from "./types";
+import type { Account, CashflowSection, Entry, Priority } from "./types.js";
 
 /** §8.1 계정과목 마스터 (초기 적재) */
 export const ACCOUNTS: Account[] = [

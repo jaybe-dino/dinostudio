@@ -6,15 +6,15 @@
  * 사용자는 구글 SSO 세션 쿠키에서 읽는다 — 익명 접근은 protectedProcedure가 막는다.
  */
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
-import type { User } from "../../drizzle/schema";
-import { appRouter } from "../../server/routers";
-import type { TrpcContext } from "../../server/_core/context";
+import type { User } from "../../drizzle/schema.js";
+import { appRouter } from "../../server/routers.js";
+import type { TrpcContext } from "../../server/_core/context.js";
 import {
   SESSION_COOKIE,
   parseCookies,
   serializeCookie,
   verifySessionToken,
-} from "../../server/auth/session";
+} from "../../server/auth/session.js";
 
 /** Express Request/Response 중 라우터가 실제로 건드리는 부분만 흉내낸다. */
 function shim(req: Request, cookies: string[]) {

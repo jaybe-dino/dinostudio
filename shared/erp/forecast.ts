@@ -10,8 +10,8 @@
  * 성사확률(B10)이 확정되지 않았고 debt_schedule이 비어 있으므로(B2),
  * 파이프라인과 상환 라인은 계산에서 빠지고 그 사실을 blockers로 노출한다 (원칙 8).
  */
-import { addDays, daysBetween, isUncollected } from "./ar";
-import type { DebtSchedule, Entry } from "./types";
+import { addDays, daysBetween, isUncollected } from "./ar.js";
+import type { DebtSchedule, Entry } from "./types.js";
 
 export type Scenario = "Base" | "Stress" | "Upside";
 

@@ -1,7 +1,12 @@
 import { eq } from "drizzle-orm";
-import { createDb } from "./dbPool";
-import { InsertUser, users, contacts, InsertContact } from "../drizzle/schema";
-import { ENV } from "./_core/env";
+import { createDb } from "./dbPool.js";
+import {
+  InsertUser,
+  users,
+  contacts,
+  InsertContact,
+} from "../drizzle/schema.js";
+import { ENV } from "./_core/env.js";
 
 let _db: ReturnType<typeof createDb> | null = null;
 

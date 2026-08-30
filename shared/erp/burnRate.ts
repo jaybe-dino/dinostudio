@@ -12,8 +12,8 @@
  * 마감된 월이 0이거나 급여 실액이 미확정이면 세 값 모두 null이고,
  * 라벨 없이 "런웨이"라고 쓰지 않는다 (원칙 3 · T15).
  */
-import { isOpex } from "./accounts";
-import type { Entry, Metric, Period } from "./types";
+import { isOpex } from "./accounts.js";
+import type { Entry, Metric, Period } from "./types.js";
 
 export interface OpexBreakdown {
   /** 운영비에 들어간 확정 지출 */

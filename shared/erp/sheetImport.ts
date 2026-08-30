@@ -10,10 +10,10 @@
  *   · 항목이 공란이면 판정 대기
  *   · 행을 버리지 않는다 — 파싱 실패도 판정 대기로 적재한다
  */
-import { defaultPriorityOf } from "./accounts";
-import { nextCode } from "./codes";
-import { kstIso, kstToday } from "./time";
-import type { DaySnapshot, Direction, Entry } from "./types";
+import { defaultPriorityOf } from "./accounts.js";
+import { nextCode } from "./codes.js";
+import { kstIso, kstToday } from "./time.js";
+import type { DaySnapshot, Direction, Entry } from "./types.js";
 
 /** 이 금액 미만이 적요 칸에만 있으면 단위(원/만원)를 판정할 수 없다고 본다 */
 export const UNIT_UNKNOWN_BELOW = 10_000;

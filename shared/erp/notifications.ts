@@ -5,10 +5,10 @@
  * 도착지가 정해지지 않았으므로(B7) 알림함 적재를 기본으로 하고, 발송 실패도 알림함에는 남긴다 —
  * 도착지가 죽어 있어도 경보가 사라지면 안 된다.
  */
-import type { ArReport } from "./ar";
-import type { CashPosition } from "./cashPosition";
-import type { DebtReport } from "./debt";
-import type { Notification, NotificationRule } from "./types";
+import type { ArReport } from "./ar.js";
+import type { CashPosition } from "./cashPosition.js";
+import type { DebtReport } from "./debt.js";
+import type { Notification, NotificationRule } from "./types.js";
 
 export const CEO_DAILY_CAP = 3;
 

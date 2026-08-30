@@ -4,10 +4,10 @@
  * "증빙이 없는 건은 보류까지만" 규칙은 증빙을 올릴 수 있어야 성립한다.
  */
 import { describe, expect, it } from "vitest";
-import { storageKey, validateUpload } from "./attachments";
-import { LedgerService } from "./service";
-import { InMemoryLedgerStore } from "./store";
-import type { Actor } from "./service";
+import { storageKey, validateUpload } from "./attachments.js";
+import { LedgerService } from "./service.js";
+import { InMemoryLedgerStore } from "./store.js";
+import type { Actor } from "./service.js";
 
 const CEO: Actor = { id: "ceo@dinostudio.kr", role: "대표" };
 const CFO: Actor = { id: "cfo@dinostudio.kr", role: "재무" };
@@ -18,7 +18,9 @@ describe("§13.2 증빙", () => {
   it("증빙이 없으면 확정되지 않는다", async () => {
     const svc = service();
     const { entry } = await svc.getEntry("EX-260901-01", CFO); // 증빙 없음
-    await expect(svc.approve("EX-260901-01", entry.version, CEO)).rejects.toMatchObject({
+    await expect(
+      svc.approve("EX-260901-01", entry.version, CEO)
+    ).rejects.toMatchObject({
       code: "evidence_required",
     });
   });
@@ -48,7 +50,12 @@ describe("§13.2 증빙", () => {
     const svc = service();
     await expect(
       svc.addEvidence(
-        { code: "EX-260901-01", kind: "기타", storage: "link", url: "javascript:alert(1)" },
+        {
+          code: "EX-260901-01",
+          kind: "기타",
+          storage: "link",
+          url: "javascript:alert(1)",
+        },
         CFO
       )
     ).rejects.toMatchObject({ code: "evidence_required" });
@@ -57,7 +64,12 @@ describe("§13.2 증빙", () => {
   it("증빙 등록은 감사로그에 남는다", async () => {
     const svc = service();
     await svc.addEvidence(
-      { code: "EX-260901-01", kind: "영수증", storage: "link", url: "https://example.com/a.pdf" },
+      {
+        code: "EX-260901-01",
+        kind: "영수증",
+        storage: "link",
+        url: "https://example.com/a.pdf",
+      },
       CFO
     );
     const audit = await svc.auditTrail({ table: "attachment" });
@@ -67,14 +79,24 @@ describe("§13.2 증빙", () => {
   it("스토리지가 없으면 파일 업로드를 열어주지 않는다", async () => {
     const svc = service();
     await expect(
-      svc.requestEvidenceUpload("EX-260901-01", "a.pdf", "application/pdf", 1000, CFO)
+      svc.requestEvidenceUpload(
+        "EX-260901-01",
+        "a.pdf",
+        "application/pdf",
+        1000,
+        CFO
+      )
     ).rejects.toMatchObject({ code: "evidence_required" });
   });
 
   it("업로드 검증 — 크기 · 형식", () => {
     expect(validateUpload("a.pdf", "application/pdf", 1000)).toBeNull();
-    expect(validateUpload("a.exe", "application/x-msdownload", 1000)).toContain("형식");
-    expect(validateUpload("a.pdf", "application/pdf", 50 * 1024 * 1024)).toContain("MB");
+    expect(validateUpload("a.exe", "application/x-msdownload", 1000)).toContain(
+      "형식"
+    );
+    expect(
+      validateUpload("a.pdf", "application/pdf", 50 * 1024 * 1024)
+    ).toContain("MB");
     expect(validateUpload("", "application/pdf", 1000)).toContain("파일명");
   });
 
@@ -88,20 +110,38 @@ describe("§13.2 증빙", () => {
 describe("§13.1 사용자 · 역할 (G13)", () => {
   it("역할 지정은 대표만 할 수 있다", async () => {
     const svc = service();
-    const user = { id: "a@x.kr", email: "a@x.kr", name: "가", role: "재무" as const, active: true };
-    await expect(svc.putAppUser(user, CFO)).rejects.toMatchObject({ code: "forbidden_field" });
-    await expect(svc.putAppUser(user, CEO)).resolves.toMatchObject({ role: "재무" });
+    const user = {
+      id: "a@x.kr",
+      email: "a@x.kr",
+      name: "가",
+      role: "재무" as const,
+      active: true,
+    };
+    await expect(svc.putAppUser(user, CFO)).rejects.toMatchObject({
+      code: "forbidden_field",
+    });
+    await expect(svc.putAppUser(user, CEO)).resolves.toMatchObject({
+      role: "재무",
+    });
   });
 
   it("담당자는 사용자 목록을 볼 수 없다", async () => {
     const svc = service();
-    await expect(svc.appUsers(STAFF)).rejects.toMatchObject({ code: "forbidden_field" });
+    await expect(svc.appUsers(STAFF)).rejects.toMatchObject({
+      code: "forbidden_field",
+    });
   });
 
   it("배정은 감사로그에 남는다", async () => {
     const svc = service();
     await svc.putAppUser(
-      { id: "b@x.kr", email: "b@x.kr", name: "나", role: "담당자", active: true },
+      {
+        id: "b@x.kr",
+        email: "b@x.kr",
+        name: "나",
+        role: "담당자",
+        active: true,
+      },
       CEO
     );
     const audit = await svc.auditTrail({ table: "app_user" });
@@ -121,7 +161,9 @@ describe("§12 알림 적재", () => {
     // 다시 계산해도 읽음 표시가 지워지지 않는다
     const second = await svc.notifications(CFO);
     expect(second.unread).toBe(first.unread - 1);
-    expect(second.delivered.find(n => n.id === first.delivered[0].id)?.readAt).not.toBeNull();
+    expect(
+      second.delivered.find(n => n.id === first.delivered[0].id)?.readAt
+    ).not.toBeNull();
   });
 
   it("도착지가 없으면 미발송이지만 알림함에는 남는다 (B7)", async () => {

@@ -2,8 +2,8 @@
  * 전표 · 분개장 — 원장이 확정되는 순간 자동 생성된다. 사람이 분개를 만들지 않는다 (원칙 12).
  * 사양서는 3차로 잡았지만 인수 기준 T1 ⑤가 1차에서 전표 1건 생성을 요구한다.
  */
-import { counterAccountFor, findAccount } from "./accounts";
-import type { Entry, Journal, JournalLine } from "./types";
+import { counterAccountFor, findAccount } from "./accounts.js";
+import type { Entry, Journal, JournalLine } from "./types.js";
 
 export interface IdFactory {
   (): string;

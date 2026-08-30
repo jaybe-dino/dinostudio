@@ -12,7 +12,13 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-export const ATTACHMENT_KINDS = ["계산서", "영수증", "계약서", "이체확인증", "기타"] as const;
+export const ATTACHMENT_KINDS = [
+  "계산서",
+  "영수증",
+  "계약서",
+  "이체확인증",
+  "기타",
+] as const;
 export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
 
 /** §14 — 증빙은 스캔본이라 크지 않다. 20MB를 넘으면 원본 링크를 쓰게 한다. */
@@ -40,7 +46,9 @@ function getClient(): S3Client {
   if (!client) {
     client = new S3Client({
       region: process.env.ERP_S3_REGION,
-      ...(process.env.ERP_S3_ENDPOINT ? { endpoint: process.env.ERP_S3_ENDPOINT, forcePathStyle: true } : {}),
+      ...(process.env.ERP_S3_ENDPOINT
+        ? { endpoint: process.env.ERP_S3_ENDPOINT, forcePathStyle: true }
+        : {}),
       credentials: {
         accessKeyId: process.env.ERP_S3_ACCESS_KEY_ID ?? "",
         secretAccessKey: process.env.ERP_S3_SECRET_ACCESS_KEY ?? "",
@@ -58,7 +66,11 @@ export interface UploadTicket {
   expiresInSeconds: number;
 }
 
-export function validateUpload(fileName: string, contentType: string, sizeBytes: number): string | null {
+export function validateUpload(
+  fileName: string,
+  contentType: string,
+  sizeBytes: number
+): string | null {
   if (!fileName.trim()) return "파일명이 없습니다";
   if (sizeBytes <= 0) return "빈 파일입니다";
   if (sizeBytes > MAX_UPLOAD_BYTES) {
@@ -71,7 +83,11 @@ export function validateUpload(fileName: string, contentType: string, sizeBytes:
 }
 
 /** 파일명을 그대로 키로 쓰지 않는다 — 경로 조작과 한글 인코딩 문제를 피한다 */
-export function storageKey(entryCode: string, fileName: string, id: string): string {
+export function storageKey(
+  entryCode: string,
+  fileName: string,
+  id: string
+): string {
   const ext = /\.([a-z0-9]{1,6})$/i.exec(fileName)?.[1]?.toLowerCase() ?? "bin";
   return `erp/evidence/${entryCode}/${id}.${ext}`;
 }

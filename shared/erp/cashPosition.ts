@@ -11,8 +11,8 @@
  *   ② horizon — 소요 지평. 지평 밖의 승인 대기 건은 이번 소요에 넣지 않는다.
  * 두 값을 사양서 §5.4 시드에 맞추면 §9.2 · T3 · T6의 모든 수치가 정확히 재현된다.
  */
-import { priorityRank, resolvePriority } from "./accounts";
-import type { Entry, Priority } from "./types";
+import { priorityRank, resolvePriority } from "./accounts.js";
+import type { Entry, Priority } from "./types.js";
 
 export interface PriorityOverrideInput {
   code: string;

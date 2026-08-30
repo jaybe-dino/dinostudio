@@ -3,8 +3,8 @@
  * 설정되지 않은 로그인 버튼을 보여 주면 눌렀을 때 500이 나므로, 켜진 것만 그린다.
  * 비밀·설정값 자체는 절대 내보내지 않고 켜짐/꺼짐만 준다.
  */
-import { googleConfigured } from "../../server/auth/google";
-import { passwordLoginConfigured } from "../../server/auth/password";
+import { googleConfigured } from "../../server/auth/google.js";
+import { passwordLoginConfigured } from "../../server/auth/password.js";
 
 /*
  * Vercel 서버리스 런타임은 이 파일을 정적으로 훑어 어떤 HTTP 메서드를 다루는지 정한다.

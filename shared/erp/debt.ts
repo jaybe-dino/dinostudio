@@ -9,8 +9,8 @@
  *
  * maturity_date가 null이면 규칙은 존재하되 **발동 불가** 상태로 표시한다 (B2).
  */
-import { daysBetween } from "./ar";
-import type { Debt } from "./types";
+import { daysBetween } from "./ar.js";
+import type { Debt } from "./types.js";
 
 export const ALARM_STEPS = [30, 14, 7, 0] as const;
 export type AlarmStep = (typeof ALARM_STEPS)[number];

@@ -11,8 +11,8 @@
  *
  * 파생 뷰는 계산 결과이고 저장하지 않는다 (§4). 이 파일에 부수효과가 없어야 한다.
  */
-import { countsInCashflow } from "./status";
-import type { DaySnapshot, Entry } from "./types";
+import { countsInCashflow } from "./status.js";
+import type { DaySnapshot, Entry } from "./types.js";
 
 export type CashflowUnit = "day" | "month" | "year";
 

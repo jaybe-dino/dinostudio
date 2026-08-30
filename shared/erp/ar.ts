@@ -9,7 +9,7 @@
  *   D-day = today − due_date       (+n = n일 연체)
  *   DSO   = Σ(미수 잔액 × 경과일) ÷ Σ 미수 잔액              // 발행분만
  */
-import type { Contract, Entry, Party } from "./types";
+import type { Contract, Entry, Party } from "./types.js";
 
 export function daysBetween(from: string, to: string): number {
   return Math.round(

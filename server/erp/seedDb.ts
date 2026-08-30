@@ -13,15 +13,15 @@ import {
   SEED_ENTRIES,
   SEED_SETTINGS,
   runMigrationChecks,
-} from "@shared/erp";
+} from "../../shared/erp/index.js";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   erpAccounts,
   erpDaySnapshots,
   erpEntries,
   erpSettings,
-} from "../../drizzle/erpSchema";
-import { DrizzleLedgerStore } from "./drizzleStore";
+} from "../../drizzle/erpSchema.js";
+import { DrizzleLedgerStore } from "./drizzleStore.js";
 
 async function main() {
   const checkOnly = process.argv.includes("--check");

@@ -18,7 +18,7 @@ import {
   SEED_SETTINGS,
   SEED_STAGE2_SETTINGS,
   buildJournal,
-} from "@shared/erp";
+} from "../../shared/erp/index.js";
 import type {
   Account,
   AppUser,
@@ -37,8 +37,8 @@ import type {
   Period,
   Project,
   Setting,
-} from "@shared/erp";
-import type { SeedDaySnapshot } from "@shared/erp/seed";
+} from "../../shared/erp/index.js";
+import type { SeedDaySnapshot } from "../../shared/erp/seed.js";
 
 export interface EntryFilter {
   from?: string;
@@ -328,7 +328,9 @@ export class InMemoryLedgerStore implements LedgerStore {
   }
 
   async listAttachments(entryId?: string): Promise<Attachment[]> {
-    const rows = entryId ? this.attachments.filter(a => a.entryId === entryId) : this.attachments;
+    const rows = entryId
+      ? this.attachments.filter(a => a.entryId === entryId)
+      : this.attachments;
     return rows.map(a => ({ ...a }));
   }
   async appendAttachment(attachment: Attachment): Promise<Attachment> {
@@ -347,5 +349,4 @@ export class InMemoryLedgerStore implements LedgerStore {
   async upsertAppUser(user: AppUser): Promise<AppUser> {
     return upsertBy(this.appUsers, user, "id");
   }
-
 }

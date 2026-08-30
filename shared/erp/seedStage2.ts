@@ -6,7 +6,7 @@
  * 원장에 **수입 미입금 건**으로 추가되므로 확정 지출·확정 수입 합계는 바뀌지 않습니다
  * (status = pending · cash_date 없음 → 현금흐름 계에 들어가지 않음).
  */
-import type { Debt, Entry, Party, Project, Setting } from "./types";
+import type { Debt, Entry, Party, Project, Setting } from "./types.js";
 
 export const SEED_PARTIES: Party[] = [
   party("PTY-0001", "하드렐"),

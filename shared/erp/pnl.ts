@@ -12,8 +12,8 @@
  *
  * 두 계단의 영업이익이 다르면 배부 로직이 틀린 것이다. 이 일치 검증을 자동 테스트로 둔다.
  */
-import { findAccount } from "./accounts";
-import type { Entry } from "./types";
+import { findAccount } from "./accounts.js";
+import type { Entry } from "./types.js";
 
 export interface AccountingLadder {
   revenue: number;

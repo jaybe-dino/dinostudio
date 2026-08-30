@@ -19,12 +19,12 @@ import {
   SEED_ENTRIES,
   SEED_SETTINGS,
   settingValue,
-} from "@shared/erp";
-import type { Entry } from "@shared/erp";
+} from "../../shared/erp/index.js";
+import type { Entry } from "../../shared/erp/index.js";
 import { beforeEach, describe, expect, it } from "vitest";
-import { LedgerService } from "./service";
-import { InMemoryLedgerStore } from "./store";
-import type { Actor } from "./service";
+import { LedgerService } from "./service.js";
+import { InMemoryLedgerStore } from "./store.js";
+import type { Actor } from "./service.js";
 
 const CFO: Actor = { id: "cfo@dinostudio.kr", role: "재무" };
 const CEO: Actor = { id: "ceo@dinostudio.kr", role: "대표" };

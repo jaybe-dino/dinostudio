@@ -1,5 +1,5 @@
 /** GET|POST /api/auth/logout — 세션 쿠키를 지운다. */
-import { SESSION_COOKIE, serializeCookie } from "../../server/auth/session";
+import { SESSION_COOKIE, serializeCookie } from "../../server/auth/session.js";
 
 function handler(req: Request): Response {
   const url = new URL(req.url);

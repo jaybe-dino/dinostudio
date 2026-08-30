@@ -6,7 +6,7 @@
  * DATABASE_URL 없이 500을 내던 회귀를 이 테스트로 막는다.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { appRouter } from "./routers";
+import { appRouter } from "./routers.js";
 
 const input = {
   name: "홍길동",
