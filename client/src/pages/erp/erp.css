@@ -614,6 +614,12 @@ a.erp-btn {
   font: inherit;
 }
 
+/* 로그인 카드 안의 입력은 좁은 필터 폭이 아니라 카드 폭을 쓴다 */
+.erp-card-body form .erp-field {
+  min-width: 0;
+  max-width: 320px;
+}
+
 .erp-filters {
   display: flex;
   flex-wrap: wrap;

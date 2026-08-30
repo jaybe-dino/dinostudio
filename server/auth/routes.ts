@@ -9,6 +9,7 @@ import {
   googleConfigured,
   redirectUriFrom,
 } from "./google";
+import { passwordLoginConfigured, verifyPasswordLogin } from "./password";
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE_SECONDS,
@@ -25,6 +26,43 @@ function originOf(req: Request): string {
 }
 
 export function registerGoogleAuthRoutes(app: Express) {
+  app.get("/api/auth/methods", (_req: Request, res: Response) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      google: googleConfigured(),
+      password: passwordLoginConfigured(),
+    });
+  });
+
+  // 구글 SSO를 붙이기 전까지 쓰는 임시 경로 — 발급하는 쿠키는 SSO와 완전히 같다
+  app.post("/api/auth/password", async (req: Request, res: Response) => {
+    const contentType = String(req.headers["content-type"] ?? "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      res.status(415).json({ ok: false, reason: "잘못된 요청입니다." });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const result = await verifyPasswordLogin(body.email, body.password);
+    res.setHeader("Cache-Control", "no-store");
+    if (!result.ok) {
+      res.status(result.status).json({ ok: false, reason: result.reason });
+      return;
+    }
+    const secure = originOf(req).startsWith("https");
+    const token = await createSessionToken(result.identity);
+    const next = typeof body.next === "string" ? body.next : "/";
+    const safeNext =
+      next.startsWith("/") && !next.startsWith("//") ? next : "/";
+    res.setHeader(
+      "Set-Cookie",
+      serializeCookie(SESSION_COOKIE, token, {
+        maxAge: SESSION_MAX_AGE_SECONDS,
+        secure,
+      })
+    );
+    res.json({ ok: true, next: safeNext });
+  });
+
   app.get("/api/auth/google/start", (req: Request, res: Response) => {
     if (!googleConfigured()) {
       res

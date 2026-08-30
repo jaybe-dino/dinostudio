@@ -4,7 +4,14 @@
  * 레일 순서는 사용 빈도가 아니라 데이터 흐름을 따른다 —
  * 원장(원본)이 맨 위, 그 원장을 접은 화면이 그다음. 첫 진입은 현금흐름표다.
  */
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactElement,
+} from "react";
 import { trpc } from "@/lib/trpc";
 import { EntryDrawer } from "./components/EntryDrawer";
 import { ErpUiContext } from "./context";
@@ -458,10 +465,74 @@ export default function ErpApp() {
 
 /**
  * 로그인 · 접근 안내 — 급여·부채를 다루므로 익명 접근을 허용하지 않는다 (§14).
+ * 이메일 + 지정 비밀번호가 임시 경로이고, 구글 SSO가 켜지면 버튼이 함께 나온다.
  * 역할이 아직 배정되지 않은 사람은 로그인해도 화면이 열리지 않는다 (§13.1 · G10).
  */
 function SignIn({ message }: { message: string }) {
   const needsRole = message.includes("역할");
+  const [methods, setMethods] = useState<{
+    google: boolean;
+    password: boolean;
+  } | null>(null);
+  const [email, setEmail] = useState(
+    () => window.localStorage.getItem("erp:lastEmail") ?? ""
+  );
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/auth/methods", { credentials: "same-origin" })
+      .then(response => (response.ok ? response.json() : null))
+      .then(data => {
+        if (alive && data) setMethods(data);
+      })
+      // 조회 자체가 실패하면 두 수단을 모두 보여 준다 — 아무것도 못 누르는 것보다 낫다
+      .catch(() => {
+        if (alive) setMethods({ google: true, password: true });
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/auth/password", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          next: window.location.pathname || "/",
+        }),
+      });
+      const data = (await response.json()) as {
+        ok?: boolean;
+        reason?: string;
+        next?: string;
+      };
+      if (!response.ok || !data.ok) {
+        setError(data.reason ?? "로그인에 실패했습니다.");
+        setPassword("");
+        return;
+      }
+      // 다음에 이메일을 다시 치지 않도록 남긴다. 비밀번호는 절대 남기지 않는다.
+      window.localStorage.setItem("erp:lastEmail", email.trim().toLowerCase());
+      window.location.replace(data.next ?? "/");
+    } catch {
+      setError("서버에 연결하지 못했습니다. 잠시 뒤 다시 시도하십시오.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="erp-page">
       <header>
@@ -471,33 +542,78 @@ function SignIn({ message }: { message: string }) {
         <p>
           {needsRole
             ? "로그인은 되었지만 이 계정에 경영관리 시스템 역할이 배정되지 않았습니다. 대표님께 역할 지정을 요청하십시오 — 급여·부채는 역할이 있어야 보입니다."
-            : "회사 구글 계정으로 로그인하십시오. 승인·수정 이력이 사람 신원에 묶여 감사로그에 남습니다."}
+            : "회사 이메일과 지정 비밀번호로 로그인하십시오. 승인·수정 이력이 사람 신원에 묶여 감사로그에 남습니다."}
         </p>
       </header>
 
       <section className="erp-card">
         <div
           className="erp-card-body"
-          style={{ display: "flex", flexDirection: "column", gap: 10 }}
+          style={{ display: "flex", flexDirection: "column", gap: 12 }}
         >
-          <p
-            className="erp-note"
-            data-tone={needsRole ? "warn" : undefined}
-            style={{ margin: 0 }}
-          >
-            {message}
-          </p>
-          {needsRole ? null : (
+          {needsRole ? (
+            <p className="erp-note" data-tone="warn" style={{ margin: 0 }}>
+              {message}
+            </p>
+          ) : null}
+
+          {!needsRole && methods?.password !== false ? (
+            <form
+              onSubmit={submit}
+              style={{ display: "flex", flexDirection: "column", gap: 10 }}
+            >
+              <label className="erp-field">
+                <span>회사 이메일</span>
+                <input
+                  type="email"
+                  name="email"
+                  autoComplete="username"
+                  required
+                  value={email}
+                  onChange={event => setEmail(event.target.value)}
+                  placeholder="name@dinostudio.kr"
+                />
+              </label>
+              <label className="erp-field">
+                <span>비밀번호</span>
+                <input
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={event => setPassword(event.target.value)}
+                />
+              </label>
+              {error ? (
+                <p className="erp-note" data-tone="alert" style={{ margin: 0 }}>
+                  {error}
+                </p>
+              ) : null}
+              <div>
+                <button
+                  className="erp-btn"
+                  data-variant="primary"
+                  type="submit"
+                  disabled={busy}
+                >
+                  {busy ? "확인 중…" : "로그인"}
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {!needsRole && methods?.google ? (
             <div>
               <a
                 className="erp-btn"
-                data-variant="primary"
                 href={`/api/auth/google/start?next=${encodeURIComponent(window.location.pathname || "/")}`}
               >
                 구글 워크스페이스 계정으로 로그인
               </a>
             </div>
-          )}
+          ) : null}
+
           <p className="erp-null" style={{ margin: 0 }}>
             허용된 도메인·계정만 들어올 수 있습니다. 로그인 후 역할(대표 ·
             부대표 · 재무 · 사업부 리더 · 담당자 · 외부 세무)에 따라 보이는

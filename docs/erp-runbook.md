@@ -22,14 +22,21 @@
 
 ## 1단계 — 배포 (대표 30분 + 재무 15분)
 
-### ① 구글 OAuth 클라이언트 (대표, 10분)
+### ① 로그인 수단 — 지금은 비밀번호로 열고, 구글 SSO는 나중에
 
-[Cloud Console](https://console.cloud.google.com/apis/credentials) → OAuth 클라이언트 ID → 웹 애플리케이션
+**지금 (1분)** — Vercel 환경변수에 `ERP_PASSWORD`(10자 이상)만 넣으면 회사 이메일 + 그 비밀번호로
+로그인합니다. 구글 콘솔을 만질 필요가 없습니다. ②로 넘어가십시오.
+
+**나중에 (10분)** — [Cloud Console](https://console.cloud.google.com/apis/credentials) →
+OAuth 클라이언트 ID → 웹 애플리케이션
 
 | 항목         | 값                                                     |
 | ------------ | ------------------------------------------------------ |
 | 리디렉션 URI | `https://admin.dinostudio.kr/api/auth/google/callback` |
 | 동의 화면    | **내부(Internal)** — 워크스페이스 구성원만             |
+
+두 수단은 같은 세션 쿠키를 발급하므로, SSO를 나중에 붙여도 이미 들어간 데이터와 권한은 그대로입니다.
+SSO가 정착하면 `ERP_PASSWORD`를 지우십시오 — 공용 비밀번호는 사람이 나갈 때 회수가 어렵습니다.
 
 ### ② DB 고르기 (대표 판단 · 재무 실행)
 
@@ -43,15 +50,25 @@
 
 ### ③ Vercel 환경변수
 
-**최소 5개 — 이것만 있으면 로그인하고 화면이 뜹니다.**
+**최소 4개 — 이것만 있으면 로그인하고 화면이 뜹니다.**
 
-| 이름                                        | 없으면                                   |
-| ------------------------------------------- | ---------------------------------------- |
-| `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | 로그인 불가                              |
-| `SESSION_SECRET`                            | 로그인 불가 (`openssl rand -base64 48`)  |
-| `ERP_ALLOWED_DOMAIN` = `dinostudio.kr`      | **아무도 못 들어옴** (기본값이 「닫힘」) |
-| `ERP_ROLE_MAP` = `{"대표이메일":"대표"}`    | 「역할 미지정」으로 막힘                 |
-| `DATABASE_URL`                              | 시드가 메모리에 올라가 재시작 시 초기화  |
+| 이름                                     | 없으면                                      |
+| ---------------------------------------- | ------------------------------------------- |
+| `SESSION_SECRET`                         | 로그인 불가 — 세션을 서명할 열쇠가 없습니다 |
+| `ERP_PASSWORD` (10자 이상)               | 비밀번호 로그인 버튼이 안 나옴              |
+| `ERP_ALLOWED_DOMAIN` = `dinostudio.kr`   | **아무도 못 들어옴** (기본값이 「닫힘」)    |
+| `ERP_ROLE_MAP` = `{"대표이메일":"대표"}` | 「역할 미지정」으로 막힘                    |
+
+`SESSION_SECRET`은 브라우저 F12 → 콘솔에
+`crypto.randomUUID() + crypto.randomUUID() + crypto.randomUUID()` 를 붙여넣어 만드십시오.
+터미널을 쓰신다면 `openssl rand -base64 48` 도 같습니다. **어디에도 붙여넣지 마시고** Vercel에만 넣으십시오.
+
+**곧 필요한 것**
+
+| 이름                                        | 없으면                                          |
+| ------------------------------------------- | ----------------------------------------------- |
+| `DATABASE_URL`                              | 시드가 메모리에 올라가 재시작 시 초기화         |
+| `GOOGLE_CLIENT_ID` · `GOOGLE_CLIENT_SECRET` | 구글 로그인 버튼이 안 나옴 (비밀번호는 계속 됨) |
 
 **나중에 켜도 되는 것** — 슬랙(`SLACK_*`) · AI(`ANTHROPIC_API_KEY`) · 증빙 파일(`ERP_S3_*`).
 없어도 시스템은 돌아갑니다. 증빙은 드라이브 링크로, 알림은 알림함으로 대체됩니다.
@@ -70,7 +87,7 @@ pnpm erp:seed     # 시드 27건 + 일계 7행 + V1~V8 검증 리포트
 
 Vercel Settings → Domains 에 `admin.dinostudio.kr` 추가 → 안내되는 CNAME을 DNS에 등록.
 
-`https://admin.dinostudio.kr` → 구글 로그인 → 현금 현황에서 **P0 부족액 −272,110** 이 나오면 성공.
+`https://admin.dinostudio.kr` → 회사 이메일 + 비밀번호 → 현금 현황에서 **P0 부족액 −272,110** 이 나오면 성공.
 이 호스트는 루트가 곧 경영관리 시스템입니다 (마케팅 사이트는 보이지 않습니다).
 
 ---
