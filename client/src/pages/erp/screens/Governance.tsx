@@ -11,7 +11,7 @@ import {
 } from "@shared/erp";
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, Note, Tile } from "../components/Bits";
+import { Card, Note, Tile, chipClass } from "../components/Bits";
 import { matchesQuery, useErpUi } from "../context";
 import { won } from "../format";
 
@@ -204,8 +204,9 @@ export function GovernanceScreen({
                       <td>{user.name}</td>
                       <td>
                         <span
-                          className="chip"
-                          data-tone={user.role === "대표" ? "alert" : "info"}
+                          className={chipClass(
+                            user.role === "대표" ? "alert" : "info"
+                          )}
                         >
                           {user.role}
                         </span>
@@ -268,8 +269,7 @@ export function GovernanceScreen({
               </label>
               <button
                 type="button"
-                className="btn"
-                data-variant="primary"
+                className="btn pri"
                 disabled={
                   me.data?.role !== "대표" ||
                   !draft.email.includes("@") ||
@@ -509,14 +509,13 @@ export function GovernanceScreen({
                   </td>
                   <td>
                     <span
-                      className="chip"
-                      data-tone={
+                      className={chipClass(
                         m.confidence === "확정"
                           ? "ok"
                           : m.confidence === "추정"
                             ? "warn"
                             : "alert"
-                      }
+                      )}
                     >
                       {m.confidence}
                     </span>

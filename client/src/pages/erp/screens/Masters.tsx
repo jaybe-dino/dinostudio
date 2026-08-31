@@ -349,8 +349,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
           </label>
           <button
             type="button"
-            className="btn"
-            data-variant="primary"
+            className="btn pri"
             disabled={!draft.code || upsert.isPending}
             onClick={() =>
               upsert.mutate({

@@ -3,7 +3,7 @@
  * 값이 없으면 0으로 그리지 않고 무엇이 필요한지를 쓴다 (§10.2 · 원칙 8).
  */
 import { trpc } from "@/lib/trpc";
-import { Card, Note, Tile } from "../components/Bits";
+import { Card, Note, Tile, chipClass } from "../components/Bits";
 import { useErpUi } from "../context";
 import { shortfallTone, signedWon, won } from "../format";
 
@@ -139,14 +139,13 @@ export function OverviewScreen() {
                   <td className="s">{check.formula}</td>
                   <td>
                     <span
-                      className="chip"
-                      data-tone={
+                      className={chipClass(
                         check.verdict === "pass"
                           ? "ok"
                           : check.verdict === "fail"
                             ? "alert"
                             : "info"
-                      }
+                      )}
                     >
                       {check.verdict === "pass"
                         ? "통과"

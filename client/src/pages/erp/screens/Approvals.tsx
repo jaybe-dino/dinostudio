@@ -205,8 +205,7 @@ export function ApprovalsScreen() {
         </label>
         <button
           type="button"
-          className="btn"
-          data-variant="primary"
+          className="btn pri"
           disabled={codes.length === 0 || bulk.isPending}
           onClick={() => bulk.mutate({ codes, decision: "approve" })}
         >
@@ -242,7 +241,7 @@ export function ApprovalsScreen() {
           footer={
             <tr>
               <td colSpan={6}>합계</td>
-              <td className="num">{won(pendingTotal)}</td>
+              <td className="n">{won(pendingTotal)}</td>
               <td colSpan={2} />
             </tr>
           }
@@ -256,7 +255,7 @@ export function ApprovalsScreen() {
               <tr>
                 <th>단계</th>
                 <th>내용</th>
-                <th className="num">금액</th>
+                <th className="n">금액</th>
                 <th>확정도</th>
               </tr>
             </thead>
@@ -264,7 +263,7 @@ export function ApprovalsScreen() {
               <tr>
                 <td>보유 현금</td>
                 <td>집행원장 기준 확정 잔액</td>
-                <td className="num">{won(cashOnHand) ?? "계산 불가"}</td>
+                <td className="n">{won(cashOnHand) ?? "계산 불가"}</td>
                 <td>
                   {position.data?.cashOnHandIsProvisional ? "임시" : "확정"}
                 </td>
@@ -275,13 +274,13 @@ export function ApprovalsScreen() {
                   금액이 확정된 지출 {rows.filter(r => r.amount != null).length}
                   건
                 </td>
-                <td className="num">{won(pendingTotal)}</td>
+                <td className="n">{won(pendingTotal)}</td>
                 <td>확정</td>
               </tr>
               <tr>
                 <td>= 예약 후 잔액</td>
                 <td>이것이 실제 쓸 수 있는 돈</td>
-                <td className="num">
+                <td className="n">
                   {signedWon(reservedBalance) ?? "계산 불가"}
                 </td>
                 <td>

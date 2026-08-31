@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import type { ErpOutputs } from "../api";
-import { Card, Money, Note, Tile } from "../components/Bits";
+import { Card, Money, Note, Tile, chipClass } from "../components/Bits";
 import { DataTable, type Column } from "../components/DataTable";
 import { matchesQuery, useErpUi } from "../context";
 import { won } from "../format";
@@ -104,14 +104,13 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
       sortValue: l => l.state,
       render: l => (
         <span
-          className="chip"
-          data-tone={
+          className={chipClass(
             l.state === "만기 미확인"
               ? "alert"
               : l.state === "정상"
                 ? "ok"
                 : "warn"
-          }
+          )}
         >
           {l.state}
         </span>
@@ -302,10 +301,9 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
                   </td>
                   <td>
                     <span
-                      className="chip"
-                      data-tone={
+                      className={chipClass(
                         gate.fired ? "alert" : gate.blocked ? "warn" : "ok"
-                      }
+                      )}
                     >
                       {gate.fired
                         ? "발동"

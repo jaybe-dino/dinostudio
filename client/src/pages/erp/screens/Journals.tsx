@@ -65,9 +65,9 @@ export function JournalsScreen() {
               <tr>
                 <th>계정</th>
                 <th>대분류</th>
-                <th className="num">차변</th>
-                <th className="num">대변</th>
-                <th className="num">잔액</th>
+                <th className="n">차변</th>
+                <th className="n">대변</th>
+                <th className="n">잔액</th>
               </tr>
             </thead>
             <tbody>
@@ -75,18 +75,18 @@ export function JournalsScreen() {
                 <tr key={row.accountCode}>
                   <td>{accountLabel(row.accountCode)}</td>
                   <td>{row.type}</td>
-                  <td className="num">{won(row.debit)}</td>
-                  <td className="num">{won(row.credit)}</td>
-                  <td className="num">{won(row.balance)}</td>
+                  <td className="n">{won(row.debit)}</td>
+                  <td className="n">{won(row.credit)}</td>
+                  <td className="n">{won(row.balance)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
                 <td colSpan={2}>합계</td>
-                <td className="num">{won(tb?.debitTotal ?? 0)}</td>
-                <td className="num">{won(tb?.creditTotal ?? 0)}</td>
-                <td className="num">{won(tb?.difference ?? 0)}</td>
+                <td className="n">{won(tb?.debitTotal ?? 0)}</td>
+                <td className="n">{won(tb?.creditTotal ?? 0)}</td>
+                <td className="n">{won(tb?.difference ?? 0)}</td>
               </tr>
             </tfoot>
           </table>
@@ -101,9 +101,9 @@ export function JournalsScreen() {
                 <th>집행원장</th>
                 <th>전표일</th>
                 <th>차변 계정</th>
-                <th className="num">차변</th>
+                <th className="n">차변</th>
                 <th>대변 계정</th>
-                <th className="num">대변</th>
+                <th className="n">대변</th>
                 <th>적요</th>
               </tr>
             </thead>
@@ -130,9 +130,9 @@ export function JournalsScreen() {
                       </td>
                       <td>{shortDate(journal.journalDate)}</td>
                       <td>{accountLabel(debit?.accountCode)}</td>
-                      <td className="num">{won(debit?.debit ?? 0)}</td>
+                      <td className="n">{won(debit?.debit ?? 0)}</td>
                       <td>{accountLabel(credit?.accountCode)}</td>
-                      <td className="num">{won(credit?.credit ?? 0)}</td>
+                      <td className="n">{won(credit?.credit ?? 0)}</td>
                       <td className="wrap">{journal.memo}</td>
                     </tr>
                   );

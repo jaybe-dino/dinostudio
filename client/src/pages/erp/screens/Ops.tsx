@@ -89,9 +89,9 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
                   <th>일자</th>
                   <th>항목</th>
                   <th>계정</th>
-                  <th className="num">금액</th>
-                  <th className="num">공급가액</th>
-                  <th className="num">세액</th>
+                  <th className="n">금액</th>
+                  <th className="n">공급가액</th>
+                  <th className="n">세액</th>
                   <th>상태</th>
                 </tr>
               </thead>
@@ -109,7 +109,7 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
                     <td>{shortDate(entry.cashDate)}</td>
                     <td className="wrap">{entry.title}</td>
                     <td>{accountLabel(entry.accountCode)}</td>
-                    <td className="num">
+                    <td className="n">
                       <Money
                         value={entry.amount}
                         reason={entry.undecidedReason}
@@ -257,8 +257,8 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
               <thead>
                 <tr>
                   <th>프로젝트</th>
-                  <th className="num">예산</th>
-                  <th className="num">기여이익 (실적)</th>
+                  <th className="n">예산</th>
+                  <th className="n">기여이익 (실적)</th>
                   <th>비교</th>
                 </tr>
               </thead>
@@ -272,12 +272,12 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
                       <td>
                         {project.code} {project.name}
                       </td>
-                      <td className="num">
+                      <td className="n">
                         {won(project.budget) ?? (
                           <span className="s">미등록</span>
                         )}
                       </td>
-                      <td className="num">
+                      <td className="n">
                         {won(actual?.contributionProfit ?? 0)}
                       </td>
                       <td className="s">
@@ -358,18 +358,18 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
               <thead>
                 <tr>
                   <th>사업부</th>
-                  <th className="num">직접원가</th>
-                  <th className="num">공통배부 (현재)</th>
-                  <th className="num">건수</th>
+                  <th className="n">직접원가</th>
+                  <th className="n">공통배부 (현재)</th>
+                  <th className="n">건수</th>
                 </tr>
               </thead>
               <tbody>
                 {segments.map(segment => (
                   <tr key={segment.key}>
                     <td>{segment.label}</td>
-                    <td className="num">{won(segment.directCost)}</td>
-                    <td className="num">{won(segment.commonAllocated)}</td>
-                    <td className="num">{segment.entryCount}</td>
+                    <td className="n">{won(segment.directCost)}</td>
+                    <td className="n">{won(segment.commonAllocated)}</td>
+                    <td className="n">{segment.entryCount}</td>
                   </tr>
                 ))}
               </tbody>
@@ -449,8 +449,7 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           <button
             type="button"
-            className="btn"
-            data-variant="primary"
+            className="btn pri"
             onClick={() => setShowExport(true)}
           >
             원장 전건 내보내기

@@ -254,7 +254,7 @@ export function CashPositionScreen() {
           footer={
             <tr>
               <td colSpan={5}>표시된 소요 합계 (P3 · 미지정 포함)</td>
-              <td className="num">
+              <td className="n">
                 {won(lines.reduce((a, l) => a + (l.amountUsed ?? 0), 0))}
               </td>
               <td colSpan={3} />

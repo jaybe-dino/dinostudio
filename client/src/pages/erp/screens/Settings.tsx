@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, Note, Tile } from "../components/Bits";
+import { Card, Note, Tile, chipClass } from "../components/Bits";
 import { matchesQuery, useErpUi } from "../context";
 
 const LABELS: Record<string, string> = {
@@ -146,7 +146,7 @@ export function SettingsScreen() {
                 <tr key={setting.key}>
                   <td style={{ fontFamily: "var(--mono)" }}>{setting.key}</td>
                   <td className="wrap">{LABELS[setting.key] ?? "—"}</td>
-                  <td className="num">
+                  <td className="n">
                     {setting.value == null ? (
                       <span className="s">미확정</span>
                     ) : typeof setting.value === "number" ? (
@@ -157,8 +157,9 @@ export function SettingsScreen() {
                   </td>
                   <td>
                     <span
-                      className="chip"
-                      data-tone={setting.isProvisional ? "warn" : "ok"}
+                      className={chipClass(
+                        setting.isProvisional ? "warn" : "ok"
+                      )}
                     >
                       {setting.isProvisional ? "임시" : "확정"}
                     </span>

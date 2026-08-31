@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, Note, Tile } from "../components/Bits";
+import { Card, Note, Tile, chipClass } from "../components/Bits";
 import { signedWon, won } from "../format";
 import type { ErpOutputs } from "../api";
 
@@ -67,10 +67,7 @@ export function FinancialStatementsScreen() {
             onChange={e => setYm(e.target.value)}
           />
         </label>
-        <span
-          className="chip"
-          data-tone={fs.data?.status === "확정" ? "ok" : "warn"}
-        >
+        <span className={chipClass(fs.data?.status === "확정" ? "ok" : "warn")}>
           {fs.data?.status ?? "—"}
         </span>
       </div>
@@ -100,7 +97,7 @@ export function FinancialStatementsScreen() {
               <thead>
                 <tr>
                   <th>항목</th>
-                  <th className="num">금액</th>
+                  <th className="n">금액</th>
                   <th>비고</th>
                 </tr>
               </thead>
@@ -115,7 +112,7 @@ export function FinancialStatementsScreen() {
                     }
                   >
                     <td>{row.label}</td>
-                    <td className="num">
+                    <td className="n">
                       {row.amount == null ? (
                         <span className="s">계산 불가</span>
                       ) : (

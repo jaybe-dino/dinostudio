@@ -17,7 +17,6 @@ import { trpc } from "@/lib/trpc";
 import { EntryDrawer } from "./components/EntryDrawer";
 import { ErpUiContext } from "./context";
 import "./design.css";
-import "./erp.css";
 import { AccountsScreen } from "./screens/Accounts";
 import { ApprovalsScreen } from "./screens/Approvals";
 import { ArScreen } from "./screens/Ar";
@@ -590,7 +589,7 @@ function SignIn({ message }: { message: string }) {
   }
 
   return (
-    <div className="erp-page">
+    <>
       <header>
         <h1>
           {needsRole ? "역할이 지정되지 않았습니다" : "로그인이 필요합니다"}
@@ -608,14 +607,14 @@ function SignIn({ message }: { message: string }) {
           style={{ display: "flex", flexDirection: "column", gap: 12 }}
         >
           {needsRole ? (
-            <p className="note" data-tone="warn" style={{ margin: 0 }}>
+            <p className="note" style={{ margin: 0 }}>
               {message}
             </p>
           ) : null}
 
           {noMethod ? (
             <>
-              <p className="note" data-tone="alert" style={{ margin: 0 }}>
+              <p className="alertbox" style={{ margin: 0 }}>
                 서버에 로그인 수단이 설정되지 않았습니다. 들어올 수 있는 방법이
                 없는 상태입니다.
               </p>
@@ -662,17 +661,12 @@ function SignIn({ message }: { message: string }) {
                 />
               </label>
               {error ? (
-                <p className="note" data-tone="alert" style={{ margin: 0 }}>
+                <p className="alertbox" style={{ margin: 0 }}>
                   {error}
                 </p>
               ) : null}
               <div>
-                <button
-                  className="btn"
-                  data-variant="primary"
-                  type="submit"
-                  disabled={busy}
-                >
+                <button className="btn pri" type="submit" disabled={busy}>
                   {busy ? "확인 중…" : "로그인"}
                 </button>
               </div>
@@ -697,7 +691,7 @@ function SignIn({ message }: { message: string }) {
           </p>
         </div>
       </section>
-    </div>
+    </>
   );
 }
 
@@ -726,12 +720,19 @@ function CommandPalette({
   }, [text]);
 
   return (
-    <div className="pal" onClick={onClose}>
-      <div onClick={event => event.stopPropagation()}>
+    // 조건부로 렌더하므로 프로토타입의 .on 을 항상 붙인다 (기본이 display:none)
+    <div
+      className="pal on"
+      role="dialog"
+      aria-label="화면 이동"
+      onClick={onClose}
+    >
+      <div className="pal-box" onClick={event => event.stopPropagation()}>
         <input
           ref={inputRef}
           value={text}
-          placeholder="화면 이름으로 이동 — ↑↓ Enter"
+          placeholder="화면 이름으로 이동 — 예: 집행원장, 재무제표, 번레이트"
+          aria-label="화면 검색"
           onChange={event => setText(event.target.value)}
           onKeyDown={event => {
             if (event.key === "ArrowDown") {
@@ -746,25 +747,34 @@ function CommandPalette({
               onPick(matches[cursor].id);
           }}
         />
-        <ul>
+        <div className="pal-list">
           {matches.map((item, index) => (
-            <li key={item.id} data-active={index === cursor}>
-              <button type="button" onClick={() => onPick(item.id)}>
-                <span>
-                  {item.label} <span className="s">· {item.stage}차</span>
-                </span>
-                <span className="s">{item.hint}</span>
-              </button>
-            </li>
+            <button
+              type="button"
+              className={index === cursor ? "pal-item sel" : "pal-item"}
+              key={item.id}
+              onClick={() => onPick(item.id)}
+            >
+              <span>{item.label}</span>
+              <span className="g2">{item.group}</span>
+            </button>
           ))}
           {matches.length === 0 ? (
-            <li>
-              <button type="button" disabled>
-                <span className="s">일치하는 화면이 없습니다</span>
-              </button>
-            </li>
+            <div className="noresult">일치하는 화면이 없습니다</div>
           ) : null}
-        </ul>
+        </div>
+        <div className="pal-foot">
+          <span>
+            <b>↑↓</b> 이동
+          </span>
+          <span>
+            <b>Enter</b> 열기
+          </span>
+          <span>
+            <b>Esc</b> 닫기
+          </span>
+          <span style={{ marginLeft: "auto" }}>{SCREENS.length}개 화면</span>
+        </div>
       </div>
     </div>
   );

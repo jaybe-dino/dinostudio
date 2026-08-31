@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, Money, Note, Tile } from "../components/Bits";
+import { Card, Money, Note, Tile, chipClass } from "../components/Bits";
 import { useErpUi } from "../context";
 import { shortDate, won } from "../format";
 
@@ -76,8 +76,7 @@ export function SheetImportScreen() {
           </button>
           <button
             type="button"
-            className="btn"
-            data-variant="primary"
+            className="btn pri"
             disabled={!preview.data || commit.isPending}
             onClick={() => commit.mutate({ text, from: from || null })}
             title={preview.data ? undefined : "먼저 미리보기로 확인하십시오"}
@@ -159,7 +158,7 @@ export function SheetImportScreen() {
                     <th>코드</th>
                     <th>일자</th>
                     <th>항목 · 적요</th>
-                    <th className="num">금액</th>
+                    <th className="n">금액</th>
                     <th>상태</th>
                     <th>검수</th>
                   </tr>
@@ -178,7 +177,7 @@ export function SheetImportScreen() {
                           <span className="s"> · {item.entry.noteRaw}</span>
                         ) : null}
                       </td>
-                      <td className="num">
+                      <td className="n">
                         <Money
                           value={item.entry.amount}
                           reason={item.entry.undecidedReason}
@@ -193,10 +192,9 @@ export function SheetImportScreen() {
                       </td>
                       <td>
                         <span
-                          className="chip"
-                          data-tone={
+                          className={chipClass(
                             item.entry.status === "pending" ? "warn" : "alert"
-                          }
+                          )}
                         >
                           {item.entry.status === "pending"
                             ? "승인 대기"

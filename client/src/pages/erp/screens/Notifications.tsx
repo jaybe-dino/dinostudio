@@ -4,7 +4,7 @@
  * 도착지가 죽어 있어도 경보가 사라지면 안 되므로 알림함 적재가 기본이다 (B7).
  */
 import { trpc } from "@/lib/trpc";
-import { Card, Note, Tile } from "../components/Bits";
+import { Card, Note, Tile, chipClass } from "../components/Bits";
 import { useErpUi } from "../context";
 
 export function NotificationsScreen() {
@@ -150,14 +150,13 @@ export function NotificationsScreen() {
                 <tr key={rule.id}>
                   <td>
                     <span
-                      className="chip"
-                      data-tone={
+                      className={chipClass(
                         rule.tier === "T3"
                           ? "alert"
                           : rule.tier === "T2"
                             ? "warn"
                             : undefined
-                      }
+                      )}
                     >
                       {rule.tier}
                     </span>

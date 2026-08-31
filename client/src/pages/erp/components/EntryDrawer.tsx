@@ -66,21 +66,26 @@ export function EntryDrawer({
 
   return (
     <>
-      <div className="scrim" onClick={onClose} />
-      <aside className="drawer" role="dialog" aria-label={`${code} 상세`}>
-        <header>
-          <span className="m">{code}</span>
-          <button type="button" className="btn" onClick={onClose}>
-            닫기
+      {/* 조건부 렌더이므로 프로토타입의 .on 을 항상 붙인다 (기본이 숨김) */}
+      <div className="scrim on" onClick={onClose} />
+      <aside className="drawer on" role="dialog" aria-label={`${code} 상세`}>
+        <div className="drawer-h">
+          <b className="m">{code}</b>
+          <button
+            type="button"
+            className="ico x"
+            onClick={onClose}
+            aria-label="닫기"
+            style={{ marginLeft: "auto" }}
+          >
+            ×
           </button>
-        </header>
+        </div>
 
         <div className="drawer-b">
           {detail.isLoading ? <p className="s">불러오는 중…</p> : null}
           {detail.error ? (
-            <p className="note" data-tone="alert">
-              {detail.error.message}
-            </p>
+            <div className="alertbox">{detail.error.message}</div>
           ) : null}
 
           {entry ? (
@@ -95,23 +100,17 @@ export function EntryDrawer({
                   overridden={entry.priorityOverride != null}
                 />
                 {entry.masked ? (
-                  <span
-                    className="chip"
-                    data-tone="info"
-                    style={{ marginLeft: 6 }}
-                  >
+                  <span className="chip n" style={{ marginLeft: 6 }}>
                     마스킹
                   </span>
                 ) : null}
               </div>
 
               {entry.masked && entry.maskReason ? (
-                <p className="note" data-tone="warn">
-                  {entry.maskReason}
-                </p>
+                <p className="note">{entry.maskReason}</p>
               ) : null}
               {entry.undecidedReason ? (
-                <p className="note" data-tone="alert">
+                <p className="alertbox">
                   판정 대기 사유 — {entry.undecidedReason}
                 </p>
               ) : null}
@@ -163,7 +162,7 @@ export function EntryDrawer({
               </dl>
 
               {detail.data!.duplicates.length > 0 ? (
-                <p className="note" data-tone="warn">
+                <p className="note">
                   중복 의심 —{" "}
                   {detail
                     .data!.duplicates.map(
@@ -210,8 +209,7 @@ export function EntryDrawer({
                 >
                   <button
                     type="button"
-                    className="btn"
-                    data-variant="primary"
+                    className="btn pri"
                     disabled={busy || entry.status !== "pending"}
                     onClick={() =>
                       approve.mutate({ code, version: entry.version })
@@ -242,7 +240,6 @@ export function EntryDrawer({
                   <button
                     type="button"
                     className="btn"
-                    data-variant="danger"
                     disabled={
                       busy || !reason.trim() || entry.status !== "confirmed"
                     }
@@ -302,11 +299,7 @@ export function EntryDrawer({
                 </p>
               </div>
 
-              {error ? (
-                <p className="note" data-tone="alert">
-                  {error}
-                </p>
-              ) : null}
+              {error ? <p className="alertbox">{error}</p> : null}
 
               <Evidence code={code} onChanged={refresh} />
 

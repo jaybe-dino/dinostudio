@@ -303,7 +303,7 @@ export function CashflowScreen() {
                               <th>항목</th>
                               <th>계정과목</th>
                               <th>우선</th>
-                              <th className="num">금액</th>
+                              <th className="n">금액</th>
                               <th>처리</th>
                             </tr>
                           </thead>
@@ -330,7 +330,7 @@ export function CashflowScreen() {
                                     overridden={entry.priorityOverride != null}
                                   />
                                 </td>
-                                <td className="num">
+                                <td className="n">
                                   <Money
                                     value={entry.amount}
                                     reason={entry.undecidedReason}
@@ -476,7 +476,7 @@ function SideTable({
               <th>일자</th>
               <th>항목 · 적요 원문</th>
               <th>계정</th>
-              <th className="num">금액</th>
+              <th className="n">금액</th>
             </tr>
           </thead>
           <tbody>
@@ -502,7 +502,7 @@ function SideTable({
                     ) : null}
                   </td>
                   <td>{accountLabel(entry.accountCode)}</td>
-                  <td className="num">
+                  <td className="n">
                     <Money
                       value={entry.amount}
                       reason={entry.undecidedReason}

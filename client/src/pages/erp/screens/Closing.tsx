@@ -4,7 +4,7 @@
  */
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, Note, Tile } from "../components/Bits";
+import { Card, Note, Tile, chipClass } from "../components/Bits";
 
 export function ClosingScreen() {
   const utils = trpc.useUtils();
@@ -82,8 +82,7 @@ export function ClosingScreen() {
           </label>
           <button
             type="button"
-            className="btn"
-            data-variant="primary"
+            className="btn pri"
             disabled={close.isPending}
             onClick={() => close.mutate({ ym })}
           >
@@ -130,8 +129,9 @@ export function ClosingScreen() {
                     <td style={{ fontFamily: "var(--mono)" }}>{period.ym}</td>
                     <td>
                       <span
-                        className="chip"
-                        data-tone={period.status === "closed" ? "ok" : "warn"}
+                        className={chipClass(
+                          period.status === "closed" ? "ok" : "warn"
+                        )}
                       >
                         {period.status === "closed" ? "마감" : "열림"}
                       </span>

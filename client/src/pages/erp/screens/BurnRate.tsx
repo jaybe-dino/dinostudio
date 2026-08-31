@@ -3,7 +3,7 @@
  * 라벨 없이 「런웨이」라고 쓰지 않는다 (원칙 3). 세 값이 전부 null이면 그대로 null이라고 쓴다.
  */
 import { trpc } from "@/lib/trpc";
-import { Card, Note, Tile } from "../components/Bits";
+import { Card, Note, Tile, chipClass } from "../components/Bits";
 import { won } from "../format";
 
 export function BurnRateScreen() {
@@ -98,10 +98,7 @@ export function BurnRateScreen() {
                   <td>{condition.current}</td>
                   <td>{condition.owner}</td>
                   <td>
-                    <span
-                      className="chip"
-                      data-tone={condition.met ? "ok" : "alert"}
-                    >
+                    <span className={chipClass(condition.met ? "ok" : "alert")}>
                       {condition.met ? "충족" : "미충족"}
                     </span>
                   </td>
@@ -122,36 +119,34 @@ export function BurnRateScreen() {
             <thead>
               <tr>
                 <th>구분</th>
-                <th className="num">금액</th>
-                <th className="num">건수</th>
+                <th className="n">금액</th>
+                <th className="n">건수</th>
                 <th>번레이트 반영</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>확정 운영비</td>
-                <td className="num">{won(data?.opex.opex.amount ?? 0)}</td>
-                <td className="num">{data?.opex.opex.count ?? 0}</td>
+                <td className="n">{won(data?.opex.opex.amount ?? 0)}</td>
+                <td className="n">{data?.opex.opex.count ?? 0}</td>
                 <td>
                   <span className="chip g">포함</span>
                 </td>
               </tr>
               <tr>
                 <td>통과원가 (받아야 나감)</td>
-                <td className="num">
-                  {won(data?.opex.passThrough.amount ?? 0)}
-                </td>
-                <td className="num">{data?.opex.passThrough.count ?? 0}</td>
+                <td className="n">{won(data?.opex.passThrough.amount ?? 0)}</td>
+                <td className="n">{data?.opex.passThrough.count ?? 0}</td>
                 <td>
                   <span className="chip">제외</span>
                 </td>
               </tr>
               <tr>
                 <td>차입 원금 · 부가세 · 자산 취득</td>
-                <td className="num">
+                <td className="n">
                   {won(data?.opex.nonOperating.amount ?? 0)}
                 </td>
-                <td className="num">{data?.opex.nonOperating.count ?? 0}</td>
+                <td className="n">{data?.opex.nonOperating.count ?? 0}</td>
                 <td>
                   <span className="chip">제외</span>
                 </td>
@@ -159,7 +154,7 @@ export function BurnRateScreen() {
               <tr>
                 <td>판정 대기</td>
                 <td className="num s">계산 불가</td>
-                <td className="num">{data?.opex.undecided.count ?? 0}</td>
+                <td className="n">{data?.opex.undecided.count ?? 0}</td>
                 <td>
                   <span className="chip a">산입 불가</span>
                 </td>

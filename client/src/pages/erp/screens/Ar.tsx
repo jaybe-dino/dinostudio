@@ -180,7 +180,7 @@ export function ArScreen() {
           footer={
             <tr>
               <td colSpan={3}>미수 합계 (발행분 기준)</td>
-              <td className="num">{won(ar.data?.receivableTotal ?? 0)}</td>
+              <td className="n">{won(ar.data?.receivableTotal ?? 0)}</td>
               <td colSpan={4} />
             </tr>
           }
@@ -199,7 +199,7 @@ export function ArScreen() {
           footer={
             <tr>
               <td colSpan={3}>발행 대기 합계 (판별 가능분)</td>
-              <td className="num">{won(ar.data?.pendingIssueTotal ?? 0)}</td>
+              <td className="n">{won(ar.data?.pendingIssueTotal ?? 0)}</td>
               <td colSpan={3} />
             </tr>
           }

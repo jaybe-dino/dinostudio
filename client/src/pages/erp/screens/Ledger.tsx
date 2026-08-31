@@ -341,7 +341,7 @@ export function LedgerScreen({
           footer={
             <tr>
               <td colSpan={8}>확정 합계</td>
-              <td className="num">{won(totals?.sum ?? 0)}</td>
+              <td className="n">{won(totals?.sum ?? 0)}</td>
             </tr>
           }
         />

@@ -77,70 +77,72 @@ export function ExportModal({
   };
 
   return (
-    <div className="pal" onClick={onClose}>
-      <div
-        onClick={event => event.stopPropagation()}
-        style={{ width: "min(880px, 94vw)", maxHeight: "72vh" }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 10,
-            padding: "10px 14px",
-            borderBottom: "1px solid var(--rule)",
-          }}
-        >
-          <strong>
-            {title} — 탭 구분 텍스트 {rows.length - 1}행
-          </strong>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              type="button"
-              className="btn"
-              data-variant="primary"
-              onClick={downloadXlsx}
-            >
-              엑셀 내려받기
-            </button>
-            <button type="button" className="btn" onClick={downloadCsv}>
-              CSV
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(text);
-                  setCopied(true);
-                } catch {
-                  setCopied(false);
-                }
-              }}
-            >
-              {copied ? "복사됨" : "전체 복사"}
-            </button>
-            <button type="button" className="btn" onClick={onClose}>
-              닫기
-            </button>
-          </div>
+    <div
+      className="modal on"
+      role="dialog"
+      aria-label={title}
+      onClick={onClose}
+    >
+      <div className="modal-box" onClick={event => event.stopPropagation()}>
+        <div className="modal-h">
+          <b>{title}</b>
+          <span className="chip n">탭 구분 · {rows.length - 1}행</span>
+          <button
+            type="button"
+            className="ico x"
+            onClick={onClose}
+            aria-label="닫기"
+            style={{ marginLeft: "auto" }}
+          >
+            ×
+          </button>
         </div>
-        <textarea
-          readOnly
-          value={text}
-          onFocus={event => event.currentTarget.select()}
-          style={{
-            width: "100%",
-            minHeight: "48vh",
-            border: 0,
-            padding: "12px 14px",
-            font: "12px/1.6 var(--mono)",
-            resize: "none",
-            background: "var(--surface)",
-            color: "var(--ink)",
-          }}
-        />
+
+        <div className="modal-b" style={{ padding: 0 }}>
+          <textarea
+            readOnly
+            value={text}
+            onFocus={event => event.currentTarget.select()}
+            aria-label={`${title} 내보내기 내용`}
+            style={{
+              width: "100%",
+              minHeight: "44vh",
+              border: 0,
+              padding: "12px 14px",
+              font: '12px/1.6 "IBM Plex Mono", monospace',
+              resize: "none",
+              background: "var(--surface)",
+              color: "var(--ink)",
+            }}
+          />
+        </div>
+
+        <div className="modal-f">
+          <button type="button" className="btn" onClick={onClose}>
+            닫기
+          </button>
+          <button type="button" className="btn" onClick={downloadCsv}>
+            CSV
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(text);
+                setCopied(true);
+              } catch {
+                // 클립보드 권한이 없으면 사용자가 직접 선택해 복사하면 된다
+                setCopied(false);
+              }
+            }}
+          >
+            {copied ? "복사됨" : "전체 복사"}
+          </button>
+          <button type="button" className="btn pri" onClick={downloadXlsx}>
+            엑셀 내려받기
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -256,8 +256,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
         </div>
         <button
           type="button"
-          className="btn"
-          data-variant="primary"
+          className="btn pri"
           disabled={create.isPending || !draft.cashDate}
           onClick={submit}
         >

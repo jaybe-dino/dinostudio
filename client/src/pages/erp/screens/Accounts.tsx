@@ -5,7 +5,7 @@
 import { autoPriority, type Account } from "@shared/erp";
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, Note, PriorityChip } from "../components/Bits";
+import { Card, Note, PriorityChip, chipClass } from "../components/Bits";
 import { DataTable, type Column } from "../components/DataTable";
 import { matchesQuery, useErpUi } from "../context";
 
@@ -47,14 +47,13 @@ export function AccountsScreen() {
       sortValue: a => a.cfSection,
       render: a => (
         <span
-          className="chip"
-          data-tone={
+          className={chipClass(
             a.cfSection === "영업"
               ? "ok"
               : a.cfSection === "재무"
                 ? "info"
                 : undefined
-          }
+          )}
         >
           {a.cfSection}
         </span>

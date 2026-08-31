@@ -163,18 +163,18 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
               <thead>
                 <tr>
                   <th>계정과목</th>
-                  <th className="num">금액</th>
-                  <th className="num">건수</th>
-                  <th className="num">비중</th>
+                  <th className="n">금액</th>
+                  <th className="n">건수</th>
+                  <th className="n">비중</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map(row => (
                   <tr key={row.code}>
                     <td>{accountLabel(row.code)}</td>
-                    <td className="num">{won(row.amount)}</td>
-                    <td className="num">{row.count}</td>
-                    <td className="num">
+                    <td className="n">{won(row.amount)}</td>
+                    <td className="n">{row.count}</td>
+                    <td className="n">
                       {grand > 0
                         ? `${Math.round((row.amount / grand) * 100)}%`
                         : "—"}
@@ -185,11 +185,9 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
               <tfoot>
                 <tr>
                   <td>합계</td>
-                  <td className="num">{won(grand)}</td>
-                  <td className="num">
-                    {rows.reduce((a, r) => a + r.count, 0)}
-                  </td>
-                  <td className="num">100%</td>
+                  <td className="n">{won(grand)}</td>
+                  <td className="n">{rows.reduce((a, r) => a + r.count, 0)}</td>
+                  <td className="n">100%</td>
                 </tr>
               </tfoot>
             </table>
@@ -365,7 +363,7 @@ function Row({
       }
     >
       <td>{label}</td>
-      <td className="num">
+      <td className="n">
         {won(amount ?? 0) ?? <span className="s">계산 불가</span>}
       </td>
     </tr>

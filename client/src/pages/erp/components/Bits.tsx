@@ -24,7 +24,8 @@ const CHIP_CLASS: Record<NonNullable<Tone>, string> = {
   null: "n",
 };
 
-function chipClass(tone: Tone): string {
+/** Tone → 프로토타입 chip 변형 클래스. 화면들도 동적 색에 이걸 쓴다. */
+export function chipClass(tone: Tone): string {
   return tone ? `chip ${CHIP_CLASS[tone]}` : "chip";
 }
 

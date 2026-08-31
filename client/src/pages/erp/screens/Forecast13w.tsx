@@ -119,10 +119,10 @@ export function Forecast13wScreen() {
               <tr>
                 <th>주차</th>
                 <th>기간</th>
-                <th className="num">시작</th>
-                <th className="num">예정입금</th>
-                <th className="num">예정지출</th>
-                <th className="num">종료</th>
+                <th className="n">시작</th>
+                <th className="n">예정입금</th>
+                <th className="n">예정지출</th>
+                <th className="n">종료</th>
                 <th>근거</th>
               </tr>
             </thead>
@@ -133,13 +133,13 @@ export function Forecast13wScreen() {
                   <td>
                     {shortDate(week.start)} – {shortDate(week.end)}
                   </td>
-                  <td className="num">
+                  <td className="n">
                     {won(week.open) ?? <span className="s">계산 불가</span>}
                   </td>
-                  <td className="num">{won(week.inflow)}</td>
-                  <td className="num">{won(week.outflow)}</td>
+                  <td className="n">{won(week.inflow)}</td>
+                  <td className="n">{won(week.outflow)}</td>
                   <td
-                    className="num"
+                    className="n"
                     style={{
                       color: (week.close ?? 0) < 0 ? "var(--alert)" : undefined,
                     }}
