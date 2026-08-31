@@ -507,6 +507,55 @@ export class LedgerService {
   }
 
   /**
+   * GET /brief — 경영자 3줄 브리프 (E1 CFO · E2 런웨이)
+   *
+   * 대표가 화면에 들어와서 표를 읽어야 판단이 나오면 늦다.
+   * 「지금 얼마가 모자라나 · 오늘 무엇을 결정해야 하나 · 얼마나 버티나」 세 가지를
+   * 한 줄씩 먼저 답한다. 계산은 각 화면과 같은 함수를 쓴다 — 숫자가 갈리면 안 된다.
+   */
+  async brief(actor: Actor) {
+    const [position, decisions, runway] = await Promise.all([
+      this.cashPosition({}, actor),
+      this.decisions(actor),
+      this.runway(),
+    ]);
+
+    const ownerItems = decisions.owner;
+    // 되돌릴 수 없는 것이 몇 건인지가 「오늘」의 무게를 정한다
+    const irreversible = ownerItems.filter(i => i.score.reversibility === 3);
+
+    return {
+      today: decisions.today,
+      /** ① 지금 얼마가 모자라나 */
+      shortfall: {
+        // P0 부족액이 「지금 당장」의 숫자다 — 미룰 수 없는 것만 낸 뒤 남는 돈
+        tiers: position.tiers,
+        p0: position.tiers.find(t => t.level === 0) ?? null,
+        cashOnHand: position.cashOnHand,
+        horizon: position.horizon,
+        isProvisional: position.cashOnHandIsProvisional,
+        excludedUndecided: position.excludedUndecided.n,
+      },
+      /** ② 오늘 무엇을 결정해야 하나 */
+      decisions: {
+        owner: ownerItems.length,
+        irreversible: irreversible.length,
+        top: ownerItems[0] ?? null,
+        leader: decisions.counts.leader,
+      },
+      /** ③ 얼마나 버티나 — 라벨 없이 「런웨이」라고 쓰지 않는다 (원칙 3) */
+      runway: {
+        simple: runway.simple,
+        reserved: runway.reserved,
+        expectedWeeks: runway.expected.value,
+        monthlyBurn: runway.burnRate.value,
+        deductions: runway.reservedDeductions,
+        threshold: decisions.threshold,
+      },
+    };
+  }
+
+  /**
    * GET /decisions — 오늘의 3가지 · 결정 큐 (E3 비서실장)
    *
    * 4축 점수를 서버에서 한 번 계산한다. 화면이 각자 계산하면 순위가 갈리고,
@@ -1112,6 +1161,8 @@ export class LedgerService {
        * 손익은 이 날짜를, 현금흐름은 cashDate 를 축으로 쓴다 (docs/erp-qa.md A4).
        */
       accrualDate?: string | null;
+      /** 거래처 — 한도 쪼개기 판정(D2)과 채권·채무 대응에 쓰인다 */
+      partyId?: string | null;
       accountCode?: string | null;
       nature?: Entry["nature"];
       buCode?: Entry["buCode"];
@@ -1167,7 +1218,7 @@ export class LedgerService {
       nature: input.nature ?? "미지정",
       buCode: input.buCode ?? null,
       projectId: input.projectId ?? null,
-      partyId: null,
+      partyId: input.partyId ?? null,
       contractId: null,
       priority:
         input.direction === "in" ? null : defaultPriorityOf(input.accountCode),
@@ -1460,7 +1511,16 @@ export class LedgerService {
     if (entry.amount == null) throw erpError("amount_undecided");
     if (!entry.accountCode) throw erpError("account_required");
     if (!entry.hasEvidence) throw erpError("evidence_required");
-    if (entry.createdBy === actor.id) throw erpError("self_approval");
+    // D1 — 만든 사람뿐 아니라 이 건을 손댄 사람 전부를 승인에서 제외한다.
+    // 생성자만 막으면 수정본(-R1)을 만든 사람이 자기 수정을 승인할 수 있다.
+    const touched = await this.touchedBy(entry);
+    if (touched.has(actor.id)) throw erpError("self_approval");
+
+    // D2 — 같은 거래처에 쪼개서 올리면 건별 한도를 우회할 수 있다.
+    // 같은 주에 같은 거래처로 나가는 확정·대기 합계로 다시 판정한다.
+    const weekTotal = await this.partyWeekTotal(entry);
+    if (weekTotal > entry.amount && !canApproveAmount(actor.role, weekTotal))
+      throw erpError("approval_limit", { amount: weekTotal });
     if (!canApproveAmount(actor.role, entry.amount))
       throw erpError("approval_limit", { amount: entry.amount });
 
@@ -1647,6 +1707,55 @@ export class LedgerService {
       { n: sensitive.length, codes: sensitive.map(e => e.code) },
       actor
     );
+  }
+
+  /**
+   * 이 건을 손댄 사람 전부 — 생성자와 수정본 계보 전체의 생성자.
+   * 자기승인 차단은 「만든 사람」이 아니라 「관여한 사람」 기준이어야 한다 (D1).
+   */
+  private async touchedBy(entry: Entry): Promise<Set<string>> {
+    const all = await this.store.listEntries();
+    const people = new Set<string>([entry.createdBy]);
+    // 수정본 계보를 거슬러 올라간다
+    let cursor: Entry | undefined = entry;
+    const seen = new Set<string>();
+    while (cursor?.parentCode && !seen.has(cursor.parentCode)) {
+      seen.add(cursor.parentCode);
+      const parentCode: string = cursor.parentCode;
+      cursor = all.find(e => e.code === parentCode);
+      if (cursor) people.add(cursor.createdBy);
+    }
+    return people;
+  }
+
+  /**
+   * 같은 거래처에 같은 주(월~일)로 나가는 금액 합계 — 한도 쪼개기를 막는다 (D2).
+   * 거래처가 지정되지 않은 건은 묶을 근거가 없으므로 건별 금액 그대로 본다.
+   */
+  private async partyWeekTotal(entry: Entry): Promise<number> {
+    if (!entry.partyId || entry.amount == null) return entry.amount ?? 0;
+    const date = entry.cashDate ?? entry.accrualDate;
+    if (!date) return entry.amount;
+
+    const day = new Date(`${date}T00:00:00+09:00`);
+    const weekday = (day.getDay() + 6) % 7; // 월요일을 0으로
+    const monday = new Date(day);
+    monday.setDate(day.getDate() - weekday);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    const from = monday.toISOString().slice(0, 10);
+    const to = sunday.toISOString().slice(0, 10);
+
+    const all = await this.store.listEntries();
+    return all
+      .filter(e => {
+        if (e.partyId !== entry.partyId) return false;
+        if (e.direction !== "out" || e.amount == null) return false;
+        if (e.status !== "pending" && e.status !== "confirmed") return false;
+        const d = e.cashDate ?? e.accrualDate;
+        return d != null && d >= from && d <= to;
+      })
+      .reduce((sum, e) => sum + (e.amount ?? 0), 0);
   }
 
   private async requireWritable(code: string, actor: Actor): Promise<Entry> {

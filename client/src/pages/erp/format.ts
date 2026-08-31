@@ -32,7 +32,8 @@ export function blockLabel(key: string): string {
 
 export const NULL_REASON_TEXT: Record<string, string> = {
   undecided_carryover: "판정 대기 승계 — 종료 잔액 확정 불가",
-  burn_rate_unavailable: "번레이트 분모 없음",
+  burn_rate_unavailable:
+    "월 번레이트를 확정할 수 없습니다 — 급여 실액과 구독 원장이 필요합니다",
 };
 
 export function nullReasonText(reason: string | null | undefined): string {

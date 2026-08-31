@@ -108,6 +108,7 @@ export const erpRouter = router({
           amountCandidate: z.number().int().nullable().optional(),
           cashDate: z.string(),
           accrualDate: z.string().nullable().optional(),
+          partyId: z.string().nullable().optional(),
           accountCode: z.string().nullable().optional(),
           nature: z
             .enum([
@@ -414,6 +415,11 @@ export const erpRouter = router({
     actorFrom(ctx);
     return run(() => getLedgerService().runway());
   }),
+
+  /** GET /brief — 경영자 3줄 브리프 (E1 · E2) */
+  brief: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().brief(actorFrom(ctx)))
+  ),
 
   /** GET /decisions — 오늘의 3가지 · 결정 큐 (E3) */
   decisions: protectedProcedure.query(({ ctx }) =>

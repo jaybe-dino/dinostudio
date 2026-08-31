@@ -14,6 +14,7 @@ import {
   type ReactElement,
 } from "react";
 import { trpc } from "@/lib/trpc";
+import { Brief } from "./components/Brief";
 import { EntryDrawer } from "./components/EntryDrawer";
 import { ErpUiContext } from "./context";
 import "./design.css";
@@ -360,6 +361,19 @@ const SCREENS: ScreenDef[] = [
 
 const GROUPS = Array.from(new Set(SCREENS.map(s => s.group)));
 
+/**
+ * 3줄 브리프를 붙이는 화면.
+ * 매일 보는 운영 화면에만 붙인다 — 마스터·설정까지 붙이면 소음이 되고,
+ * 늘 떠 있는 것은 곧 안 보이는 것이 된다.
+ */
+const BRIEFED_SCREENS = new Set([
+  "today",
+  "cashflow",
+  "cash-position",
+  "approvals",
+  "overview",
+]);
+
 export default function ErpApp() {
   // 첫 진입 화면은 현금흐름표다 (08-27 회의 결정)
   const [screenId, setScreenId] = useState("cashflow");
@@ -471,7 +485,11 @@ export default function ErpApp() {
               {me.error ? (
                 <SignIn message={me.error.message} />
               ) : (
-                screen.render()
+                <>
+                  {/* 표를 읽기 전에 세 가지를 먼저 답한다 (E1·E2) */}
+                  {BRIEFED_SCREENS.has(screenId) ? <Brief /> : null}
+                  {screen.render()}
+                </>
               )}
             </section>
           </div>
