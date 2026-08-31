@@ -45,8 +45,20 @@ export async function GET(): Promise<Response> {
   ])
     env[key] = Boolean(process.env[key]);
 
+  // 어느 배포를 보고 있는지 — 환경변수는 환경(Production/Preview)별로 따로 잡힌다.
+  // 비밀이 아니라 Vercel 이 주는 배포 메타데이터다.
+  const deployment = {
+    environment: process.env.VERCEL_ENV ?? "(vercel 아님)",
+    branch: process.env.VERCEL_GIT_COMMIT_REF ?? null,
+    commit: (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7) || null,
+  };
+
   return new Response(
-    JSON.stringify({ node: process.version, modules, env }, null, 2),
+    JSON.stringify(
+      { node: process.version, deployment, modules, env },
+      null,
+      2
+    ),
     {
       status: 200,
       headers: {
