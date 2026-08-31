@@ -1,0 +1,9 @@
+# 마케팅 사이트는 색인을 허용하고, 경영관리 시스템은 막는다.
+# robots.txt 는 「요청」일 뿐이라 지키지 않는 크롤러도 있다 — 실제 방어는
+# X-Robots-Tag 헤더와 로그인이고, 이 파일은 정상적인 크롤러를 위한 안내다.
+User-agent: *
+Disallow: /erp
+Disallow: /api/
+
+# admin.dinostudio.kr 은 호스트 전체가 X-Robots-Tag: noindex 다 (vercel.json)
+Sitemap: https://dinostudio.kr/sitemap.xml

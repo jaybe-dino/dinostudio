@@ -1,10 +1,15 @@
 /**
- * GET /api/diag — 배포 진단용 임시 엔드포인트.
+ * GET /api/diag — 배포 진단용 엔드포인트.
  *
  * 정적 import 가 하나도 없다. 그래야 다른 모듈이 전부 깨져 있어도 이 파일만은 뜨고,
- * 무엇이 깨졌는지 말해줄 수 있다. 원인을 잡으면 지운다.
+ * 무엇이 깨졌는지 말해줄 수 있다.
  *
- * 비밀값은 절대 내보내지 않는다 — 환경변수는 "있다/없다"만 본다.
+ * **로그인이 필요하다.** 처음에는 열어 두었는데, 이 응답은 서버 모듈 구성과
+ * 어떤 비밀이 설정되어 있는지를 알려 준다. 공격자에게는 지도가 된다.
+ * 배포가 아예 죽어 로그인조차 안 되는 상황을 위해, 세션이 없으면
+ * DIAG_TOKEN 헤더로도 열 수 있게 두되 기본값은 잠금이다.
+ *
+ * 비밀값 자체는 어떤 경우에도 내보내지 않는다 — 환경변수는 "있다/없다"만 본다.
  */
 
 async function probe(load: () => Promise<unknown>): Promise<string> {
@@ -18,7 +23,41 @@ async function probe(load: () => Promise<unknown>): Promise<string> {
   }
 }
 
-export async function GET(): Promise<Response> {
+/** 세션이 없으면 비상용 토큰으로만 열 수 있다 */
+async function allowed(req: Request): Promise<boolean> {
+  const token = process.env.DIAG_TOKEN;
+  if (token && req.headers.get("x-diag-token") === token) return true;
+
+  try {
+    const { SESSION_COOKIE, parseCookies, verifySessionToken } = await import(
+      "../server/auth/session.js"
+    );
+    const cookies = parseCookies(req.headers.get("cookie"));
+    const raw = cookies[SESSION_COOKIE];
+    if (!raw) return false;
+    return (await verifySessionToken(raw)) != null;
+  } catch {
+    // 세션 모듈 자체가 깨져 있으면 확인할 방법이 없다 — 그럴 때는 잠근다
+    return false;
+  }
+}
+
+export async function GET(req: Request): Promise<Response> {
+  if (!(await allowed(req)))
+    return new Response(
+      JSON.stringify({
+        error:
+          "로그인이 필요합니다. 배포가 죽어 로그인할 수 없으면 DIAG_TOKEN 을 설정하고 x-diag-token 헤더로 호출하십시오.",
+      }),
+      {
+        status: 401,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+
   const modules: Record<string, string> = {
     jose: await probe(() => import("jose")),
     "server/auth/session": await probe(
