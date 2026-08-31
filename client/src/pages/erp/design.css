@@ -1,0 +1,2156 @@
+/*
+ * 경영관리 시스템 디자인 시스템 — ERP 68화면 프로토타입에서 그대로 옮긴 것.
+ *
+ * 프로토타입의 클래스 이름(.card · .kpi · .nav …)을 바꾸지 않는다.
+ * 이름을 바꾸면 원본 마크업을 그대로 옮길 수 없어 디자인이 조금씩 어긋난다.
+ * 대신 모든 규칙을 .erp-app 안으로 가둬서 마케팅 사이트와 충돌하지 않게 했다
+ * (마케팅 쪽도 .card · .btn 을 쓴다). 수정할 일이 있으면 프로토타입을 먼저 고치고
+ * 여기로 다시 옮기는 편이 어긋남이 적다.
+ */
+.erp-app {
+  --paper: #f7f9f6;
+  --surface: #ffffff;
+  --surface-2: #f1f4ef;
+  --surface-3: #e8ede6;
+  --ink: #1b2621;
+  --ink-2: #44524b;
+  --muted: #75837b;
+  --rule: #dde3db;
+  --rule-soft: #ebefe9;
+  --accent: #0f5e48;
+  --accent-soft: #0f5e4812;
+  --alert: #a8342a;
+  --alert-soft: #a8342a10;
+  --warn: #8a6414;
+  --warn-soft: #8a641410;
+  --info: #1d5c86;
+  --info-soft: #1d5c8610;
+  --rail: #ffffff;
+  --rail-2: #edf2ea;
+  --rail-ink: #2a362f;
+  --rail-muted: #8b978f;
+}
+
+.erp-app,
+.erp-app * {
+  box-sizing: border-box;
+}
+.erp-app {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family:
+    "IBM Plex Sans KR",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Apple SD Gothic Neo",
+    sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+}
+.erp-app .m {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.erp-app a {
+  color: var(--accent);
+}
+.erp-app a:hover {
+  color: var(--accent);
+}
+
+/* ---------- shell ---------- */
+.erp-app .app {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  min-height: 100vh;
+}
+.erp-app .rail {
+  background: var(--rail);
+  color: var(--rail-ink);
+  border-right: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.erp-app .rail-top {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.erp-app .rail-top .co {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.erp-app .rail-top .sub {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rail-muted);
+  margin-top: 3px;
+}
+.erp-app .rail nav {
+  padding: 10px 0 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.erp-app .grp {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--rail-muted);
+  padding: 14px 18px 6px;
+}
+.erp-app .nav {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 18px;
+  font-size: 12.5px;
+  color: var(--rail-ink);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  background: none;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+.erp-app .nav:hover {
+  background: var(--rail-2);
+}
+.erp-app .nav:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.erp-app .nav[aria-current="page"] {
+  background: var(--rail-2);
+  border-left-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.erp-app .nav .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: transparent;
+}
+.erp-app .nav .dot.a {
+  background: var(--alert);
+}
+.erp-app .nav .dot.w {
+  background: var(--warn);
+}
+.erp-app .nav .cnt {
+  margin-left: auto;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  color: var(--rail-muted);
+}
+
+/* ---------- topbar ---------- */
+.erp-app .main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.erp-app .top {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  padding: 0 26px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.erp-app .crumb {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.erp-app .crumb b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.erp-app .top-r {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .pill {
+  border: 1px solid var(--rule);
+  padding: 3px 9px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+}
+.erp-app .pill.live {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------- page ---------- */
+.erp-app .screen {
+  display: none;
+  padding: 22px 26px 60px;
+  flex-direction: column;
+  gap: 18px;
+}
+.erp-app .screen.on {
+  display: flex;
+}
+.erp-app .ph {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.erp-app .ph h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.erp-app .ph .desc {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 4px;
+  max-width: 74ch;
+}
+.erp-app .acts {
+  display: flex;
+  gap: 8px;
+}
+.erp-app .btn {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink-2);
+  padding: 6px 13px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.erp-app .btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.erp-app .btn:active {
+  background: var(--accent-soft);
+}
+.erp-app .btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.erp-app .btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.erp-app .btn.pri {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- tabs ---------- */
+.erp-app .tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--rule);
+}
+.erp-app .tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 9px 15px;
+  font-size: 12.5px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.erp-app .tab:hover {
+  color: var(--ink);
+}
+.erp-app .tab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.erp-app .tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.erp-app .tp {
+  display: none;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 18px;
+}
+.erp-app .tp.on {
+  display: flex;
+}
+
+/* ---------- kpi ---------- */
+.erp-app .kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+.erp-app .kpi {
+  background: var(--surface);
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.erp-app .kpi .k {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.erp-app .kpi .v {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 19px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.erp-app .kpi .s {
+  font-size: 11px;
+  color: var(--muted);
+}
+.erp-app .kpi.bad .v {
+  color: var(--alert);
+}
+.erp-app .kpi.good .v {
+  color: var(--accent);
+}
+.erp-app .kpi.warn .v {
+  color: var(--warn);
+}
+
+/* ---------- card / table ---------- */
+.erp-app .card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+}
+.erp-app .card-h {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.erp-app .card-h .t {
+  font-size: 13px;
+  font-weight: 600;
+}
+.erp-app .card-h .s {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .card-b {
+  padding: 16px;
+}
+.erp-app .grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.erp-app .grid3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+.erp-app .grid-21 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+.erp-app .grid-12 {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 16px;
+}
+.erp-app .scroll {
+  overflow-x: auto;
+}
+.erp-app table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+.erp-app th,
+.erp-app td {
+  text-align: left;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+}
+.erp-app thead th {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+.erp-app tbody tr:last-child td {
+  border-bottom: none;
+}
+.erp-app tbody tr:hover {
+  background: var(--surface-2);
+}
+.erp-app td.n,
+.erp-app th.n {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.erp-app td.k {
+  font-weight: 500;
+  color: var(--ink);
+}
+.erp-app td.nw {
+  white-space: nowrap;
+}
+.erp-app tr.sum td {
+  border-top: 1.5px solid var(--ink);
+  font-weight: 600;
+  background: var(--surface-2);
+}
+.erp-app tr.hd td {
+  background: var(--surface-3);
+  font-weight: 600;
+}
+.erp-app .neg {
+  color: var(--alert);
+}
+.erp-app .pos {
+  color: var(--accent);
+}
+.erp-app .wrn {
+  color: var(--warn);
+}
+
+.erp-app .chip {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.erp-app .chip.a {
+  color: var(--alert);
+  background: var(--alert-soft);
+}
+.erp-app .chip.w {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+.erp-app .chip.g {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.erp-app .chip.n {
+  color: var(--muted);
+}
+
+.erp-app .filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.erp-app .fl {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  padding: 5px 11px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-family: inherit;
+}
+.erp-app .fl:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.erp-app .fl:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.erp-app .fl.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.erp-app .note {
+  background: var(--warn-soft);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--warn);
+  padding: 12px 16px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.erp-app .alertbox {
+  background: var(--alert-soft);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--alert);
+  padding: 12px 16px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.erp-app .okbox {
+  background: var(--accent-soft);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.erp-app .note b,
+.erp-app .alertbox b,
+.erp-app .okbox b {
+  color: var(--ink);
+}
+
+.erp-app .bar {
+  height: 7px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.erp-app .bar > i {
+  display: block;
+  height: 7px;
+  background: var(--accent);
+}
+.erp-app .bar > i.a {
+  background: var(--alert);
+}
+.erp-app .bar > i.w {
+  background: var(--warn);
+}
+
+.erp-app .lgd {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .lgd i {
+  display: inline-block;
+  width: 14px;
+  height: 9px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.erp-app ul.li {
+  margin: 0;
+  padding-left: 17px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--ink-2);
+  font-size: 12.5px;
+}
+.erp-app ul.li li::marker {
+  color: var(--muted);
+}
+.erp-app ul.li b {
+  color: var(--ink);
+}
+
+/* ---------- 편집 레이어 ---------- */
+.erp-app .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+}
+.erp-app .toolbar .lbl {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.erp-app .tog {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--ink-2);
+  user-select: none;
+}
+.erp-app .tog i {
+  width: 30px;
+  height: 16px;
+  border: 1px solid var(--rule);
+  background: var(--surface-3);
+  position: relative;
+  transition: 0.14s;
+  flex: none;
+}
+.erp-app .tog i::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 12px;
+  height: 12px;
+  background: var(--muted);
+  transition: 0.14s;
+}
+.erp-app .tog input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.erp-app .tog input:checked + i {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.erp-app .tog input:checked + i::after {
+  left: 15px;
+  background: var(--accent);
+}
+.erp-app .tog input:focus-visible + i {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.erp-app body.edit .ed {
+  background: var(--surface);
+  box-shadow: inset 0 -1px 0 var(--rule);
+  cursor: text;
+}
+.erp-app body.edit .ed:hover {
+  background: var(--accent-soft);
+}
+.erp-app body.edit .ed:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--surface);
+}
+.erp-app body.edit .rowact {
+  visibility: visible;
+}
+.erp-app .rowact {
+  visibility: hidden;
+  display: inline-flex;
+  gap: 4px;
+}
+.erp-app tr:hover .rowact {
+  visibility: visible;
+}
+.erp-app .rowact .ico[data-view] {
+  visibility: visible;
+}
+.erp-app .ico {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--muted);
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.erp-app .ico:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.erp-app .ico.del:hover {
+  border-color: var(--alert);
+  color: var(--alert);
+}
+.erp-app tr.dirty {
+  background: var(--warn-soft) !important;
+}
+.erp-app tr.dirty td:first-child::before {
+  content: "●";
+  color: var(--warn);
+  margin-right: 5px;
+  font-size: 9px;
+  vertical-align: middle;
+}
+.erp-app tr.added {
+  background: var(--accent-soft) !important;
+}
+.erp-app .addrow {
+  border: 1px dashed var(--rule);
+  background: none;
+  color: var(--muted);
+  padding: 7px 13px;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+}
+.erp-app .addrow:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.erp-app .savebar {
+  position: sticky;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-left: 3px solid var(--accent);
+  font-size: 12.5px;
+  z-index: 5;
+}
+.erp-app body.edit .savebar {
+  display: flex;
+}
+.erp-app .savebar .cnt2 {
+  margin-left: auto;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 드로어 */
+.erp-app .scrim {
+  position: fixed;
+  inset: 0;
+  background: #1b262133;
+  display: none;
+  z-index: 40;
+}
+.erp-app .scrim.on {
+  display: block;
+}
+.erp-app .drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(460px, 100%);
+  height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--rule);
+  transform: translateX(100%);
+  transition:
+    transform 0.18s,
+    visibility 0.18s;
+  visibility: hidden;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+}
+.erp-app .drawer.on {
+  transform: none;
+  visibility: visible;
+}
+.erp-app .drawer-h {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.erp-app .drawer-h b {
+  font-size: 14px;
+}
+.erp-app .drawer-h .x {
+  margin-left: auto;
+}
+.erp-app .drawer-b {
+  padding: 18px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.erp-app .drawer-f {
+  padding: 12px 20px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.erp-app .field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.erp-app .field label {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.erp-app .field input,
+.erp-app .field select,
+.erp-app .field textarea {
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+  color: var(--ink);
+  padding: 8px 11px;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+}
+.erp-app .field input:focus,
+.erp-app .field select:focus,
+.erp-app .field textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.erp-app .field .hint {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .f2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* 연결 카드 / 레벨 / 흐름도 */
+.erp-app .conn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.erp-app .conn:last-child {
+  border-bottom: 0;
+}
+.erp-app .conn .ic {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  flex: none;
+}
+.erp-app .conn .nm {
+  flex: 1;
+  min-width: 0;
+}
+.erp-app .conn .nm b {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+}
+.erp-app .conn .nm span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .lv {
+  display: flex;
+  gap: 3px;
+}
+.erp-app .lv i {
+  width: 20px;
+  height: 5px;
+  background: var(--surface-3);
+}
+.erp-app .lv i.on {
+  background: var(--accent);
+}
+.erp-app .lv i.wn {
+  background: var(--warn);
+}
+.erp-app .dgm {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.erp-app .d-acc {
+  color: var(--accent);
+}
+.erp-app .d-warn {
+  color: var(--warn);
+}
+.erp-app .d-alert {
+  color: var(--alert);
+}
+.erp-app .d-mut {
+  color: var(--muted);
+}
+.erp-app .d-ink {
+  color: var(--ink);
+}
+.erp-app .dgm text {
+  font-family: "IBM Plex Sans KR", sans-serif;
+  fill: currentColor;
+}
+.erp-app .dgm .box {
+  fill: var(--surface-2);
+  stroke: var(--rule);
+}
+
+/* ---------- 체크·일괄승인·직접입력 ---------- */
+.erp-app th.ck,
+.erp-app td.ck {
+  width: 30px;
+  padding-left: 12px;
+  padding-right: 0;
+}
+.erp-app input[type="checkbox"].rowck,
+.erp-app input[type="checkbox"].allck {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin: 0;
+  vertical-align: middle;
+}
+.erp-app tr.picked {
+  background: var(--accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.erp-app tr.approved {
+  background: var(--accent-soft) !important;
+  opacity: 0.85;
+}
+.erp-app tr.rejected {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+.erp-app tr.held {
+  background: var(--warn-soft) !important;
+}
+
+.erp-app .selbar {
+  position: sticky;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 16px;
+  z-index: 6;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-left: 3px solid var(--accent);
+  font-size: 12.5px;
+}
+.erp-app .selbar.on {
+  display: flex;
+}
+.erp-app .selbar .n1 {
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+}
+.erp-app .selbar .sumv {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 600;
+}
+.erp-app .selbar .sp {
+  margin-left: auto;
+  display: flex;
+  gap: 7px;
+}
+
+.erp-app .entry {
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+}
+.erp-app .entry-h {
+  padding: 9px 15px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.erp-app .entry-h b {
+  font-size: 12.5px;
+}
+.erp-app .entry-h .s {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-left: auto;
+}
+.erp-app .entry-g {
+  padding: 13px 15px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 11px;
+  align-items: end;
+}
+.erp-app .entry-g .field label {
+  font-size: 9.5px;
+}
+.erp-app .entry-g .field input,
+.erp-app .entry-g .field select {
+  padding: 6px 9px;
+  font-size: 12.5px;
+  background: var(--surface);
+}
+.erp-app .entry-g .go {
+  grid-column: span 1;
+}
+.erp-app .entry-g .go .btn {
+  width: 100%;
+  justify-content: center;
+  padding: 7px 10px;
+}
+.erp-app .entry-msg {
+  padding: 0 15px 13px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .entry-msg.err {
+  color: var(--alert);
+}
+
+/* ---------- 인터랙션 레이어 ---------- */
+.erp-app thead th.srt {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: 20px;
+}
+.erp-app thead th.srt:hover {
+  color: var(--ink);
+}
+.erp-app thead th.srt::after {
+  content: "⇅";
+  position: absolute;
+  right: 7px;
+  opacity: 0.32;
+  font-size: 9px;
+}
+.erp-app thead th.srt.asc::after {
+  content: "▲";
+  opacity: 1;
+  color: var(--accent);
+}
+.erp-app thead th.srt.desc::after {
+  content: "▼";
+  opacity: 1;
+  color: var(--accent);
+}
+.erp-app tr.fhide {
+  display: none;
+}
+.erp-app .noresult {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 10px 14px;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.erp-app .qbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+  padding: 3px 8px;
+}
+.erp-app .qbox input {
+  border: 0;
+  background: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  color: var(--ink);
+  width: 118px;
+}
+.erp-app .qbox input::placeholder {
+  color: var(--muted);
+}
+.erp-app .qbox .k {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  color: var(--muted);
+}
+.erp-app .qbox:focus-within {
+  border-color: var(--accent);
+}
+
+.erp-app .bell {
+  position: relative;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  cursor: pointer;
+  padding: 3px 9px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  color: var(--ink-2);
+}
+.erp-app .bell:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.erp-app .bell b {
+  color: var(--alert);
+}
+
+.erp-app .toasts {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(400px, 90vw);
+}
+.erp-app .toast {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  box-shadow: 0 2px 10px rgba(27, 38, 33, 0.1);
+  animation: tin 0.16s ease-out;
+}
+.erp-app .toast b {
+  color: var(--ink);
+}
+.erp-app .toast.warn {
+  border-left-color: var(--warn);
+}
+.erp-app .toast.bad {
+  border-left-color: var(--alert);
+}
+@keyframes tin {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.erp-app .pal {
+  position: fixed;
+  inset: 0;
+  background: #1b262144;
+  z-index: 70;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 11vh;
+}
+.erp-app .pal.on {
+  display: flex;
+}
+.erp-app .pal-box {
+  width: min(620px, 92vw);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  box-shadow: 0 12px 44px rgba(27, 38, 33, 0.22);
+  display: flex;
+  flex-direction: column;
+  max-height: 70vh;
+}
+.erp-app .pal-box input {
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+  padding: 14px 16px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  outline: none;
+}
+.erp-app .pal-list {
+  overflow-y: auto;
+  padding: 6px 0;
+}
+.erp-app .pal-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 12.5px;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  color: var(--ink);
+}
+.erp-app .pal-item:hover,
+.erp-app .pal-item.sel {
+  background: var(--accent-soft);
+}
+.erp-app .pal-item .g2 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-left: auto;
+}
+.erp-app .pal-foot {
+  border-top: 1px solid var(--rule);
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  gap: 14px;
+}
+.erp-app .pal-foot span b {
+  font-family: "IBM Plex Mono", monospace;
+  color: var(--ink-2);
+}
+
+.erp-app .modal {
+  position: fixed;
+  inset: 0;
+  background: #1b262144;
+  z-index: 65;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.erp-app .modal.on {
+  display: flex;
+}
+.erp-app .modal-box {
+  width: min(760px, 94vw);
+  max-height: 82vh;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+}
+.erp-app .modal-h {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.erp-app .modal-h b {
+  font-size: 14px;
+}
+.erp-app .modal-h .x {
+  margin-left: auto;
+}
+.erp-app .modal-b {
+  padding: 16px 18px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.erp-app .modal-f {
+  padding: 11px 18px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.erp-app .modal-b textarea {
+  width: 100%;
+  min-height: 280px;
+  border: 1px solid var(--rule);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11.5px;
+  padding: 11px;
+  resize: vertical;
+}
+
+.erp-app .inbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  cursor: pointer;
+}
+.erp-app .inbox-row:hover {
+  background: var(--surface-2);
+}
+.erp-app .inbox-row:last-child {
+  border-bottom: 0;
+}
+.erp-app .inbox-row .tm {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+  width: 74px;
+  flex: none;
+  padding-top: 2px;
+}
+.erp-app .inbox-row .bd {
+  flex: 1;
+  min-width: 0;
+}
+.erp-app .inbox-row .bd b {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.erp-app .inbox-row .bd span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .inbox-row.unread {
+  background: var(--accent-soft);
+}
+
+/* ---------- 승인 칸 · 무한 스크롤 ---------- */
+.erp-app .pend {
+  border-top: 1px dashed var(--warn);
+  background: var(--warn-soft);
+}
+.erp-app .pend-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.erp-app .pend-h b {
+  color: var(--warn);
+}
+.erp-app .pend-h .rt {
+  margin-left: auto;
+  display: flex;
+  gap: 7px;
+}
+.erp-app .pend table td {
+  padding: 6px 14px;
+}
+.erp-app .btn-xs {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink-2);
+  padding: 3px 9px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.erp-app .btn-xs:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.erp-app .btn-xs.ok {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.erp-app .btn-xs.no:hover {
+  border-color: var(--alert);
+  color: var(--alert);
+}
+.erp-app .btn-xs:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.erp-app .sentinel {
+  padding: 18px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px dashed var(--rule);
+  background: var(--surface-2);
+}
+.erp-app .sentinel.end {
+  border-style: solid;
+  color: var(--ink-2);
+}
+.erp-app .unitbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.erp-app .unitbar .seg {
+  display: flex;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+.erp-app .unitbar .seg button {
+  border: 0;
+  background: none;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  border-right: 1px solid var(--rule);
+}
+.erp-app .unitbar .seg button:last-child {
+  border-right: 0;
+}
+.erp-app .unitbar .seg button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+.erp-app .unitbar .seg button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.erp-app .acct {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  line-height: 1.55;
+}
+.erp-app .acct.cogs {
+  color: var(--info);
+  background: var(--info-soft);
+}
+.erp-app .acct.sga {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+.erp-app .acct.nonop {
+  color: var(--muted);
+}
+.erp-app .liq {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.erp-app .liq:last-child {
+  border-bottom: 0;
+}
+.erp-app .liq .nm {
+  font-size: 13px;
+  font-weight: 600;
+}
+.erp-app .liq .amt {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: right;
+}
+.erp-app .liq .sub {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  grid-column: 1/2;
+}
+.erp-app .liq .rt {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  font-family: "IBM Plex Mono", monospace;
+}
+.erp-app .gap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+.erp-app .gap.bad {
+  border-color: var(--alert);
+  background: var(--alert-soft);
+}
+.erp-app .gap.warn {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+.erp-app .gap .lb {
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.erp-app .gap .vv {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 19px;
+  font-weight: 600;
+}
+.erp-app .gap .ss {
+  font-size: 11px;
+  color: var(--muted);
+}
+.erp-app .stat-need {
+  color: var(--warn);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  border: 1px solid currentColor;
+  padding: 1px 5px;
+  background: var(--warn-soft);
+  white-space: nowrap;
+}
+
+/* ---------- 아코디언 (접었다 폈다) ---------- */
+.erp-app .acc {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  margin-bottom: 10px;
+}
+.erp-app .acc-h {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: var(--surface-2);
+  border-bottom: 1px solid transparent;
+  user-select: none;
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  font-family: inherit;
+  text-align: left;
+}
+.erp-app .acc.open > .acc-h {
+  border-bottom-color: var(--rule);
+}
+.erp-app .acc-h:hover {
+  background: var(--surface-3);
+}
+.erp-app .acc-h:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.erp-app .acc-h .tw {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  color: var(--muted);
+  width: 11px;
+  flex: none;
+  transition: transform 0.14s;
+}
+.erp-app .acc.open > .acc-h .tw {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+.erp-app .acc-h .d2 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.erp-app .acc-h .sm {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .acc-h .rr {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11.5px;
+}
+.erp-app .acc-h .rr b {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.erp-app .acc-b {
+  display: none;
+}
+.erp-app .acc.open > .acc-b {
+  display: block;
+}
+.erp-app .accbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* ---------- 연동 단계 ---------- */
+.erp-app .steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+.erp-app .step {
+  background: var(--surface);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+}
+.erp-app .step .no {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+.erp-app .step .tt {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.erp-app .step .ds {
+  font-size: 11.5px;
+  color: var(--ink-2);
+  line-height: 1.55;
+}
+.erp-app .step.done {
+  background: var(--accent-soft);
+}
+.erp-app .step.done .tt {
+  color: var(--accent);
+}
+.erp-app .step.wait {
+  background: var(--warn-soft);
+}
+.erp-app .step.wait .tt {
+  color: var(--warn);
+}
+.erp-app .step.block {
+  background: var(--alert-soft);
+}
+.erp-app .step.block .tt {
+  color: var(--alert);
+}
+.erp-app .srcrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.erp-app .srcrow:last-child {
+  border-bottom: 0;
+}
+.erp-app .srcrow .ic2 {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  flex: none;
+  background: var(--surface-2);
+}
+
+/* ---------- 집행원장 코드 ---------- */
+.erp-app .exid {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--info);
+  border: 1px solid var(--info);
+  background: var(--info-soft);
+  padding: 1px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-block;
+  line-height: 1.5;
+}
+.erp-app .exid:hover {
+  background: var(--info);
+  color: #fff;
+}
+.erp-app .exid:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.erp-app .exid.done {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.erp-app .exid.done:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.erp-app .exid.hold {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+.erp-app .exid.hold:hover {
+  background: var(--warn);
+  color: #fff;
+}
+.erp-app .exid.risk {
+  color: var(--alert);
+  border-color: var(--alert);
+  background: var(--alert-soft);
+}
+.erp-app .exid.risk:hover {
+  background: var(--alert);
+  color: #fff;
+}
+.erp-app .exmeta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  font-size: 12.5px;
+}
+.erp-app .exmeta dt {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding-top: 3px;
+}
+.erp-app .exmeta dd {
+  margin: 0;
+  color: var(--ink);
+}
+.erp-app .extrail {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-left: 2px solid var(--rule);
+  padding-left: 14px;
+}
+.erp-app .extrail > div {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: 12px;
+}
+.erp-app .extrail > div:last-child {
+  border-bottom: 0;
+}
+.erp-app .extrail .w {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+/* ---------- 데일리 지출/수입 좌우 블록 ---------- */
+.erp-app .dayside {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  border-top: 1px solid var(--rule);
+}
+.erp-app .dayside > .side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.erp-app .dayside > .side.out {
+  border-right: 1px solid var(--ink);
+}
+.erp-app .side-h {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.erp-app .side-h .lbl2 {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.erp-app .side-h .ttl {
+  font-size: 13px;
+  font-weight: 600;
+}
+.erp-app .side-h .tot {
+  margin-left: auto;
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-weight: 600;
+}
+.erp-app .side.out .side-h {
+  background: var(--info-soft);
+}
+.erp-app .side.in .side-h {
+  background: var(--alert-soft);
+}
+.erp-app .sgrp {
+  border-bottom: 1px solid var(--rule);
+}
+.erp-app .sgrp:last-child {
+  border-bottom: 0;
+}
+.erp-app .sgrp-h {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.erp-app .sgrp-h .g {
+  font-size: 12px;
+  font-weight: 600;
+}
+.erp-app .sgrp-h .c {
+  margin-left: auto;
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+}
+.erp-app .sgrp-h .c.zero {
+  color: var(--muted);
+  font-weight: 400;
+}
+.erp-app .sgrp table {
+  font-size: 12px;
+}
+.erp-app .sgrp th,
+.erp-app .sgrp td {
+  padding: 6px 14px;
+}
+.erp-app .sgrp thead th {
+  font-size: 9px;
+  letter-spacing: 0.07em;
+}
+.erp-app .sgrp td.rm {
+  color: var(--ink-2);
+  word-break: break-all;
+}
+.erp-app .sgrp .empty td {
+  color: var(--muted);
+  font-size: 11.5px;
+  padding: 8px 14px;
+}
+.erp-app .flagrow {
+  background: var(--warn-soft) !important;
+}
+.erp-app .flagrow.bad {
+  background: var(--alert-soft) !important;
+}
+.erp-app .tag {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border: 1px solid currentColor;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.erp-app .tag.w {
+  color: var(--warn);
+}
+.erp-app .tag.a {
+  color: var(--alert);
+}
+.erp-app .tag.n {
+  color: var(--muted);
+}
+.erp-app .daysum {
+  display: flex;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--ink);
+}
+.erp-app .daysum > div {
+  flex: 1;
+  min-width: 172px;
+  padding: 9px 14px;
+  border-right: 1px solid var(--rule);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.erp-app .daysum > div:last-child {
+  border-right: 0;
+}
+.erp-app .daysum .lb {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.erp-app .daysum .vv {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 14px;
+}
+.erp-app .s-close {
+  background: #f3e9a81f;
+  box-shadow: inset 3px 0 0 #c9a227;
+}
+.erp-app .s-out {
+  background: var(--info-soft);
+  box-shadow: inset 3px 0 0 var(--info);
+}
+.erp-app .s-in {
+  background: var(--alert-soft);
+  box-shadow: inset 3px 0 0 var(--alert);
+}
+.erp-app .s-net {
+  background: var(--surface-2);
+}
+@media (max-width: 1100px) {
+  .erp-app .dayside {
+    grid-template-columns: 1fr;
+  }
+  .erp-app .dayside > .side.out {
+    border-right: 0;
+    border-bottom: 1px solid var(--ink);
+  }
+}
+
+/* ---------- 일자 블록 (구 시트형) ---------- */
+.erp-app .dayblk {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  margin-bottom: 16px;
+}
+.erp-app .dayblk-h {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-2);
+}
+.erp-app .dayblk-h .d {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.erp-app .dayblk-h .r {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.erp-app .daygrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(286px, 1fr));
+  min-width: 1430px;
+}
+.erp-app .dgcol {
+  border-right: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+}
+.erp-app .dgcol:last-child {
+  border-right: 0;
+}
+.erp-app .dgcol > .gh {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface-2);
+  font-weight: 500;
+}
+.erp-app .dgcol table {
+  font-size: 12px;
+}
+.erp-app .dgcol th,
+.erp-app .dgcol td {
+  padding: 5px 10px;
+}
+.erp-app .dgcol thead th {
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+.erp-app .dgcol tbody tr:last-child td {
+  border-bottom: 1px solid var(--rule-soft);
+}
+.erp-app .dgcol .gt {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 11px;
+  border-top: 1px solid var(--rule);
+  background: var(--surface-2);
+  font-size: 11.5px;
+}
+.erp-app .dgcol .gt b {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+.erp-app .dayblk-f {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-top: 1px solid var(--rule);
+}
+.erp-app .dayblk-f > div {
+  flex: 1;
+  min-width: 190px;
+  padding: 9px 14px;
+  border-right: 1px solid var(--rule);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+}
+.erp-app .dayblk-f > div:last-child {
+  border-right: 0;
+}
+.erp-app .dayblk-f .lb {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.erp-app .dayblk-f .vv {
+  font-family: "IBM Plex Mono", monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.erp-app .f-close {
+  background: #f5ebb811;
+}
+.erp-app .f-out {
+  background: #1d5c8610;
+}
+.erp-app .f-in {
+  background: #a8342a0a;
+}
+.erp-app .imp {
+  display: inline-block;
+  width: 15px;
+  text-align: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  color: var(--alert);
+  font-weight: 600;
+}
+.erp-app .hl {
+  background: var(--info-soft);
+  box-shadow: inset 2px 0 0 var(--info);
+}
+.erp-app .misfit {
+  color: var(--alert);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+}
+
+@media (max-width: 900px) {
+  .erp-app .app {
+    grid-template-columns: 1fr;
+  }
+  .erp-app .rail {
+    position: static;
+    height: auto;
+  }
+  .erp-app .rail nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+  .erp-app .grp {
+    display: none;
+  }
+  .erp-app .nav {
+    width: auto;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    padding: 7px 12px;
+  }
+  .erp-app .nav[aria-current="page"] {
+    border-left-color: transparent;
+    border-bottom-color: var(--accent);
+  }
+  .erp-app .grid2,
+  .erp-app .grid3,
+  .erp-app .grid-21,
+  .erp-app .grid-12 {
+    grid-template-columns: 1fr;
+  }
+  .erp-app .screen {
+    padding: 16px 14px 50px;
+  }
+  .erp-app .f2 {
+    grid-template-columns: 1fr;
+  }
+  .erp-app .drawer {
+    width: 100%;
+  }
+  .erp-app .entry-g {
+    grid-template-columns: 1fr 1fr;
+  }
+  .erp-app .daygrid {
+    grid-template-columns: repeat(5, minmax(240px, 1fr));
+    min-width: 1200px;
+  }
+  .erp-app .selbar {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .erp-app,
+  .erp-app * {
+    transition: none !important;
+  }
+}

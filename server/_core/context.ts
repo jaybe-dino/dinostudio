@@ -1,6 +1,11 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
-import type { User } from "../../drizzle/schema";
-import { sdk } from "./sdk";
+import type { User } from "../../drizzle/schema.js";
+import {
+  SESSION_COOKIE,
+  parseCookies,
+  verifySessionToken,
+} from "../auth/session.js";
+import { sdk } from "./sdk.js";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -18,6 +23,25 @@ export async function createContext(
   } catch (error) {
     // Authentication is optional for public procedures.
     user = null;
+  }
+
+  // 구글 워크스페이스 SSO 세션 — 경영관리 시스템이 쓰는 경로.
+  if (!user) {
+    const token = parseCookies(opts.req.headers.cookie)[SESSION_COOKIE];
+    const session = token ? await verifySessionToken(token) : null;
+    if (session) {
+      user = {
+        id: 0,
+        openId: session.sub,
+        name: session.name,
+        email: session.email,
+        loginMethod: "google",
+        role: "user",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+      } as User;
+    }
   }
 
   return {

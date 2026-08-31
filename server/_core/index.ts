@@ -3,11 +3,12 @@ import express from "express";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "./oauth";
-import { registerStorageProxy } from "./storageProxy";
-import { appRouter } from "../routers";
-import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { registerOAuthRoutes } from "./oauth.js";
+import { registerGoogleAuthRoutes } from "../auth/routes.js";
+import { registerStorageProxy } from "./storageProxy.js";
+import { appRouter } from "../routers.js";
+import { createContext } from "./context.js";
+import { serveStatic, setupVite } from "./vite.js";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -36,6 +37,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  // 경영관리 시스템은 구글 워크스페이스 SSO를 쓴다
+  registerGoogleAuthRoutes(app);
 
   // IP-based country detection endpoint
   app.get("/api/geo", (req, res) => {
@@ -56,7 +59,7 @@ async function startServer() {
     }
     // Use ip-api.com free tier (no key needed, 45 req/min)
     fetch(`http://ip-api.com/json/${ip}?fields=countryCode`)
-      .then((r) => r.json())
+      .then(r => r.json())
       .then((data: any) => {
         res.json({ country: data.countryCode || "KR", ip });
       })
