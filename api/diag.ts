@@ -51,11 +51,23 @@ export async function GET(): Promise<Response> {
     environment: process.env.VERCEL_ENV ?? "(vercel 아님)",
     branch: process.env.VERCEL_GIT_COMMIT_REF ?? null,
     commit: (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7) || null,
+    // 재배포하면 커밋이 같아도 이 주소는 바뀐다 —
+    // "재배포를 했는가"를 커밋만으로는 알 수 없어서 함께 내보낸다
+    deploymentUrl: process.env.VERCEL_URL ?? null,
+    // 환경변수가 어느 프로젝트에 들어갔는지 대조하기 위한 것
+    project: process.env.VERCEL_PROJECT_PRODUCTION_URL ?? null,
   };
+
+  // 실제로 잡힌 변수의 "이름"만 — 이름을 잘못 적어 넣은 경우를 잡는다.
+  // 값은 절대 내보내지 않고, 우리가 정의한 접두어에 해당하는 이름만 본다.
+  const knownPrefixes = ["ERP_", "SESSION_", "GOOGLE_", "SLACK_", "DATABASE_"];
+  const seenNames = Object.keys(process.env)
+    .filter(name => knownPrefixes.some(prefix => name.startsWith(prefix)))
+    .sort();
 
   return new Response(
     JSON.stringify(
-      { node: process.version, deployment, modules, env },
+      { node: process.version, deployment, modules, env, seenNames },
       null,
       2
     ),
