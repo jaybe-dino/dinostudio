@@ -35,15 +35,17 @@ export function SheetImportScreen() {
   const result = commit.data ?? preview.data;
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>시트 이관</h1>
-        <p>
-          구글 시트에서 표를 복사해 붙여 넣으면 §5.2 매핑대로 원장 건으로
-          바꿉니다. 한 번만 쓰는 경로입니다 — 이관이 끝나면 시트는 읽기 전용으로
-          동결하고, 이후 어떤 화면도 시트를 참조하지 않습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>시트 이관</h1>
+          <div className="desc">
+            구글 시트에서 표를 복사해 붙여 넣으면 §5.2 매핑대로 원장 건으로
+            바꿉니다. 한 번만 쓰는 경로입니다 — 이관이 끝나면 시트는 읽기
+            전용으로 동결하고, 이후 어떤 화면도 시트를 참조하지 않습니다.
+          </div>
+        </div>
+      </div>
 
       <Note tone="warn">
         붙여 넣기 전에 시트 공유 범위를 <b>제한됨</b>으로 바꾸고 버전 기록을
@@ -55,8 +57,8 @@ export function SheetImportScreen() {
         title="붙여 넣기"
         meta="구글 시트에서 헤더 줄까지 함께 복사 (탭 구분)"
       >
-        <div className="erp-filters" style={{ marginBottom: 8 }}>
-          <label className="erp-field">
+        <div className="filters" style={{ marginBottom: 8 }}>
+          <label className="field">
             <span>이 날짜부터만 들여오기</span>
             <input
               type="date"
@@ -66,7 +68,7 @@ export function SheetImportScreen() {
           </label>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             disabled={!text.trim() || preview.isPending}
             onClick={() => preview.mutate({ text, from: from || null })}
           >
@@ -74,7 +76,7 @@ export function SheetImportScreen() {
           </button>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             data-variant="primary"
             disabled={!preview.data || commit.isPending}
             onClick={() => commit.mutate({ text, from: from || null })}
@@ -100,7 +102,7 @@ export function SheetImportScreen() {
             color: "var(--ink)",
           }}
         />
-        <p className="erp-null" style={{ marginTop: 6 }}>
+        <p className="s" style={{ marginTop: 6 }}>
           헤더는 일자 · 항목 · 적요 · 지출 · 수입 · 시작잔액 · 종료잔액을
           알아봅니다. 헤더가 없으면 이 순서로 읽습니다.
         </p>
@@ -111,11 +113,7 @@ export function SheetImportScreen() {
       {committed ? (
         <Note>
           {committed} —{" "}
-          <button
-            type="button"
-            className="erp-btn"
-            onClick={() => goto("ledger")}
-          >
+          <button type="button" className="btn" onClick={() => goto("ledger")}>
             집행원장에서 확인
           </button>
         </Note>
@@ -123,7 +121,7 @@ export function SheetImportScreen() {
 
       {result ? (
         <>
-          <div className="erp-tiles">
+          <div className="kpis">
             <Tile
               label="읽은 행"
               value={`${result.summary.total}건`}
@@ -153,8 +151,8 @@ export function SheetImportScreen() {
             meta={`${result.entries.length}건 · 아직 저장되지 않았습니다`}
             body={false}
           >
-            <div className="erp-scroll">
-              <table className="erp-table">
+            <div className="scroll">
+              <table>
                 <thead>
                   <tr>
                     <th>줄</th>
@@ -169,7 +167,7 @@ export function SheetImportScreen() {
                 <tbody>
                   {result.entries.map(item => (
                     <tr key={item.entry.code}>
-                      <td className="erp-null">{item.sourceLine}</td>
+                      <td className="s">{item.sourceLine}</td>
                       <td style={{ fontFamily: "var(--mono)", fontSize: 11 }}>
                         {item.entry.code}
                       </td>
@@ -177,10 +175,7 @@ export function SheetImportScreen() {
                       <td className="wrap">
                         {item.entry.title || "(항목명 없음)"}
                         {item.entry.noteRaw ? (
-                          <span className="erp-null">
-                            {" "}
-                            · {item.entry.noteRaw}
-                          </span>
+                          <span className="s"> · {item.entry.noteRaw}</span>
                         ) : null}
                       </td>
                       <td className="num">
@@ -189,7 +184,7 @@ export function SheetImportScreen() {
                           reason={item.entry.undecidedReason}
                         />
                         {item.entry.amountCandidate != null ? (
-                          <span className="erp-null">
+                          <span className="s">
                             {" "}
                             후보{" "}
                             {item.entry.amountCandidate.toLocaleString("ko-KR")}
@@ -198,7 +193,7 @@ export function SheetImportScreen() {
                       </td>
                       <td>
                         <span
-                          className="erp-chip"
+                          className="chip"
                           data-tone={
                             item.entry.status === "pending" ? "warn" : "alert"
                           }
@@ -208,7 +203,7 @@ export function SheetImportScreen() {
                             : "판정 대기"}
                         </span>
                       </td>
-                      <td className="wrap erp-null">
+                      <td className="wrap s">
                         {item.flags.join(" · ") || "—"}
                       </td>
                     </tr>
@@ -224,8 +219,8 @@ export function SheetImportScreen() {
               meta={`${result.rejected.length}건`}
               body={false}
             >
-              <div className="erp-scroll">
-                <table className="erp-table">
+              <div className="scroll">
+                <table>
                   <thead>
                     <tr>
                       <th>줄</th>
@@ -236,7 +231,7 @@ export function SheetImportScreen() {
                   <tbody>
                     {result.rejected.map(row => (
                       <tr key={row.line}>
-                        <td className="erp-null">{row.line}</td>
+                        <td className="s">{row.line}</td>
                         <td className="wrap">{row.raw}</td>
                         <td>{row.reason}</td>
                       </tr>
@@ -268,6 +263,6 @@ export function SheetImportScreen() {
           </li>
         </ol>
       </Card>
-    </div>
+    </>
   );
 }

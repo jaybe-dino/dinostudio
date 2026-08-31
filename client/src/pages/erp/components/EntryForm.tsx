@@ -120,9 +120,9 @@ export function EntryForm({ direction }: { direction?: Direction }) {
 
   return (
     <div>
-      <div className="erp-filters">
+      <div className="filters">
         {!direction ? (
-          <label className="erp-field">
+          <label className="field">
             <span>방향</span>
             <select
               value={draft.direction}
@@ -138,14 +138,14 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             </select>
           </label>
         ) : null}
-        <label className="erp-field" style={{ flex: "1 1 200px" }}>
+        <label className="field" style={{ flex: "1 1 200px" }}>
           <span>항목 (비우면 판정 대기)</span>
           <input
             value={draft.title}
             onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
           />
         </label>
-        <label className="erp-field">
+        <label className="field">
           <span>계정과목</span>
           <select
             value={draft.accountCode}
@@ -161,7 +161,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             ))}
           </select>
         </label>
-        <label className="erp-field">
+        <label className="field">
           <span>원가성격</span>
           <select
             value={draft.nature}
@@ -176,7 +176,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             ))}
           </select>
         </label>
-        <label className="erp-field">
+        <label className="field">
           <span>금액 (원 · 비우면 판정 대기)</span>
           <input
             inputMode="numeric"
@@ -184,7 +184,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             onChange={e => setDraft(d => ({ ...d, amount: e.target.value }))}
           />
         </label>
-        <label className="erp-field">
+        <label className="field">
           <span>입출금일</span>
           <input
             type="date"
@@ -192,7 +192,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             onChange={e => setDraft(d => ({ ...d, cashDate: e.target.value }))}
           />
         </label>
-        <label className="erp-field">
+        <label className="field">
           <span>사업부</span>
           <select
             value={draft.buCode}
@@ -206,7 +206,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             ))}
           </select>
         </label>
-        <label className="erp-field">
+        <label className="field">
           <span>프로젝트</span>
           <input
             placeholder="PRJ-0132"
@@ -214,7 +214,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             onChange={e => setDraft(d => ({ ...d, projectId: e.target.value }))}
           />
         </label>
-        <label className="erp-field">
+        <label className="field">
           <span>수단</span>
           <select
             value={draft.payMethod}
@@ -229,7 +229,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             ))}
           </select>
         </label>
-        <label className="erp-field">
+        <label className="field">
           <span>증빙</span>
           <select
             value={draft.hasEvidence ? "y" : "n"}
@@ -241,14 +241,14 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             <option value="y">있음</option>
           </select>
         </label>
-        <label className="erp-field" style={{ flex: "1 1 180px" }}>
+        <label className="field" style={{ flex: "1 1 180px" }}>
           <span>적요 원문</span>
           <input
             value={draft.noteRaw}
             onChange={e => setDraft(d => ({ ...d, noteRaw: e.target.value }))}
           />
         </label>
-        <div className="erp-field">
+        <div className="field">
           <span>자동 우선순위</span>
           <div style={{ paddingTop: 4 }}>
             <PriorityChip priority={autoPriority} />
@@ -256,7 +256,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
         </div>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           data-variant="primary"
           disabled={create.isPending || !draft.cashDate}
           onClick={submit}
@@ -268,8 +268,8 @@ export function EntryForm({ direction }: { direction?: Direction }) {
       {duplicateWarning ? (
         <div style={{ marginTop: 10 }}>
           <Note tone="warn">{duplicateWarning}</Note>
-          <div className="erp-filters" style={{ marginTop: 6 }}>
-            <label className="erp-field" style={{ flex: "1 1 260px" }}>
+          <div className="filters" style={{ marginTop: 6 }}>
+            <label className="field" style={{ flex: "1 1 260px" }}>
               <span>강행 사유 (감사로그에 남습니다)</span>
               <input
                 value={overrideReason}
@@ -278,7 +278,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             </label>
             <button
               type="button"
-              className="erp-btn"
+              className="btn"
               disabled={!overrideReason.trim() || create.isPending}
               onClick={submit}
             >
@@ -286,7 +286,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
             </button>
             <button
               type="button"
-              className="erp-btn"
+              className="btn"
               onClick={() => setDuplicateWarning(null)}
             >
               취소
@@ -301,7 +301,7 @@ export function EntryForm({ direction }: { direction?: Direction }) {
         </div>
       ) : null}
 
-      <p className="erp-null" style={{ marginTop: 8 }}>
+      <p className="s" style={{ marginTop: 8 }}>
         증빙이 없는 건은 승인해도 확정되지 않습니다. 계정을 비우면 전표가
         생성되지 않아 손익·재무제표에서 빠집니다.
       </p>

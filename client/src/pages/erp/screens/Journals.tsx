@@ -22,17 +22,19 @@ export function JournalsScreen() {
   const tb = data.data?.trialBalance;
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>전표 · 분개장</h1>
-        <p>
-          사람이 분개를 만들지 않습니다. 원장이 확정되면 전표가 자동 생성되고,
-          수정은 -R1 역분개, 취소는 -C 상계로만 이뤄집니다. 수기 생성 API를
-          노출하지 않습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>전표 · 분개장</h1>
+          <div className="desc">
+            사람이 분개를 만들지 않습니다. 원장이 확정되면 전표가 자동 생성되고,
+            수정은 -R1 역분개, 취소는 -C 상계로만 이뤄집니다. 수기 생성 API를
+            노출하지 않습니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="전표"
           value={`${journals.length}건`}
@@ -57,8 +59,8 @@ export function JournalsScreen() {
       </div>
 
       <Card title="시산표" meta="계정과목으로 접은 것" body={false}>
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>계정</th>
@@ -92,8 +94,8 @@ export function JournalsScreen() {
       </Card>
 
       <Card title="분개장" meta={`${journals.length}건`} body={false}>
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>집행원장</th>
@@ -120,7 +122,7 @@ export function JournalsScreen() {
                     <tr key={journal.id}>
                       <td>
                         <button
-                          className="erp-code"
+                          className="m"
                           onClick={() => openEntry(journal.entryCode)}
                         >
                           {journal.entryCode}
@@ -146,6 +148,6 @@ export function JournalsScreen() {
           차변 합과 대변 합이 맞지 않습니다 — 전표 생성 로직을 확인해야 합니다.
         </Note>
       ) : null}
-    </div>
+    </>
   );
 }

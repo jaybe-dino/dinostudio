@@ -87,7 +87,7 @@ export function LedgerScreen({
       header: "집행원장",
       sortValue: e => e.code,
       render: e => (
-        <button className="erp-code" onClick={() => openEntry(e.code)}>
+        <button className="m" onClick={() => openEntry(e.code)}>
           {e.code}
         </button>
       ),
@@ -112,7 +112,7 @@ export function LedgerScreen({
       render: e => (
         <>
           {e.title || "(항목명 없음)"}
-          {e.noteRaw ? <span className="erp-null"> · {e.noteRaw}</span> : null}
+          {e.noteRaw ? <span className="s"> · {e.noteRaw}</span> : null}
         </>
       ),
     },
@@ -134,11 +134,11 @@ export function LedgerScreen({
       sortValue: e => `${e.buCode ?? "ZZ"}${e.projectId ?? ""}`,
       render: e => (
         <>
-          {e.buCode ?? <span className="erp-null">미지정</span>}
+          {e.buCode ?? <span className="s">미지정</span>}
           {e.projectId ? (
             ` · ${e.projectId}`
           ) : (
-            <span className="erp-null"> · 프로젝트 미지정</span>
+            <span className="s"> · 프로젝트 미지정</span>
           )}
         </>
       ),
@@ -162,20 +162,22 @@ export function LedgerScreen({
       render: e => (
         <>
           <Money value={e.amount} reason={e.undecidedReason ?? e.maskReason} />
-          {e.masked ? <span className="erp-null"> 마스킹</span> : null}
+          {e.masked ? <span className="s"> 마스킹</span> : null}
         </>
       ),
     },
   ];
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>{title}</h1>
-        <p>{blurb}</p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>{title}</h1>
+          <div className="desc">{blurb}</div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="확정 합계"
           value={won(totals?.sum ?? 0) ?? "—"}
@@ -204,7 +206,7 @@ export function LedgerScreen({
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           aria-pressed={showForm}
           onClick={() => setShowForm(v => !v)}
         >
@@ -212,7 +214,7 @@ export function LedgerScreen({
         </button>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           onClick={() => setShowExport(true)}
         >
           내보내기
@@ -226,8 +228,8 @@ export function LedgerScreen({
       ) : null}
 
       <Card title="필터 10종">
-        <div className="erp-filters">
-          <label className="erp-field">
+        <div className="filters">
+          <label className="field">
             <span>상태</span>
             <select
               value={status}
@@ -241,7 +243,7 @@ export function LedgerScreen({
               ))}
             </select>
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>계정과목</span>
             <select value={account} onChange={e => setAccount(e.target.value)}>
               <option value="">전체</option>
@@ -252,7 +254,7 @@ export function LedgerScreen({
               ))}
             </select>
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>원가성격</span>
             <select value={nature} onChange={e => setNature(e.target.value)}>
               <option value="">전체</option>
@@ -263,7 +265,7 @@ export function LedgerScreen({
               ))}
             </select>
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>사업부</span>
             <select value={bu} onChange={e => setBu(e.target.value)}>
               <option value="">전체</option>
@@ -274,7 +276,7 @@ export function LedgerScreen({
               ))}
             </select>
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>우선순위</span>
             <select
               value={priority}
@@ -288,7 +290,7 @@ export function LedgerScreen({
               ))}
             </select>
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>시작일</span>
             <input
               type="date"
@@ -296,7 +298,7 @@ export function LedgerScreen({
               onChange={e => setFrom(e.target.value)}
             />
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>종료일</span>
             <input
               type="date"
@@ -306,7 +308,7 @@ export function LedgerScreen({
           </label>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             onClick={() => {
               setStatus("");
               setAccount("");
@@ -387,6 +389,6 @@ export function LedgerScreen({
           뷰는 저장하지 않으므로 두 화면의 숫자가 어긋날 수 없습니다.
         </p>
       </Card>
-    </div>
+    </>
   );
 }

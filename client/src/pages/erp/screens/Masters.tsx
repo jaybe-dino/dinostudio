@@ -74,28 +74,30 @@ export function MastersScreen({ kind }: { kind: Kind }) {
         key: "biz",
         header: "사업자번호",
         sortValue: p => p.bizNo ?? "",
-        render: p => p.bizNo ?? <span className="erp-null">미등록</span>,
+        render: p => p.bizNo ?? <span className="s">미등록</span>,
       },
       {
         key: "vat",
         header: "VAT 표기",
         sortValue: p => p.vatMode ?? "",
-        render: p => p.vatMode ?? <span className="erp-null">미확정 (B3)</span>,
+        render: p => p.vatMode ?? <span className="s">미확정 (B3)</span>,
       },
       {
         key: "bank",
         header: "입금계좌",
         sortValue: p => p.bankAccount ?? "",
-        render: p => p.bankAccount ?? <span className="erp-null">미등록</span>,
+        render: p => p.bankAccount ?? <span className="s">미등록</span>,
       },
     ];
     return (
-      <div className="erp-page">
-        <header>
-          <h1>{title}</h1>
-          <p>{blurb}</p>
-        </header>
-        <div className="erp-tiles">
+      <>
+        <div className="ph">
+          <div>
+            <h1>{title}</h1>
+            <div className="desc">{blurb}</div>
+          </div>
+        </div>
+        <div className="kpis">
           <Tile
             label="거래처"
             value={`${masters.data?.parties.length ?? 0}곳`}
@@ -116,7 +118,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
             initialSort={{ key: "name", dir: "asc" }}
           />
         </Card>
-      </div>
+      </>
     );
   }
 
@@ -158,15 +160,17 @@ export function MastersScreen({ kind }: { kind: Kind }) {
         header: "예산",
         numeric: true,
         sortValue: p => p.budget,
-        render: p => won(p.budget) ?? <span className="erp-null">미등록</span>,
+        render: p => won(p.budget) ?? <span className="s">미등록</span>,
       },
     ];
     return (
-      <div className="erp-page">
-        <header>
-          <h1>{title}</h1>
-          <p>{blurb}</p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>{title}</h1>
+            <div className="desc">{blurb}</div>
+          </div>
+        </div>
         <Note tone="warn">
           귀속 미지정 건이 남아 있는 한 사업부 손익과 프로젝트 마진은 그만큼
           비어 있습니다. 프로젝트를 먼저 등록하고 원장에서 귀속을 채우십시오.
@@ -179,7 +183,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
             initialSort={{ key: "code", dir: "asc" }}
           />
         </Card>
-      </div>
+      </>
     );
   }
 
@@ -201,22 +205,21 @@ export function MastersScreen({ kind }: { kind: Kind }) {
       sortValue: c => c.partyId ?? "",
       render: c =>
         masters.data?.parties.find(p => p.id === c.partyId)?.name ?? (
-          <span className="erp-null">미지정</span>
+          <span className="s">미지정</span>
         ),
     },
     {
       key: "project",
       header: "프로젝트",
       sortValue: c => c.projectId ?? "",
-      render: c => c.projectId ?? <span className="erp-null">미지정</span>,
+      render: c => c.projectId ?? <span className="s">미지정</span>,
     },
     {
       key: "amount",
       header: "계약금액",
       numeric: true,
       sortValue: c => c.amountTotal,
-      render: c =>
-        won(c.amountTotal) ?? <span className="erp-null">미등록</span>,
+      render: c => won(c.amountTotal) ?? <span className="s">미등록</span>,
     },
     {
       key: "terms",
@@ -224,7 +227,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
       sortValue: c => c.paymentTermsDays,
       render: c =>
         c.paymentTermsDays == null ? (
-          <span className="erp-null">미확인 — 입금예정일 산출 불가</span>
+          <span className="s">미확인 — 입금예정일 산출 불가</span>
         ) : (
           `계산서 발행 후 ${c.paymentTermsDays}일`
         ),
@@ -242,13 +245,15 @@ export function MastersScreen({ kind }: { kind: Kind }) {
   );
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>{title}</h1>
-        <p>{blurb}</p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>{title}</h1>
+          <div className="desc">{blurb}</div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="등록된 계약"
           value={`${masters.data?.contracts.length ?? 0}건`}
@@ -274,8 +279,8 @@ export function MastersScreen({ kind }: { kind: Kind }) {
       {message ? <Note>{message}</Note> : null}
 
       <Card title="계약 등록">
-        <div className="erp-filters">
-          <label className="erp-field">
+        <div className="filters">
+          <label className="field">
             <span>계약 코드</span>
             <input
               placeholder="CT-260827-01"
@@ -283,7 +288,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
               onChange={e => setDraft(d => ({ ...d, code: e.target.value }))}
             />
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>거래처</span>
             <select
               value={draft.partyId ?? ""}
@@ -297,7 +302,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
               ))}
             </select>
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>프로젝트</span>
             <select
               value={draft.projectId ?? ""}
@@ -313,7 +318,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
               ))}
             </select>
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>계약금액 (원)</span>
             <input
               inputMode="numeric"
@@ -323,7 +328,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
               }
             />
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>결제조건 (계산서 발행 후 N일)</span>
             <input
               inputMode="numeric"
@@ -333,7 +338,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
               }
             />
           </label>
-          <label className="erp-field" style={{ flex: "1 1 200px" }}>
+          <label className="field" style={{ flex: "1 1 200px" }}>
             <span>드라이브 링크</span>
             <input
               value={draft.driveUrl ?? ""}
@@ -344,7 +349,7 @@ export function MastersScreen({ kind }: { kind: Kind }) {
           </label>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             data-variant="primary"
             disabled={!draft.code || upsert.isPending}
             onClick={() =>
@@ -385,6 +390,6 @@ export function MastersScreen({ kind }: { kind: Kind }) {
           empty="등록된 계약이 없습니다 — 2차의 선행 조건입니다"
         />
       </Card>
-    </div>
+    </>
   );
 }

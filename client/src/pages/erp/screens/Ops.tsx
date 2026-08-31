@@ -31,18 +31,20 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
     ).length;
 
     return (
-      <div className="erp-page">
-        <header>
-          <h1>세금계산서 · 부가세</h1>
-          <p>
-            공급가액과 세액을 분리 저장할 구조는 이미 있습니다(amount_supply ·
-            amount_vat). 값이 비어 있는 이유는 전사 VAT 표기 기준이 정해지지
-            않았기 때문입니다 — IP는 (vat별도), 네트워크는 (VAT 포함)으로 서로
-            다릅니다.
-          </p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>세금계산서 · 부가세</h1>
+            <div className="desc">
+              공급가액과 세액을 분리 저장할 구조는 이미 있습니다(amount_supply ·
+              amount_vat). 값이 비어 있는 이유는 전사 VAT 표기 기준이 정해지지
+              않았기 때문입니다 — IP는 (vat별도), 네트워크는 (VAT 포함)으로 서로
+              다릅니다.
+            </div>
+          </div>
+        </div>
 
-        <div className="erp-tiles">
+        <div className="kpis">
           <Tile
             label="부가세 관련 건"
             value={`${vatEntries.length}건`}
@@ -79,8 +81,8 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
           meta={`${vatEntries.length}건`}
           body={false}
         >
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>집행원장</th>
@@ -98,7 +100,7 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
                   <tr key={entry.code}>
                     <td>
                       <button
-                        className="erp-code"
+                        className="m"
                         onClick={() => openEntry(entry.code)}
                       >
                         {entry.code}
@@ -113,12 +115,12 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
                         reason={entry.undecidedReason}
                       />
                     </td>
-                    <td className="num erp-null">
+                    <td className="num s">
                       {entry.amountSupply == null
                         ? "미분리"
                         : won(entry.amountSupply)}
                     </td>
-                    <td className="num erp-null">
+                    <td className="num s">
                       {entry.amountVat == null
                         ? "미분리"
                         : won(entry.amountVat)}
@@ -141,20 +143,22 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
             <li>대리납부(역과세) 2건 처리 — 해외 SaaS · 광고</li>
           </ul>
         </Card>
-      </div>
+      </>
     );
   }
 
   if (variant === "hometax") {
     return (
-      <div className="erp-page">
-        <header>
-          <h1>홈택스 연동</h1>
-          <p>
-            전자세금계산서와 부가세 신고자료를 3차에 연동합니다. 지금은 연동
-            준비 상태만 표시합니다.
-          </p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>홈택스 연동</h1>
+            <div className="desc">
+              전자세금계산서와 부가세 신고자료를 3차에 연동합니다. 지금은 연동
+              준비 상태만 표시합니다.
+            </div>
+          </div>
+        </div>
 
         <Note tone="warn">
           연동이 켜져 있지 않습니다. 홈택스는 자격증명과 접근 권한이 필요하므로
@@ -162,8 +166,8 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
         </Note>
 
         <Card title="연동 전 필요한 것" body={false}>
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>항목</th>
@@ -187,9 +191,7 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
                     <td className="wrap">{item}</td>
                     <td>{owner}</td>
                     <td>
-                      <span className="erp-chip" data-tone="alert">
-                        {status}
-                      </span>
+                      <span className="chip a">{status}</span>
                     </td>
                   </tr>
                 ))}
@@ -203,16 +205,12 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
             계산서 발행일이 원장에 자동으로 들어와 입금예정일과 DSO가 손 대지
             않아도 계산됩니다. 지금은 발행일이 없어 DSO가 미수 3건 중 1건만
             반영하고 있습니다.{" "}
-            <button
-              type="button"
-              className="erp-btn"
-              onClick={() => goto("ar")}
-            >
+            <button type="button" className="btn" onClick={() => goto("ar")}>
               채권 관리로
             </button>
           </p>
         </Card>
-      </div>
+      </>
     );
   }
 
@@ -220,16 +218,18 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
     const projects = masters.data?.projects ?? [];
     const withBudget = projects.filter(p => p.budget != null);
     return (
-      <div className="erp-page">
-        <header>
-          <h1>예산 대비 실적</h1>
-          <p>
-            예산이 등록된 단위에 대해서만 실적을 비교합니다. 예산이 없으면
-            비교하지 않고 없다고 씁니다.
-          </p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>예산 대비 실적</h1>
+            <div className="desc">
+              예산이 등록된 단위에 대해서만 실적을 비교합니다. 예산이 없으면
+              비교하지 않고 없다고 씁니다.
+            </div>
+          </div>
+        </div>
 
-        <div className="erp-tiles">
+        <div className="kpis">
           <Tile
             label="예산 등록 프로젝트"
             value={`${withBudget.length} / ${projects.length}`}
@@ -252,8 +252,8 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
         </Note>
 
         <Card title="프로젝트별" meta={`${projects.length}건`} body={false}>
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>프로젝트</th>
@@ -274,13 +274,13 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
                       </td>
                       <td className="num">
                         {won(project.budget) ?? (
-                          <span className="erp-null">미등록</span>
+                          <span className="s">미등록</span>
                         )}
                       </td>
                       <td className="num">
                         {won(actual?.contributionProfit ?? 0)}
                       </td>
-                      <td className="erp-null">
+                      <td className="s">
                         {project.budget == null ? "예산 없음 — 비교 불가" : "—"}
                       </td>
                     </tr>
@@ -290,7 +290,7 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
             </table>
           </div>
         </Card>
-      </div>
+      </>
     );
   }
 
@@ -299,17 +299,19 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
     const segments = pnl.data?.byBu ?? [];
     const attributed = segments.filter(s => s.key !== "미지정");
     return (
-      <div className="erp-page">
-        <header>
-          <h1>공통비 배부</h1>
-          <p>
-            공통배부 금액을 사업부·프로젝트에 나누는 규칙입니다. 배부 후 관리
-            계단의 영업이익은 회계 계단과 반드시 일치해야 합니다 — 다르면 배부
-            로직이 틀린 것입니다.
-          </p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>공통비 배부</h1>
+            <div className="desc">
+              공통배부 금액을 사업부·프로젝트에 나누는 규칙입니다. 배부 후 관리
+              계단의 영업이익은 회계 계단과 반드시 일치해야 합니다 — 다르면 배부
+              로직이 틀린 것입니다.
+            </div>
+          </div>
+        </div>
 
-        <div className="erp-tiles">
+        <div className="kpis">
           <Tile
             label="공통배부 총액"
             value={won(common) ?? "—"}
@@ -351,8 +353,8 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
           meta={`${attributed.length}개 사업부`}
           body={false}
         >
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>사업부</th>
@@ -374,7 +376,7 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
             </table>
           </div>
         </Card>
-      </div>
+      </>
     );
   }
 
@@ -405,17 +407,19 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
   ];
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>보고서 빌더</h1>
-        <p>
-          화면의 표를 탭 구분 텍스트로 뽑습니다. 브라우저 정책상 파일 저장이
-          막혀 있어 복사로 넘기고, 시트에 붙여 쓰십시오 — 다만 그 시트는
-          참고용이고 원본은 계속 이 원장입니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>보고서 빌더</h1>
+          <div className="desc">
+            화면의 표를 탭 구분 텍스트로 뽑습니다. 브라우저 정책상 파일 저장이
+            막혀 있어 복사로 넘기고, 시트에 붙여 쓰십시오 — 다만 그 시트는
+            참고용이고 원본은 계속 이 원장입니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="원장 전건"
           value={`${entries.length}건`}
@@ -445,7 +449,7 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             data-variant="primary"
             onClick={() => setShowExport(true)}
           >
@@ -453,20 +457,20 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
           </button>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             onClick={() => goto("cashflow")}
           >
             현금흐름표에서 내보내기
           </button>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             onClick={() => goto("cash-position")}
           >
             현금 현황에서 내보내기
           </button>
         </div>
-        <p className="erp-null" style={{ marginTop: 8 }}>
+        <p className="s" style={{ marginTop: 8 }}>
           내보낸 시트를 다시 이 시스템으로 들여오는 기능은 제공하지 않습니다 —
           원본이 둘이 되는 순간 반드시 어긋나기 때문입니다.
         </p>
@@ -479,6 +483,6 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
           onClose={() => setShowExport(false)}
         />
       ) : null}
-    </div>
+    </>
   );
 }

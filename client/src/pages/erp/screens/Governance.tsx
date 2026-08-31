@@ -48,7 +48,11 @@ export function GovernanceScreen({
   const utils = trpc.useUtils();
   const me = trpc.erp.me.useQuery();
   const users = trpc.erp.users.list.useQuery(undefined, { retry: false });
-  const [draft, setDraft] = useState({ email: "", name: "", role: "담당자" as Role });
+  const [draft, setDraft] = useState({
+    email: "",
+    name: "",
+    role: "담당자" as Role,
+  });
   const [message, setMessage] = useState<string | null>(null);
   const putUser = trpc.erp.users.put.useMutation({
     onSuccess: async saved => {
@@ -65,17 +69,19 @@ export function GovernanceScreen({
 
   if (variant === "permissions") {
     return (
-      <div className="erp-page">
-        <header>
-          <h1>권한 · 내부통제</h1>
-          <p>
-            R 조회 · W 입력/수정 · A 승인. 개인별 급여는 응답 단계에서
-            마스킹되므로 프론트에서 숨기는 방식이 아닙니다 — 권한이 없는
-            역할에는 금액 자체가 내려가지 않습니다.
-          </p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>권한 · 내부통제</h1>
+            <div className="desc">
+              R 조회 · W 입력/수정 · A 승인. 개인별 급여는 응답 단계에서
+              마스킹되므로 프론트에서 숨기는 방식이 아닙니다 — 권한이 없는
+              역할에는 금액 자체가 내려가지 않습니다.
+            </div>
+          </div>
+        </div>
 
-        <div className="erp-tiles">
+        <div className="kpis">
           <Tile
             label="내 역할"
             value={me.data?.role ?? "—"}
@@ -105,8 +111,8 @@ export function GovernanceScreen({
           meta="대표 검토 후 확정 — 초안"
           body={false}
         >
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>리소스</th>
@@ -166,8 +172,8 @@ export function GovernanceScreen({
           meta={`${users.data?.length ?? 0}명 · 역할 지정은 대표만`}
           body={false}
         >
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>이메일</th>
@@ -187,7 +193,8 @@ export function GovernanceScreen({
                 ) : (users.data ?? []).length === 0 ? (
                   <tr>
                     <td colSpan={5} style={{ color: "var(--muted)" }}>
-                      아직 배정된 계정이 없습니다 — 배정 전에는 환경변수 ERP_ROLE_MAP이 쓰입니다
+                      아직 배정된 계정이 없습니다 — 배정 전에는 환경변수
+                      ERP_ROLE_MAP이 쓰입니다
                     </td>
                   </tr>
                 ) : (
@@ -196,7 +203,10 @@ export function GovernanceScreen({
                       <td>{user.email}</td>
                       <td>{user.name}</td>
                       <td>
-                        <span className="erp-chip" data-tone={user.role === "대표" ? "alert" : "info"}>
+                        <span
+                          className="chip"
+                          data-tone={user.role === "대표" ? "alert" : "info"}
+                        >
                           {user.role}
                         </span>
                       </td>
@@ -204,9 +214,13 @@ export function GovernanceScreen({
                       <td>
                         <button
                           type="button"
-                          className="erp-btn"
-                          disabled={me.data?.role !== "대표" || putUser.isPending}
-                          onClick={() => putUser.mutate({ ...user, active: !user.active })}
+                          className="btn"
+                          disabled={
+                            me.data?.role !== "대표" || putUser.isPending
+                          }
+                          onClick={() =>
+                            putUser.mutate({ ...user, active: !user.active })
+                          }
                         >
                           {user.active ? "정지" : "사용"}
                         </button>
@@ -217,24 +231,33 @@ export function GovernanceScreen({
               </tbody>
             </table>
           </div>
-          <div className="erp-card-body">
-            <div className="erp-filters">
-              <label className="erp-field" style={{ flex: "1 1 220px" }}>
+          <div className="card-b">
+            <div className="filters">
+              <label className="field" style={{ flex: "1 1 220px" }}>
                 <span>이메일 (회사 구글 계정)</span>
                 <input
                   value={draft.email}
-                  onChange={e => setDraft(d => ({ ...d, email: e.target.value }))}
+                  onChange={e =>
+                    setDraft(d => ({ ...d, email: e.target.value }))
+                  }
                 />
               </label>
-              <label className="erp-field">
+              <label className="field">
                 <span>이름</span>
-                <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} />
+                <input
+                  value={draft.name}
+                  onChange={e =>
+                    setDraft(d => ({ ...d, name: e.target.value }))
+                  }
+                />
               </label>
-              <label className="erp-field">
+              <label className="field">
                 <span>역할</span>
                 <select
                   value={draft.role}
-                  onChange={e => setDraft(d => ({ ...d, role: e.target.value as Role }))}
+                  onChange={e =>
+                    setDraft(d => ({ ...d, role: e.target.value as Role }))
+                  }
                 >
                   {ROLES.map(role => (
                     <option key={role} value={role}>
@@ -245,7 +268,7 @@ export function GovernanceScreen({
               </label>
               <button
                 type="button"
-                className="erp-btn"
+                className="btn"
                 data-variant="primary"
                 disabled={
                   me.data?.role !== "대표" ||
@@ -271,8 +294,9 @@ export function GovernanceScreen({
                 <Note>{message}</Note>
               </div>
             ) : null}
-            <p className="erp-null" style={{ marginTop: 6 }}>
-              권한을 나눠주는 일은 위임하지 않습니다 — 역할 지정은 대표만 할 수 있고 감사로그에 남습니다 (G13).
+            <p className="s" style={{ marginTop: 6 }}>
+              권한을 나눠주는 일은 위임하지 않습니다 — 역할 지정은 대표만 할 수
+              있고 감사로그에 남습니다 (G13).
             </p>
           </div>
         </Card>
@@ -304,7 +328,7 @@ export function GovernanceScreen({
             </li>
           </ul>
         </Card>
-      </div>
+      </>
     );
   }
 
@@ -313,17 +337,19 @@ export function GovernanceScreen({
       matchesQuery(query, a.rowId, a.action, a.actor)
     );
     return (
-      <div className="erp-page">
-        <header>
-          <h1>변경 이력</h1>
-          <p>
-            데이터를 지우지 않습니다. 물리 삭제가 없고 모든 변경·승인·강행이
-            여기 남습니다 — 3개월 뒤 「이 숫자가 어디서 왔나」를 되짚을 수
-            있어야 하기 때문입니다.
-          </p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>변경 이력</h1>
+            <div className="desc">
+              데이터를 지우지 않습니다. 물리 삭제가 없고 모든 변경·승인·강행이
+              여기 남습니다 — 3개월 뒤 「이 숫자가 어디서 왔나」를 되짚을 수
+              있어야 하기 때문입니다.
+            </div>
+          </div>
+        </div>
 
-        <div className="erp-tiles">
+        <div className="kpis">
           <Tile
             label="기록"
             value={`${rows.length}건`}
@@ -338,8 +364,8 @@ export function GovernanceScreen({
         </div>
 
         <Card title="감사로그" meta={`${rows.length}건`} body={false}>
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>시각</th>
@@ -361,7 +387,7 @@ export function GovernanceScreen({
                 ) : (
                   rows.map(log => (
                     <tr key={log.id}>
-                      <td className="erp-null">
+                      <td className="s">
                         {log.at.slice(0, 19).replace("T", " ")}
                       </td>
                       <td>{log.table}</td>
@@ -370,7 +396,7 @@ export function GovernanceScreen({
                       </td>
                       <td>{log.action}</td>
                       <td>{log.actor}</td>
-                      <td className="wrap erp-null">
+                      <td className="wrap s">
                         {(() => {
                           const after = log.after as {
                             _reason?: string;
@@ -385,7 +411,7 @@ export function GovernanceScreen({
             </table>
           </div>
         </Card>
-      </div>
+      </>
     );
   }
 
@@ -452,18 +478,20 @@ export function GovernanceScreen({
   ];
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>지표 신뢰도</h1>
-        <p>
-          지표마다 확정도를 답니다. 「계산 불가」는 오류가 아니라 무엇이 아직
-          없다는 답이고, 그 자리를 추정치로 메우지 않습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>지표 신뢰도</h1>
+          <div className="desc">
+            지표마다 확정도를 답니다. 「계산 불가」는 오류가 아니라 무엇이 아직
+            없다는 답이고, 그 자리를 추정치로 메우지 않습니다.
+          </div>
+        </div>
+      </div>
 
       <Card title="지표별 확정도" meta={`${metrics.length}개`} body={false}>
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>지표</th>
@@ -476,14 +504,12 @@ export function GovernanceScreen({
               {metrics.map(m => (
                 <tr key={m.label}>
                   <td className="wrap">{m.label}</td>
-                  <td
-                    className={m.value === "계산 불가" ? "erp-null" : undefined}
-                  >
+                  <td className={m.value === "계산 불가" ? "s" : undefined}>
                     {m.value}
                   </td>
                   <td>
                     <span
-                      className="erp-chip"
+                      className="chip"
                       data-tone={
                         m.confidence === "확정"
                           ? "ok"
@@ -507,6 +533,6 @@ export function GovernanceScreen({
         확정도 N은 「모른다」이고, 추정은 「일부 근거로 계산했다」입니다. 대외
         자료에는 확정만 씁니다.
       </Note>
-    </div>
+    </>
   );
 }

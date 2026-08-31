@@ -75,7 +75,7 @@ export function ApprovalsScreen() {
       header: "집행원장",
       sortValue: e => e.code,
       render: entry => (
-        <button className="erp-code" onClick={() => openEntry(entry.code)}>
+        <button className="m" onClick={() => openEntry(entry.code)}>
           {entry.code}
         </button>
       ),
@@ -142,16 +142,18 @@ export function ApprovalsScreen() {
   ];
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>승인 대기</h1>
-        <p>
-          예정되거나 밀린, 앞으로 나갈 돈 전부입니다. 승인 대기는 현금흐름
-          계·손익·전표에 들어가지 않고 예약런웨이에만 반영됩니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>승인 대기</h1>
+          <div className="desc">
+            예정되거나 밀린, 앞으로 나갈 돈 전부입니다. 승인 대기는 현금흐름
+            계·손익·전표에 들어가지 않고 예약런웨이에만 반영됩니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="승인 대기"
           value={won(pendingTotal) ?? "—"}
@@ -184,30 +186,26 @@ export function ApprovalsScreen() {
         />
       </div>
 
-      <div className="erp-filters">
+      <div className="filters">
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           onClick={() =>
             setSelected(Object.fromEntries(rows.map(r => [r.code, true])))
           }
         >
           전체 선택
         </button>
-        <button
-          type="button"
-          className="erp-btn"
-          onClick={() => setSelected({})}
-        >
+        <button type="button" className="btn" onClick={() => setSelected({})}>
           선택 해제
         </button>
-        <label className="erp-field" style={{ flex: "1 1 220px" }}>
+        <label className="field" style={{ flex: "1 1 220px" }}>
           <span>반려 사유 (반려 시 필수)</span>
           <input value={reason} onChange={e => setReason(e.target.value)} />
         </label>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           data-variant="primary"
           disabled={codes.length === 0 || bulk.isPending}
           onClick={() => bulk.mutate({ codes, decision: "approve" })}
@@ -216,7 +214,7 @@ export function ApprovalsScreen() {
         </button>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           disabled={codes.length === 0 || !reason.trim() || bulk.isPending}
           onClick={() => bulk.mutate({ codes, decision: "reject", reason })}
         >
@@ -252,8 +250,8 @@ export function ApprovalsScreen() {
       </Card>
 
       <Card title="자금 소요 계산" meta="승인 대기까지 합친 실제 여력">
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>단계</th>
@@ -297,17 +295,17 @@ export function ApprovalsScreen() {
               <tr>
                 <td>+ 2주 번레이트</td>
                 <td>운영을 2주 더 하려면</td>
-                <td className="num erp-null">계산 불가</td>
+                <td className="num s">계산 불가</td>
                 <td>B1 급여 실액 · 마감된 월 0개</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p className="erp-null" style={{ marginTop: 8 }}>
+        <p className="s" style={{ marginTop: 8 }}>
           번레이트는 마감된 월의 실측 운영비로만 만듭니다. 추정 분모로 런웨이를
           만들지 않습니다.
         </p>
       </Card>
-    </div>
+    </>
   );
 }

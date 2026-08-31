@@ -21,31 +21,33 @@ export function Forecast13wScreen() {
   const forecast = trpc.erp.forecast.useQuery({ scenario });
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>13주 자금계획</h1>
-        <p>
-          주차별 잔액(w) = 잔액(w−1) + 예정입금(w) − 예정지출(w). 예정입금은
-          계산서가 발행된 미수의 입금예정일만 넣습니다 — 발행 전 파이프라인은
-          성사확률이 정해지기 전까지 넣지 않습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>13주 자금계획</h1>
+          <div className="desc">
+            주차별 잔액(w) = 잔액(w−1) + 예정입금(w) − 예정지출(w). 예정입금은
+            계산서가 발행된 미수의 입금예정일만 넣습니다 — 발행 전 파이프라인은
+            성사확률이 정해지기 전까지 넣지 않습니다.
+          </div>
+        </div>
+      </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {SCENARIOS.map(s => (
           <button
             key={s}
             type="button"
-            className="erp-btn"
+            className="btn"
             aria-pressed={scenario === s}
             onClick={() => setScenario(s)}
           >
-            {s} <span className="erp-null">· {DESCRIPTION[s]}</span>
+            {s} <span className="s">· {DESCRIPTION[s]}</span>
           </button>
         ))}
       </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="시작 잔액"
           value={won(forecast.data?.weeks[0]?.open ?? null) ?? "계산 불가"}
@@ -111,8 +113,8 @@ export function Forecast13wScreen() {
         meta={DESCRIPTION[scenario]}
         body={false}
       >
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>주차</th>
@@ -132,9 +134,7 @@ export function Forecast13wScreen() {
                     {shortDate(week.start)} – {shortDate(week.end)}
                   </td>
                   <td className="num">
-                    {won(week.open) ?? (
-                      <span className="erp-null">계산 불가</span>
-                    )}
+                    {won(week.open) ?? <span className="s">계산 불가</span>}
                   </td>
                   <td className="num">{won(week.inflow)}</td>
                   <td className="num">{won(week.outflow)}</td>
@@ -144,11 +144,9 @@ export function Forecast13wScreen() {
                       color: (week.close ?? 0) < 0 ? "var(--alert)" : undefined,
                     }}
                   >
-                    {won(week.close) ?? (
-                      <span className="erp-null">계산 불가</span>
-                    )}
+                    {won(week.close) ?? <span className="s">계산 불가</span>}
                   </td>
-                  <td className="wrap erp-null">
+                  <td className="wrap s">
                     {[...week.inflowCodes, ...week.outflowCodes].join(" ") ||
                       "—"}
                   </td>
@@ -167,6 +165,6 @@ export function Forecast13wScreen() {
           봅니다.
         </p>
       </Card>
-    </div>
+    </>
   );
 }

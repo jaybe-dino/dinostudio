@@ -109,17 +109,19 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
     const grand = rows.reduce((a, r) => a + r.amount, 0);
 
     return (
-      <div className="erp-page">
-        <header>
-          <h1>비용 구조</h1>
-          <p>
-            고정비 / 변동비 구분은 번레이트 계산에서 뺐습니다. 절감 판단용 보조
-            태그(계약 고정 / 정기 재량 / 수시)로만 남기고, 번레이트는 마감된
-            월의 실측 운영비로만 만듭니다.
-          </p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>비용 구조</h1>
+            <div className="desc">
+              고정비 / 변동비 구분은 번레이트 계산에서 뺐습니다. 절감 판단용
+              보조 태그(계약 고정 / 정기 재량 / 수시)로만 남기고, 번레이트는
+              마감된 월의 실측 운영비로만 만듭니다.
+            </div>
+          </div>
+        </div>
 
-        <div className="erp-tiles">
+        <div className="kpis">
           <Tile
             label="확정 운영비"
             value={won(opex?.opex.amount ?? null) ?? "—"}
@@ -156,8 +158,8 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
           meta={`${rows.length}개 계정`}
           body={false}
         >
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>계정과목</th>
@@ -199,7 +201,7 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
             {(opex?.opex.codes ?? []).map(code => (
               <button
                 key={code}
-                className="erp-code"
+                className="m"
                 style={{ marginRight: 4 }}
                 onClick={() => openEntry(code)}
               >
@@ -208,22 +210,24 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
             ))}
           </p>
         </Card>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>{variant === "project" ? "프로젝트 마진" : "사업부 손익"}</h1>
-        <p>
-          회계 계단(세무·감사용)과 관리 계단(사업 판단용)을 함께 냅니다. 두
-          계단의 영업이익은 반드시 일치해야 하고, 다르면 배부 로직이 틀린
-          것입니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>{variant === "project" ? "프로젝트 마진" : "사업부 손익"}</h1>
+          <div className="desc">
+            회계 계단(세무·감사용)과 관리 계단(사업 판단용)을 함께 냅니다. 두
+            계단의 영업이익은 반드시 일치해야 하고, 다르면 배부 로직이 틀린
+            것입니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="순매출"
           value={won(total?.management.netRevenue ?? null) ?? "—"}
@@ -262,7 +266,7 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
       ))}
 
       <div
-        className="erp-split"
+        className="grid2"
         style={{
           border: "1px solid var(--rule)",
           borderRadius: 10,
@@ -270,7 +274,7 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
         }}
       >
         <Card title="회계 계단" meta="세무·감사용">
-          <table className="erp-table">
+          <table>
             <tbody>
               <Row label="매출" amount={total?.accounting.revenue} />
               <Row label="− 매출원가" amount={total?.accounting.cogs} />
@@ -298,7 +302,7 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
           </table>
         </Card>
         <Card title="관리 계단" meta="사업 판단용 · GMV는 제외">
-          <table className="erp-table">
+          <table>
             <tbody>
               <Row label="총매출" amount={total?.management.grossRevenue} />
               <Row label="− 통과원가" amount={total?.management.passThrough} />
@@ -339,7 +343,7 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
           initialSort={{ key: "contrib", dir: "desc" }}
         />
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -362,7 +366,7 @@ function Row({
     >
       <td>{label}</td>
       <td className="num">
-        {won(amount ?? 0) ?? <span className="erp-null">계산 불가</span>}
+        {won(amount ?? 0) ?? <span className="s">계산 불가</span>}
       </td>
     </tr>
   );

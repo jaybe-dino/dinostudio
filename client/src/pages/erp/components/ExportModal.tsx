@@ -55,7 +55,9 @@ export function ExportModal({
    * 숫자가 문자열로 들어가지 않아 바로 합계를 낼 수 있다 (§14).
    */
   const downloadXlsx = () => {
-    const body = rows.map(row => `<Row>${row.map(xmlCell).join("")}</Row>`).join("");
+    const body = rows
+      .map(row => `<Row>${row.map(xmlCell).join("")}</Row>`)
+      .join("");
     const xml =
       `<?xml version="1.0" encoding="UTF-8"?>` +
       `<?mso-application progid="Excel.Sheet"?>` +
@@ -68,11 +70,14 @@ export function ExportModal({
   const downloadCsv = () => {
     const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
     // BOM — 엑셀이 UTF-8로 열도록
-    download(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), "csv");
+    download(
+      new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }),
+      "csv"
+    );
   };
 
   return (
-    <div className="erp-palette" onClick={onClose}>
+    <div className="pal" onClick={onClose}>
       <div
         onClick={event => event.stopPropagation()}
         style={{ width: "min(880px, 94vw)", maxHeight: "72vh" }}
@@ -93,18 +98,18 @@ export function ExportModal({
           <div style={{ display: "flex", gap: 6 }}>
             <button
               type="button"
-              className="erp-btn"
+              className="btn"
               data-variant="primary"
               onClick={downloadXlsx}
             >
               엑셀 내려받기
             </button>
-            <button type="button" className="erp-btn" onClick={downloadCsv}>
+            <button type="button" className="btn" onClick={downloadCsv}>
               CSV
             </button>
             <button
               type="button"
-              className="erp-btn"
+              className="btn"
               onClick={async () => {
                 try {
                   await navigator.clipboard.writeText(text);
@@ -116,7 +121,7 @@ export function ExportModal({
             >
               {copied ? "복사됨" : "전체 복사"}
             </button>
-            <button type="button" className="erp-btn" onClick={onClose}>
+            <button type="button" className="btn" onClick={onClose}>
               닫기
             </button>
           </div>

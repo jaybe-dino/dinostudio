@@ -68,17 +68,19 @@ export function IntakeScreen() {
   });
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>수집 검수함</h1>
-        <p>
-          슬랙·은행·카드·홈택스에서 들어온 것이 원장에 바로 적재되지 않고 여기서
-          사람 확인을 거칩니다. 파싱에 실패한 메시지도 사라지지 않고 여기
-          남습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>수집 검수함</h1>
+          <div className="desc">
+            슬랙·은행·카드·홈택스에서 들어온 것이 원장에 바로 적재되지 않고
+            여기서 사람 확인을 거칩니다. 파싱에 실패한 메시지도 사라지지 않고
+            여기 남습니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="대기"
           value={`${intakes.filter(i => i.status === "waiting").length}건`}
@@ -108,8 +110,8 @@ export function IntakeScreen() {
         </Note>
       ) : (
         <Card title="검수 대기" meta={`${intakes.length}건`} body={false}>
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>수집</th>
@@ -124,15 +126,13 @@ export function IntakeScreen() {
                   <tr key={intake.id}>
                     <td>
                       {intake.source}
-                      <span className="erp-null"> · {intake.sourceRef}</span>
+                      <span className="s"> · {intake.sourceRef}</span>
                     </td>
                     <td className="wrap">{intake.raw}</td>
                     <td>{intake.status}</td>
                     <td className="wrap">{intake.failReason ?? "—"}</td>
                     <td>
-                      {intake.entryId ?? (
-                        <span className="erp-null">미적재</span>
-                      )}
+                      {intake.entryId ?? <span className="s">미적재</span>}
                     </td>
                   </tr>
                 ))}
@@ -147,8 +147,8 @@ export function IntakeScreen() {
         meta="양식을 새로 만들지 않습니다"
         body={false}
       >
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>슬랙 필드</th>
@@ -175,13 +175,13 @@ export function IntakeScreen() {
           안에서 이뤄집니다 — 그래야 누가 언제 승인했는지가 감사로그에 남습니다.{" "}
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             onClick={() => goto("approvals")}
           >
             승인 대기로
           </button>
         </p>
       </Card>
-    </div>
+    </>
   );
 }

@@ -18,17 +18,19 @@ export function BurnRateScreen() {
   ) => (m?.value == null ? "계산 불가" : `${m.value}${unit}`);
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>번레이트 마스터</h1>
-        <p>
-          월 번레이트 = 마감된 월의 운영비입니다. 고정비+변동비는 추정 분모라
-          폐기했습니다. 마감된 월이 없거나 급여 실액이 미확정이면 런웨이 세 값
-          모두 null입니다 — 임의 숫자를 내지 않습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>번레이트 마스터</h1>
+          <div className="desc">
+            월 번레이트 = 마감된 월의 운영비입니다. 고정비+변동비는 추정 분모라
+            폐기했습니다. 마감된 월이 없거나 급여 실액이 미확정이면 런웨이 세 값
+            모두 null입니다 — 임의 숫자를 내지 않습니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="월 번레이트"
           value={won(data?.burnRate.value ?? null) ?? "계산 불가"}
@@ -77,8 +79,8 @@ export function BurnRateScreen() {
         meta={`6개 중 ${data?.conditionsMet ?? 0}개 충족`}
         body={false}
       >
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>#</th>
@@ -97,7 +99,7 @@ export function BurnRateScreen() {
                   <td>{condition.owner}</td>
                   <td>
                     <span
-                      className="erp-chip"
+                      className="chip"
                       data-tone={condition.met ? "ok" : "alert"}
                     >
                       {condition.met ? "충족" : "미충족"}
@@ -115,8 +117,8 @@ export function BurnRateScreen() {
         meta="총지출 − (통과원가 + 차입 원금 + 부가세 + 자산 취득)"
         body={false}
       >
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>구분</th>
@@ -131,9 +133,7 @@ export function BurnRateScreen() {
                 <td className="num">{won(data?.opex.opex.amount ?? 0)}</td>
                 <td className="num">{data?.opex.opex.count ?? 0}</td>
                 <td>
-                  <span className="erp-chip" data-tone="ok">
-                    포함
-                  </span>
+                  <span className="chip g">포함</span>
                 </td>
               </tr>
               <tr>
@@ -143,7 +143,7 @@ export function BurnRateScreen() {
                 </td>
                 <td className="num">{data?.opex.passThrough.count ?? 0}</td>
                 <td>
-                  <span className="erp-chip">제외</span>
+                  <span className="chip">제외</span>
                 </td>
               </tr>
               <tr>
@@ -153,17 +153,15 @@ export function BurnRateScreen() {
                 </td>
                 <td className="num">{data?.opex.nonOperating.count ?? 0}</td>
                 <td>
-                  <span className="erp-chip">제외</span>
+                  <span className="chip">제외</span>
                 </td>
               </tr>
               <tr>
                 <td>판정 대기</td>
-                <td className="num erp-null">계산 불가</td>
+                <td className="num s">계산 불가</td>
                 <td className="num">{data?.opex.undecided.count ?? 0}</td>
                 <td>
-                  <span className="erp-chip" data-tone="alert">
-                    산입 불가
-                  </span>
+                  <span className="chip a">산입 불가</span>
                 </td>
               </tr>
             </tbody>
@@ -190,6 +188,6 @@ export function BurnRateScreen() {
           임계선·손익분기·커버리지도 함께 근거를 잃습니다.
         </p>
       </Card>
-    </div>
+    </>
   );
 }

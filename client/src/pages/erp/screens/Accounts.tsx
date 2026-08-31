@@ -47,7 +47,7 @@ export function AccountsScreen() {
       sortValue: a => a.cfSection,
       render: a => (
         <span
-          className="erp-chip"
+          className="chip"
           data-tone={
             a.cfSection === "영업"
               ? "ok"
@@ -66,11 +66,9 @@ export function AccountsScreen() {
       sortValue: a => (a.isOpex ? 1 : 0),
       render: a =>
         a.isOpex ? (
-          <span className="erp-chip" data-tone="warn">
-            포함
-          </span>
+          <span className="chip w">포함</span>
         ) : (
-          <span className="erp-chip">제외</span>
+          <span className="chip">제외</span>
         ),
     },
     {
@@ -89,7 +87,7 @@ export function AccountsScreen() {
           a.defaultPriority != null && a.defaultPriority !== derived;
         return (
           <span
-            className={diverges ? undefined : "erp-null"}
+            className={diverges ? undefined : "s"}
             style={diverges ? { color: "var(--warn)" } : undefined}
           >
             {derived}
@@ -105,14 +103,16 @@ export function AccountsScreen() {
   );
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>계정과목 체계</h1>
-        <p>
-          일반기업회계기준(K-GAAP). 계정과목 하나를 정하면 지급 우선순위 ·
-          현금흐름 3구간 · 운영비 포함 여부가 자동으로 정해집니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>계정과목 체계</h1>
+          <div className="desc">
+            일반기업회계기준(K-GAAP). 계정과목 하나를 정하면 지급 우선순위 ·
+            현금흐름 3구간 · 운영비 포함 여부가 자동으로 정해집니다.
+          </div>
+        </div>
+      </div>
 
       {divergent.length > 0 ? (
         <Note tone="warn">
@@ -132,7 +132,7 @@ export function AccountsScreen() {
       </Card>
 
       <div
-        className="erp-split"
+        className="grid2"
         style={{
           borderRadius: 10,
           overflow: "hidden",
@@ -153,6 +153,6 @@ export function AccountsScreen() {
           </p>
         </Card>
       </div>
-    </div>
+    </>
   );
 }

@@ -19,17 +19,19 @@ export function NotificationsScreen() {
   const blocked = rules.filter(r => r.blockedReason);
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>알림 규칙</h1>
-        <p>
-          도착지가 아직 정해지지 않아(B7) 전부 알림함에만 쌓입니다. 발송 실패도
-          알림함에는 남습니다 — 도착지가 죽어 있어도 경보가 사라지면 안 되기
-          때문입니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>알림 규칙</h1>
+          <div className="desc">
+            도착지가 아직 정해지지 않아(B7) 전부 알림함에만 쌓입니다. 발송
+            실패도 알림함에는 남습니다 — 도착지가 죽어 있어도 경보가 사라지면 안
+            되기 때문입니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="알림함"
           value={`${data.data?.delivered.length ?? 0}건`}
@@ -66,8 +68,8 @@ export function NotificationsScreen() {
       </div>
 
       <Card title="알림함" meta="미발송이어도 적재됩니다" body={false}>
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>제목</th>
@@ -93,7 +95,7 @@ export function NotificationsScreen() {
                       {n.screen ? (
                         <button
                           type="button"
-                          className="erp-btn"
+                          className="btn"
                           onClick={() => goto(n.screen!)}
                         >
                           이동
@@ -104,22 +106,18 @@ export function NotificationsScreen() {
                     </td>
                     <td>
                       {n.sentAt ? (
-                        <span className="erp-chip" data-tone="ok">
-                          발송됨
-                        </span>
+                        <span className="chip g">발송됨</span>
                       ) : (
-                        <span className="erp-chip" data-tone="warn">
-                          미발송 (도착지 미정)
-                        </span>
+                        <span className="chip w">미발송 (도착지 미정)</span>
                       )}
                     </td>
                     <td>
                       {n.readAt ? (
-                        <span className="erp-null">읽음</span>
+                        <span className="s">읽음</span>
                       ) : (
                         <button
                           type="button"
-                          className="erp-btn"
+                          className="btn"
                           disabled={markRead.isPending}
                           onClick={() => markRead.mutate({ id: n.id })}
                         >
@@ -136,8 +134,8 @@ export function NotificationsScreen() {
       </Card>
 
       <Card title="티어 · 규칙" meta={`${rules.length}개`} body={false}>
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>티어</th>
@@ -152,7 +150,7 @@ export function NotificationsScreen() {
                 <tr key={rule.id}>
                   <td>
                     <span
-                      className="erp-chip"
+                      className="chip"
                       data-tone={
                         rule.tier === "T3"
                           ? "alert"
@@ -173,9 +171,7 @@ export function NotificationsScreen() {
                         {rule.blockedReason}
                       </span>
                     ) : (
-                      <span className="erp-chip" data-tone="ok">
-                        정상
-                      </span>
+                      <span className="chip g">정상</span>
                     )}
                   </td>
                 </tr>
@@ -191,6 +187,6 @@ export function NotificationsScreen() {
           보류됐습니다 — 사라지지 않고 알림함에 남습니다.
         </Note>
       ) : null}
-    </div>
+    </>
   );
 }

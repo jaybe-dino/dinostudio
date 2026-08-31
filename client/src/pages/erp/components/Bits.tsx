@@ -3,6 +3,31 @@ import { STATUS_RULES } from "@shared/erp";
 import type { ReactNode } from "react";
 import { nullReasonText, won, type Tone } from "../format";
 
+/**
+ * 색 의미를 프로토타입 클래스로 옮긴다.
+ * kpi 는 bad/good/warn, chip·tag 는 a/w/g/n 을 쓴다 — 둘이 다르므로 표를 따로 둔다.
+ */
+const TONE_CLASS: Record<NonNullable<Tone>, string> = {
+  alert: "bad",
+  warn: "warn",
+  ok: "good",
+  info: "good",
+  // 계산 불가는 색으로 강조하지 않는다 — 숫자가 없다는 사실 자체가 메시지다
+  null: "",
+};
+
+const CHIP_CLASS: Record<NonNullable<Tone>, string> = {
+  alert: "a",
+  warn: "w",
+  ok: "g",
+  info: "n",
+  null: "n",
+};
+
+function chipClass(tone: Tone): string {
+  return tone ? `chip ${CHIP_CLASS[tone]}` : "chip";
+}
+
 /** 금액 셀 — null이면 숫자 자리에 이유가 온다 (§10.2 ①) */
 export function Money({
   value,
@@ -14,7 +39,7 @@ export function Money({
   const text = won(value);
   if (text == null)
     return (
-      <span className="erp-null" title={nullReasonText(reason)}>
+      <span className="s" title={nullReasonText(reason)}>
         계산 불가
       </span>
     );
@@ -33,10 +58,10 @@ export function Tile({
   tone?: Tone;
 }) {
   return (
-    <div className="erp-tile" data-tone={tone}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {note ? <small>{note}</small> : null}
+    <div className={`kpi ${tone ? TONE_CLASS[tone] : ""}`.trim()}>
+      <div className="k">{label}</div>
+      <div className="v">{value}</div>
+      {note ? <div className="s">{note}</div> : null}
     </div>
   );
 }
@@ -53,7 +78,7 @@ const STATUS_TONE: Record<EntryStatus, Tone> = {
 
 export function StatusChip({ status }: { status: EntryStatus }) {
   return (
-    <span className="erp-chip" data-tone={STATUS_TONE[status]}>
+    <span className={chipClass(STATUS_TONE[status])}>
       {STATUS_RULES[status].label}
     </span>
   );
@@ -73,11 +98,10 @@ export function PriorityChip({
   priority: Priority | null;
   overridden?: boolean;
 }) {
-  if (!priority) return <span className="erp-null">미지정</span>;
+  if (!priority) return <span className="s">미지정</span>;
   return (
     <span
-      className="erp-chip"
-      data-tone={PRIORITY_TONE[priority]}
+      className={chipClass(PRIORITY_TONE[priority])}
       title={overridden ? "사람이 올린 등급" : undefined}
     >
       {priority}
@@ -94,9 +118,7 @@ export function Note({
   children: ReactNode;
 }) {
   return (
-    <p className="erp-note" data-tone={tone} style={{ margin: 0 }}>
-      {children}
-    </p>
+    <div className={tone === "alert" ? "alertbox" : "note"}>{children}</div>
   );
 }
 
@@ -112,12 +134,12 @@ export function Card({
   body?: boolean;
 }) {
   return (
-    <section className="erp-card">
+    <section className="card">
       <header>
         <span>{title}</span>
         {meta ? <span>{meta}</span> : null}
       </header>
-      {body ? <div className="erp-card-body">{children}</div> : children}
+      {body ? <div className="card-b">{children}</div> : children}
     </section>
   );
 }

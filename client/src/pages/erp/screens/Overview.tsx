@@ -41,17 +41,19 @@ export function OverviewScreen() {
   const lastBlock = cashflow.data?.blocks.at(-1);
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>종합 현황</h1>
-        <p>
-          {me.data ? `${me.data.role} 권한으로 보고 있습니다. ` : ""}
-          지표마다 확정도가 붙습니다. 계산 불가는 오류가 아니라 「무엇이 아직
-          없다」는 답입니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>종합 현황</h1>
+          <div className="desc">
+            {me.data ? `${me.data.role} 권한으로 보고 있습니다. ` : ""}
+            지표마다 확정도가 붙습니다. 계산 불가는 오류가 아니라 「무엇이 아직
+            없다」는 답입니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="보유현금"
           value={won(position.data?.cashOnHand ?? null) ?? "계산 불가"}
@@ -118,8 +120,8 @@ export function OverviewScreen() {
         meta={`${migration.data?.entryCount ?? 0}건 원장 · ${migration.data?.snapshotCount ?? 0}행 일계`}
         body={false}
       >
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>#</th>
@@ -134,10 +136,10 @@ export function OverviewScreen() {
                 <tr key={check.id}>
                   <td style={{ fontFamily: "var(--mono)" }}>{check.id}</td>
                   <td>{check.name}</td>
-                  <td className="erp-null">{check.formula}</td>
+                  <td className="s">{check.formula}</td>
                   <td>
                     <span
-                      className="erp-chip"
+                      className="chip"
                       data-tone={
                         check.verdict === "pass"
                           ? "ok"
@@ -171,8 +173,8 @@ export function OverviewScreen() {
       ) : null}
 
       <Card title="지금 막고 있는 것" meta="코드로 해결되지 않는 항목">
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>#</th>
@@ -194,28 +196,20 @@ export function OverviewScreen() {
       </Card>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        <button
-          type="button"
-          className="erp-btn"
-          onClick={() => goto("cashflow")}
-        >
+        <button type="button" className="btn" onClick={() => goto("cashflow")}>
           현금흐름표로
         </button>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           onClick={() => goto("cash-position")}
         >
           현금 현황으로
         </button>
-        <button
-          type="button"
-          className="erp-btn"
-          onClick={() => goto("approvals")}
-        >
+        <button type="button" className="btn" onClick={() => goto("approvals")}>
           승인 대기로
         </button>
       </div>
-    </div>
+    </>
   );
 }

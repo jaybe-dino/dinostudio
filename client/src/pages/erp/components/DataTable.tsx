@@ -63,8 +63,8 @@ export function DataTable<T>({
   };
 
   return (
-    <div className="erp-scroll">
-      <table className="erp-table">
+    <div className="scroll">
+      <table>
         <thead>
           <tr>
             {columns.map(column => {

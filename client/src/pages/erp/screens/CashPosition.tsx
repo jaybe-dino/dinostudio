@@ -65,7 +65,7 @@ export function CashPositionScreen() {
       header: "집행원장",
       sortValue: l => l.entry.code,
       render: l => (
-        <button className="erp-code" onClick={() => openEntry(l.entry.code)}>
+        <button className="m" onClick={() => openEntry(l.entry.code)}>
           {l.entry.code}
         </button>
       ),
@@ -108,7 +108,7 @@ export function CashPositionScreen() {
       render: l => (
         <>
           <Money value={l.amountUsed} reason={l.entry.undecidedReason} />
-          {l.isCandidate ? <span className="erp-null"> 후보</span> : null}
+          {l.isCandidate ? <span className="s"> 후보</span> : null}
         </>
       ),
     },
@@ -138,16 +138,18 @@ export function CashPositionScreen() {
   ];
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>현금 현황</h1>
-        <p>
-          집행원장을 지급 우선순위로 접은 뷰입니다. 카드 한도는 현금이 아니므로
-          보유현금에서 제외합니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>현금 현황</h1>
+          <div className="desc">
+            집행원장을 지급 우선순위로 접은 뷰입니다. 카드 한도는 현금이
+            아니므로 보유현금에서 제외합니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="보유현금"
           value={won(data?.cashOnHand ?? null) ?? "계산 불가"}
@@ -179,7 +181,7 @@ export function CashPositionScreen() {
       >
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           aria-pressed={includeUndecided}
           onClick={() => {
             const next = !includeUndecided;
@@ -192,12 +194,12 @@ export function CashPositionScreen() {
         </button>
         {simulating ? (
           <>
-            <span className="erp-chip" data-tone="info">
+            <span className="chip">
               시뮬레이션 {overrides.length}건 — 저장되지 않습니다
             </span>
             <button
               type="button"
-              className="erp-btn"
+              className="btn"
               onClick={() => runSimulation([])}
             >
               초기화
@@ -219,7 +221,7 @@ export function CashPositionScreen() {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           aria-pressed={showForm}
           onClick={() => setShowForm(v => !v)}
         >
@@ -227,7 +229,7 @@ export function CashPositionScreen() {
         </button>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           onClick={() => setShowExport(true)}
         >
           내보내기
@@ -276,8 +278,8 @@ export function CashPositionScreen() {
           ))}
         </div>
 
-        <div className="erp-filters" style={{ marginTop: 12 }}>
-          <label className="erp-field">
+        <div className="filters" style={{ marginTop: 12 }}>
+          <label className="field">
             <span>집행원장 코드</span>
             <input
               value={draft.code}
@@ -287,7 +289,7 @@ export function CashPositionScreen() {
               }
             />
           </label>
-          <label className="erp-field">
+          <label className="field">
             <span>올릴 등급</span>
             <select
               value={draft.priority}
@@ -302,7 +304,7 @@ export function CashPositionScreen() {
               ))}
             </select>
           </label>
-          <label className="erp-field" style={{ flex: "1 1 220px" }}>
+          <label className="field" style={{ flex: "1 1 220px" }}>
             <span>사유 (필수)</span>
             <input
               value={draft.reason}
@@ -311,7 +313,7 @@ export function CashPositionScreen() {
           </label>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             disabled={!draft.code || !draft.reason.trim() || simulate.isPending}
             onClick={() => {
               runSimulation([
@@ -324,7 +326,7 @@ export function CashPositionScreen() {
             부족액 재계산
           </button>
         </div>
-        <p className="erp-null" style={{ marginTop: 6 }}>
+        <p className="s" style={{ marginTop: 6 }}>
           여기서 바꾼 등급은 화면에서만 반영됩니다. 원장에 남기려면 코드를 눌러
           상세에서 저장하십시오.
         </p>
@@ -341,6 +343,6 @@ export function CashPositionScreen() {
           </p>
         </Card>
       ) : null}
-    </div>
+    </>
   );
 }

@@ -81,16 +81,19 @@ export function SettingsScreen() {
   const empty = rows.filter(s => s.value == null);
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>기준값</h1>
-        <p>
-          숫자를 코드에 박지 않고 전부 여기에 둡니다. 임시값으로 개발을 진행하되
-          값이 확정되면 이 화면에서 교체하고, 교체 이력은 감사로그에 남습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>기준값</h1>
+          <div className="desc">
+            숫자를 코드에 박지 않고 전부 여기에 둡니다. 임시값으로 개발을
+            진행하되 값이 확정되면 이 화면에서 교체하고, 교체 이력은 감사로그에
+            남습니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="기준값"
           value={`${rows.length}개`}
@@ -125,8 +128,8 @@ export function SettingsScreen() {
       </Note>
 
       <Card title="설정" meta={`${rows.length}개`} body={false}>
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>키</th>
@@ -145,7 +148,7 @@ export function SettingsScreen() {
                   <td className="wrap">{LABELS[setting.key] ?? "—"}</td>
                   <td className="num">
                     {setting.value == null ? (
-                      <span className="erp-null">미확정</span>
+                      <span className="s">미확정</span>
                     ) : typeof setting.value === "number" ? (
                       setting.value.toLocaleString("ko-KR")
                     ) : (
@@ -154,14 +157,14 @@ export function SettingsScreen() {
                   </td>
                   <td>
                     <span
-                      className="erp-chip"
+                      className="chip"
                       data-tone={setting.isProvisional ? "warn" : "ok"}
                     >
                       {setting.isProvisional ? "임시" : "확정"}
                     </span>
                   </td>
                   <td>{setting.ownerRole ?? "—"}</td>
-                  <td className="erp-null">
+                  <td className="s">
                     {setting.updatedAt ? setting.updatedAt.slice(0, 10) : "—"}
                   </td>
                   <td>
@@ -177,7 +180,10 @@ export function SettingsScreen() {
                               : String(setting.value))
                         }
                         onChange={e =>
-                          setDraft(prev => ({ ...prev, [setting.key]: e.target.value }))
+                          setDraft(prev => ({
+                            ...prev,
+                            [setting.key]: e.target.value,
+                          }))
                         }
                         disabled={!canWrite}
                         style={{
@@ -190,12 +196,19 @@ export function SettingsScreen() {
                       />
                       <button
                         type="button"
-                        className="erp-btn"
-                        disabled={!canWrite || draft[setting.key] === undefined || put.isPending}
+                        className="btn"
+                        disabled={
+                          !canWrite ||
+                          draft[setting.key] === undefined ||
+                          put.isPending
+                        }
                         onClick={() =>
                           put.mutate({
                             key: setting.key,
-                            value: parseValue(setting.key, draft[setting.key] ?? ""),
+                            value: parseValue(
+                              setting.key,
+                              draft[setting.key] ?? ""
+                            ),
                             // 사람이 확정한 값이므로 임시 배지를 뗀다
                             isProvisional: false,
                           })
@@ -211,6 +224,6 @@ export function SettingsScreen() {
           </table>
         </div>
       </Card>
-    </div>
+    </>
   );
 }

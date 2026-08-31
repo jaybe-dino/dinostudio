@@ -97,14 +97,16 @@ export function CashflowScreen() {
   }, [nextCursor, cashflow.isFetching]);
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>현금흐름표</h1>
-        <p>
-          집행원장을 발생일로 접은 뷰입니다. 별도 테이블에 저장하지 않고 매번
-          원장에서 계산합니다 — 화면마다 숫자가 다를 수 없습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>현금흐름표</h1>
+          <div className="desc">
+            집행원장을 발생일로 접은 뷰입니다. 별도 테이블에 저장하지 않고 매번
+            원장에서 계산합니다 — 화면마다 숫자가 다를 수 없습니다.
+          </div>
+        </div>
+      </div>
 
       <div
         style={{
@@ -118,7 +120,7 @@ export function CashflowScreen() {
           <button
             key={u.key}
             type="button"
-            className="erp-btn"
+            className="btn"
             aria-pressed={unit === u.key}
             onClick={() => {
               setUnit(u.key);
@@ -129,12 +131,12 @@ export function CashflowScreen() {
             {u.label}
           </button>
         ))}
-        <button type="button" className="erp-btn" onClick={() => setOpen({})}>
+        <button type="button" className="btn" onClick={() => setOpen({})}>
           전체 접기
         </button>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           onClick={() =>
             setOpen(Object.fromEntries(shown.map(b => [b.key, true])))
           }
@@ -143,13 +145,13 @@ export function CashflowScreen() {
         </button>
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           onClick={() => setShowExport(true)}
         >
           내보내기
         </button>
         {cashflow.data ? (
-          <span className="erp-chip" data-tone="alert">
+          <span className="chip a">
             판정 대기 {cashflow.data.excludedUndecided.n}건 제외 중
           </span>
         ) : null}
@@ -160,9 +162,9 @@ export function CashflowScreen() {
         <Note tone="alert">{cashflow.error.message}</Note>
       ) : null}
 
-      <section className="erp-card">
+      <section className="card">
         {cashflow.isLoading ? (
-          <div className="erp-card-body erp-null">불러오는 중…</div>
+          <div className="card-b s">불러오는 중…</div>
         ) : null}
         {shown.map(block => {
           const expanded = open[block.key] ?? false;
@@ -170,44 +172,60 @@ export function CashflowScreen() {
             .concat(block.inEntries)
             .filter(e => matchesQuery(query, e.code, e.title, e.noteRaw));
           return (
-            <div className="erp-block" key={block.key}>
-              <div
-                className="erp-block-head"
+            <div className="dayblk" key={block.key}>
+              <button
+                type="button"
+                className="dayblk-h"
+                aria-expanded={expanded}
                 onClick={() =>
                   setOpen(prev => ({ ...prev, [block.key]: !expanded }))
                 }
+                style={{
+                  width: "100%",
+                  border: 0,
+                  borderBottom: "1px solid var(--rule)",
+                  font: "inherit",
+                  textAlign: "left",
+                  cursor: "pointer",
+                }}
               >
-                <strong>
+                <span className="d">
                   {expanded ? "▾" : "▸"} {blockLabel(block.key)}
-                  {block.isMigrated ? (
-                    <span
-                      className="erp-chip"
-                      data-tone="info"
-                      style={{ marginLeft: 8 }}
-                    >
-                      이관 구간 · 건별 명세 없음
+                </span>
+                {block.isMigrated ? (
+                  <span className="chip n">이관 구간 · 건별 명세 없음</span>
+                ) : null}
+                <span className="r">
+                  {block.undecided.length > 0 ? (
+                    <span className="chip w">
+                      판정 대기 {block.undecided.length}건
                     </span>
                   ) : null}
-                </strong>
-                <div className="erp-block-figures">
-                  <span>
-                    시작 <b>{won(block.open) ?? "계산 불가"}</b>
-                  </span>
-                  <span>
-                    지출 <b>{won(block.outSum)}</b>
-                  </span>
-                  <span>
-                    입금 <b>{won(block.inSum)}</b>
-                  </span>
-                  <span>
-                    종료{" "}
-                    <b
-                      style={{
-                        color: block.close == null ? "var(--muted)" : undefined,
-                      }}
-                    >
-                      {won(block.close) ?? "계산 불가"}
-                    </b>
+                </span>
+              </button>
+
+              <div className="daysum">
+                <div>
+                  <span className="lb">시작</span>
+                  <span className="vv">{won(block.open) ?? "계산 불가"}</span>
+                </div>
+                <div>
+                  <span className="lb">지출</span>
+                  <span className="vv">{won(block.outSum)}</span>
+                </div>
+                <div>
+                  <span className="lb">입금</span>
+                  <span className="vv">{won(block.inSum)}</span>
+                </div>
+                <div>
+                  <span className="lb">종료</span>
+                  <span
+                    className="vv"
+                    style={{
+                      color: block.close == null ? "var(--muted)" : undefined,
+                    }}
+                  >
+                    {won(block.close) ?? "계산 불가"}
                   </span>
                 </div>
               </div>
@@ -229,7 +247,7 @@ export function CashflowScreen() {
                     </div>
                   ) : null}
 
-                  <div className="erp-split">
+                  <div className="grid2">
                     <SideTable
                       title="지출"
                       entries={rows.filter(e => e.direction === "out")}
@@ -243,7 +261,7 @@ export function CashflowScreen() {
                   </div>
 
                   {block.pendingEntries.length > 0 ? (
-                    <div className="erp-pending-panel">
+                    <div className="pend">
                       <div
                         style={{
                           display: "flex",
@@ -265,7 +283,7 @@ export function CashflowScreen() {
                         </strong>
                         <button
                           type="button"
-                          className="erp-btn"
+                          className="btn"
                           disabled={bulk.isPending}
                           onClick={() =>
                             bulk.mutate({
@@ -277,8 +295,8 @@ export function CashflowScreen() {
                           이 기간 전체 승인
                         </button>
                       </div>
-                      <div className="erp-scroll">
-                        <table className="erp-table">
+                      <div className="scroll">
+                        <table>
                           <thead>
                             <tr>
                               <th>집행원장</th>
@@ -294,7 +312,7 @@ export function CashflowScreen() {
                               <tr key={entry.code}>
                                 <td>
                                   <button
-                                    className="erp-code"
+                                    className="m"
                                     onClick={() => openEntry(entry.code)}
                                   >
                                     {entry.code}
@@ -321,7 +339,7 @@ export function CashflowScreen() {
                                 <td>
                                   <button
                                     type="button"
-                                    className="erp-btn"
+                                    className="btn"
                                     disabled={
                                       approve.isPending || entry.amount == null
                                     }
@@ -358,19 +376,19 @@ export function CashflowScreen() {
       {nextCursor ? (
         <button
           type="button"
-          className="erp-btn"
+          className="btn"
           disabled={cashflow.isFetching}
           onClick={() => setCursor(nextCursor)}
         >
           이전 {PAGE}블록 더 보기 ({totalBlocks - shown.length}블록 남음)
         </button>
       ) : (
-        <p className="erp-null" style={{ margin: 0 }}>
+        <p className="s" style={{ margin: 0 }}>
           블록 {shown.length}개 전부 표시됨
         </p>
       )}
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="확정만 계에 들어갑니다"
           value="원칙 7"
@@ -422,7 +440,7 @@ export function CashflowScreen() {
           이어집니다.
         </p>
       </Card>
-    </div>
+    </>
   );
 }
 
@@ -450,8 +468,8 @@ function SideTable({
       >
         {title} · {entries.length}건
       </div>
-      <div className="erp-scroll">
-        <table className="erp-table">
+      <div className="scroll">
+        <table>
           <thead>
             <tr>
               <th>집행원장</th>
@@ -472,10 +490,7 @@ function SideTable({
               entries.map(entry => (
                 <tr key={entry.code}>
                   <td>
-                    <button
-                      className="erp-code"
-                      onClick={() => onOpen(entry.code)}
-                    >
+                    <button className="m" onClick={() => onOpen(entry.code)}>
                       {entry.code}
                     </button>
                   </td>
@@ -483,7 +498,7 @@ function SideTable({
                   <td className="wrap">
                     {entry.title || "(항목명 없음)"}
                     {entry.noteRaw ? (
-                      <span className="erp-null"> · {entry.noteRaw}</span>
+                      <span className="s"> · {entry.noteRaw}</span>
                     ) : null}
                   </td>
                   <td>{accountLabel(entry.accountCode)}</td>

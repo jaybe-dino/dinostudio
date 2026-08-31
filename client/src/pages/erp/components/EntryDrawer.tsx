@@ -66,19 +66,19 @@ export function EntryDrawer({
 
   return (
     <>
-      <div className="erp-drawer-backdrop" onClick={onClose} />
-      <aside className="erp-drawer" role="dialog" aria-label={`${code} 상세`}>
+      <div className="scrim" onClick={onClose} />
+      <aside className="drawer" role="dialog" aria-label={`${code} 상세`}>
         <header>
-          <span className="erp-code">{code}</span>
-          <button type="button" className="erp-btn" onClick={onClose}>
+          <span className="m">{code}</span>
+          <button type="button" className="btn" onClick={onClose}>
             닫기
           </button>
         </header>
 
-        <div className="erp-drawer-body">
-          {detail.isLoading ? <p className="erp-null">불러오는 중…</p> : null}
+        <div className="drawer-b">
+          {detail.isLoading ? <p className="s">불러오는 중…</p> : null}
           {detail.error ? (
-            <p className="erp-note" data-tone="alert">
+            <p className="note" data-tone="alert">
               {detail.error.message}
             </p>
           ) : null}
@@ -96,7 +96,7 @@ export function EntryDrawer({
                 />
                 {entry.masked ? (
                   <span
-                    className="erp-chip"
+                    className="chip"
                     data-tone="info"
                     style={{ marginLeft: 6 }}
                   >
@@ -106,22 +106,22 @@ export function EntryDrawer({
               </div>
 
               {entry.masked && entry.maskReason ? (
-                <p className="erp-note" data-tone="warn">
+                <p className="note" data-tone="warn">
                   {entry.maskReason}
                 </p>
               ) : null}
               {entry.undecidedReason ? (
-                <p className="erp-note" data-tone="alert">
+                <p className="note" data-tone="alert">
                   판정 대기 사유 — {entry.undecidedReason}
                 </p>
               ) : null}
 
-              <dl className="erp-kv">
+              <dl className="f2">
                 <dt>금액</dt>
                 <dd>
                   <Money value={entry.amount} reason={entry.undecidedReason} />
                   {entry.amount == null && entry.amountCandidate != null ? (
-                    <span className="erp-null">
+                    <span className="s">
                       {" "}
                       · 적요칸 후보{" "}
                       {entry.amountCandidate.toLocaleString("ko-KR")}
@@ -129,7 +129,7 @@ export function EntryDrawer({
                   ) : null}
                 </dd>
                 <dt>적요 원문</dt>
-                <dd>{entry.noteRaw ?? <span className="erp-null">—</span>}</dd>
+                <dd>{entry.noteRaw ?? <span className="s">—</span>}</dd>
                 <dt>입출금일</dt>
                 <dd>{entry.cashDate ?? "—"}</dd>
                 <dt>손익 귀속일</dt>
@@ -163,7 +163,7 @@ export function EntryDrawer({
               </dl>
 
               {detail.data!.duplicates.length > 0 ? (
-                <p className="erp-note" data-tone="warn">
+                <p className="note" data-tone="warn">
                   중복 의심 —{" "}
                   {detail
                     .data!.duplicates.map(
@@ -174,7 +174,7 @@ export function EntryDrawer({
               ) : null}
 
               {detail.data!.related.length > 0 ? (
-                <p className="erp-note">
+                <p className="note">
                   연결 —{" "}
                   {detail
                     .data!.related.map(r => `${r.code} (${r.status})`)
@@ -192,7 +192,7 @@ export function EntryDrawer({
                 >
                   처리
                 </h4>
-                <label className="erp-field">
+                <label className="field">
                   <span>사유 (반려·보류·취소·등급 상향에 필수)</span>
                   <textarea
                     rows={2}
@@ -210,7 +210,7 @@ export function EntryDrawer({
                 >
                   <button
                     type="button"
-                    className="erp-btn"
+                    className="btn"
                     data-variant="primary"
                     disabled={busy || entry.status !== "pending"}
                     onClick={() =>
@@ -221,7 +221,7 @@ export function EntryDrawer({
                   </button>
                   <button
                     type="button"
-                    className="erp-btn"
+                    className="btn"
                     disabled={busy || !reason.trim()}
                     onClick={() =>
                       reject.mutate({ code, version: entry.version, reason })
@@ -231,7 +231,7 @@ export function EntryDrawer({
                   </button>
                   <button
                     type="button"
-                    className="erp-btn"
+                    className="btn"
                     disabled={busy || !reason.trim()}
                     onClick={() =>
                       hold.mutate({ code, version: entry.version, reason })
@@ -241,7 +241,7 @@ export function EntryDrawer({
                   </button>
                   <button
                     type="button"
-                    className="erp-btn"
+                    className="btn"
                     data-variant="danger"
                     disabled={
                       busy || !reason.trim() || entry.status !== "confirmed"
@@ -264,7 +264,7 @@ export function EntryDrawer({
                     marginTop: 10,
                   }}
                 >
-                  <label className="erp-field">
+                  <label className="field">
                     <span>우선순위 상향</span>
                     <select
                       value={priority}
@@ -282,7 +282,7 @@ export function EntryDrawer({
                   </label>
                   <button
                     type="button"
-                    className="erp-btn"
+                    className="btn"
                     disabled={busy || (priority !== "" && !reason.trim())}
                     onClick={() =>
                       setPriorityOverride.mutate({
@@ -296,14 +296,14 @@ export function EntryDrawer({
                     등급 저장
                   </button>
                 </div>
-                <p className="erp-null" style={{ marginTop: 6 }}>
+                <p className="s" style={{ marginTop: 6 }}>
                   계정 기본값은 지우지 않고 override만 덮어씁니다. 등급을 올리면
                   사유가 원장에 남습니다.
                 </p>
               </div>
 
               {error ? (
-                <p className="erp-note" data-tone="alert">
+                <p className="note" data-tone="alert">
                   {error}
                 </p>
               ) : null}
@@ -322,7 +322,7 @@ export function EntryDrawer({
                 </h4>
                 {detail.data!.revisions.length === 0 &&
                 detail.data!.approvals.length === 0 ? (
-                  <p className="erp-null">기록 없음</p>
+                  <p className="s">기록 없음</p>
                 ) : (
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {detail.data!.approvals.map(a => (
@@ -353,7 +353,7 @@ export function EntryDrawer({
                   전표
                 </h4>
                 {detail.data!.journals.length === 0 ? (
-                  <p className="erp-null">
+                  <p className="s">
                     {entry.status !== "confirmed"
                       ? "확정 전에는 전표가 생성되지 않습니다"
                       : entry.accountCode == null

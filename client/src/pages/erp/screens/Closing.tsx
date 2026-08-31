@@ -40,17 +40,20 @@ export function ClosingScreen() {
   );
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>월 마감</h1>
-        <p>
-          마감된 기간의 건은 수정 자체를 거부합니다. 마감은 blockers가 하나도
-          없을 때만 성공하고, 잔액이 안 맞으면 차액을 조정 전표로 만들어 억지로
-          맞추지 않습니다 — 불일치를 그대로 노출하는 것이 설계 의도입니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>월 마감</h1>
+          <div className="desc">
+            마감된 기간의 건은 수정 자체를 거부합니다. 마감은 blockers가 하나도
+            없을 때만 성공하고, 잔액이 안 맞으면 차액을 조정 전표로 만들어
+            억지로 맞추지 않습니다 — 불일치를 그대로 노출하는 것이 설계
+            의도입니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="마감된 월"
           value={`${periods.filter(p => p.status === "closed").length}개`}
@@ -72,14 +75,14 @@ export function ClosingScreen() {
       </div>
 
       <Card title="마감 실행">
-        <div className="erp-filters">
-          <label className="erp-field">
+        <div className="filters">
+          <label className="field">
             <span>대상 월 (YYYY-MM)</span>
             <input value={ym} onChange={e => setYm(e.target.value)} />
           </label>
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             data-variant="primary"
             disabled={close.isPending}
             onClick={() => close.mutate({ ym })}
@@ -104,8 +107,8 @@ export function ClosingScreen() {
       </Card>
 
       <Card title="기간" meta={`${periods.length}개`} body={false}>
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>기간</th>
@@ -127,7 +130,7 @@ export function ClosingScreen() {
                     <td style={{ fontFamily: "var(--mono)" }}>{period.ym}</td>
                     <td>
                       <span
-                        className="erp-chip"
+                        className="chip"
                         data-tone={period.status === "closed" ? "ok" : "warn"}
                       >
                         {period.status === "closed" ? "마감" : "열림"}
@@ -144,6 +147,6 @@ export function ClosingScreen() {
           </table>
         </div>
       </Card>
-    </div>
+    </>
   );
 }

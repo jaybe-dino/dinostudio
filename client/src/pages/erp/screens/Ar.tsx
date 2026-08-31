@@ -22,7 +22,7 @@ export function ArScreen() {
       header: "집행원장",
       sortValue: l => l.entry.code,
       render: l => (
-        <button className="erp-code" onClick={() => openEntry(l.entry.code)}>
+        <button className="m" onClick={() => openEntry(l.entry.code)}>
           {l.entry.code}
         </button>
       ),
@@ -56,13 +56,11 @@ export function ArScreen() {
       sortValue: l => (l.entry.invoiceIssued ? 1 : 0),
       render: l =>
         l.entry.invoiceIssued ? (
-          <span className="erp-chip" data-tone="ok">
+          <span className="chip g">
             발행 완료{l.entry.invoiceNo ? ` · ${l.entry.invoiceNo}` : ""}
           </span>
         ) : (
-          <span className="erp-chip" data-tone="warn">
-            발행 전
-          </span>
+          <span className="chip w">발행 전</span>
         ),
     },
     {
@@ -73,7 +71,7 @@ export function ArScreen() {
         l.dueDate ? (
           shortDate(l.dueDate)
         ) : (
-          <span className="erp-null">{l.dueDateBlockedBy ?? "산출 불가"}</span>
+          <span className="s">{l.dueDateBlockedBy ?? "산출 불가"}</span>
         ),
     },
     ...(showDday
@@ -85,7 +83,7 @@ export function ArScreen() {
             sortValue: l => l.dDay,
             render: l =>
               l.dDay == null ? (
-                <span className="erp-null">—</span>
+                <span className="s">—</span>
               ) : (
                 <span
                   style={{ color: l.dDay > 0 ? "var(--alert)" : undefined }}
@@ -111,17 +109,20 @@ export function ArScreen() {
     );
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>채권 관리</h1>
-        <p>
-          미수는 계산서가 발행된 미입금 건만입니다. 발행 전은 회수 문제가 아니라
-          계약 마무리·검수 문제이므로 목록을 나눕니다 — 하나로 합치면 독촉
-          메일을 잘못 보내고, 정작 확정서를 안 받은 건은 아무도 챙기지 않습니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>채권 관리</h1>
+          <div className="desc">
+            미수는 계산서가 발행된 미입금 건만입니다. 발행 전은 회수 문제가
+            아니라 계약 마무리·검수 문제이므로 목록을 나눕니다 — 하나로 합치면
+            독촉 메일을 잘못 보내고, 정작 확정서를 안 받은 건은 아무도 챙기지
+            않습니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="미수 (발행분)"
           value={won(ar.data?.receivableTotal ?? null) ?? "—"}
@@ -214,6 +215,6 @@ export function ArScreen() {
           <li>월 마감 시 발행 대기 잔량을 매출 인식 시점 검토 대상으로 넘김</li>
         </ul>
       </Card>
-    </div>
+    </>
   );
 }

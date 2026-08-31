@@ -61,7 +61,7 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
         <>
           {l.debt.term}
           {l.debt.isRelatedParty ? (
-            <span className="erp-chip" style={{ marginLeft: 4 }}>
+            <span className="chip" style={{ marginLeft: 4 }}>
               특수관계
             </span>
           ) : null}
@@ -79,8 +79,7 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
       key: "maturity",
       header: "만기",
       sortValue: l => l.debt.maturityDate ?? "",
-      render: l =>
-        l.debt.maturityDate ?? <span className="erp-null">미확인</span>,
+      render: l => l.debt.maturityDate ?? <span className="s">미확인</span>,
     },
     {
       key: "dday",
@@ -88,11 +87,7 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
       numeric: true,
       sortValue: l => l.dDay,
       render: l =>
-        l.dDay == null ? (
-          <span className="erp-null">발동 불가</span>
-        ) : (
-          `D-${l.dDay}`
-        ),
+        l.dDay == null ? <span className="s">발동 불가</span> : `D-${l.dDay}`,
     },
     {
       key: "interest",
@@ -109,7 +104,7 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
       sortValue: l => l.state,
       render: l => (
         <span
-          className="erp-chip"
+          className="chip"
           data-tone={
             l.state === "만기 미확인"
               ? "alert"
@@ -142,7 +137,7 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
           />
           <button
             type="button"
-            className="erp-btn"
+            className="btn"
             disabled={!edit[l.debt.id] || upsert.isPending}
             onClick={() =>
               upsert.mutate({
@@ -160,16 +155,18 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
 
   if (variant === "ledger") {
     return (
-      <div className="erp-page">
-        <header>
-          <h1>부채 원장</h1>
-          <p>
-            만기·이자율·상환조건이 확인되면 13주 자금계획의 상환 라인과 만기
-            알람이 함께 살아납니다. 지금은 다섯 건 전부 미확인입니다.
-          </p>
-        </header>
+      <>
+        <div className="ph">
+          <div>
+            <h1>부채 원장</h1>
+            <div className="desc">
+              만기·이자율·상환조건이 확인되면 13주 자금계획의 상환 라인과 만기
+              알람이 함께 살아납니다. 지금은 다섯 건 전부 미확인입니다.
+            </div>
+          </div>
+        </div>
 
-        <div className="erp-tiles">
+        <div className="kpis">
           <Tile
             label="총 부채"
             value={won(debt.data?.total ?? null) ?? "계산 불가"}
@@ -231,7 +228,7 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
             분류합니다.
           </p>
         </Card>
-      </div>
+      </>
     );
   }
 
@@ -270,23 +267,25 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
   ];
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>부채 · 조달</h1>
-        <p>
-          협상장에서 통하는 말은 「매출이 늘고 있습니다」가 아니라 「기여이익이
-          월 X, 커버리지가 Y까지 왔습니다」입니다. 그 숫자가 나오려면
-          만기·이자·귀속이 먼저 채워져야 합니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>부채 · 조달</h1>
+          <div className="desc">
+            협상장에서 통하는 말은 「매출이 늘고 있습니다」가 아니라
+            「기여이익이 월 X, 커버리지가 Y까지 왔습니다」입니다. 그 숫자가
+            나오려면 만기·이자·귀속이 먼저 채워져야 합니다.
+          </div>
+        </div>
+      </div>
 
       <Card
         title="조달 게이트"
         meta={`${gates.filter(g => g.fired).length}건 발동 · ${gates.filter(g => g.blocked).length}건 판정 불가`}
         body={false}
       >
-        <div className="erp-scroll">
-          <table className="erp-table">
+        <div className="scroll">
+          <table>
             <thead>
               <tr>
                 <th>게이트</th>
@@ -298,12 +297,12 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
               {gates.map(gate => (
                 <tr key={gate.label}>
                   <td>{gate.label}</td>
-                  <td className={gate.blocked ? "erp-null" : undefined}>
+                  <td className={gate.blocked ? "s" : undefined}>
                     {gate.value}
                   </td>
                   <td>
                     <span
-                      className="erp-chip"
+                      className="chip"
                       data-tone={
                         gate.fired ? "alert" : gate.blocked ? "warn" : "ok"
                       }
@@ -341,6 +340,6 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
           <li>재협상 자료 — 기여이익·커버리지 데이터로 금리·만기 재협상</li>
         </ol>
       </Card>
-    </div>
+    </>
   );
 }

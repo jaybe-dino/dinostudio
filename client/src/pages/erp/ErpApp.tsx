@@ -5,6 +5,7 @@
  * 원장(원본)이 맨 위, 그 원장을 접은 화면이 그다음. 첫 진입은 현금흐름표다.
  */
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -15,6 +16,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { EntryDrawer } from "./components/EntryDrawer";
 import { ErpUiContext } from "./context";
+import "./design.css";
 import "./erp.css";
 import { AccountsScreen } from "./screens/Accounts";
 import { ApprovalsScreen } from "./screens/Approvals";
@@ -380,69 +382,82 @@ export default function ErpApp() {
 
   return (
     <ErpUiContext.Provider value={ui}>
-      <div className="erp-root">
-        <div className="erp-shell">
-          <nav className="erp-rail" aria-label="화면">
-            <div className="erp-rail-brand">
-              DINOSTUDIO
-              <small>경영관리 시스템 · 34화면</small>
+      <div className="erp-app">
+        <div className="app">
+          <aside className="rail">
+            <div className="rail-top">
+              <div className="co">디노스튜디오</div>
+              <div className="sub">경영관리 시스템</div>
             </div>
-            {GROUPS.map(group => (
-              <div className="erp-rail-group" key={group}>
-                <span>{group}</span>
-                {SCREENS.filter(s => s.group === group).map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-current={item.id === screenId ? "page" : undefined}
-                    onClick={() => ui.goto(item.id)}
-                    title={item.hint}
-                  >
-                    <span>{item.label}</span>
-                    <span className="erp-null" style={{ fontSize: 10 }}>
-                      {item.stage}차
-                    </span>
-                  </button>
-                ))}
+            <nav aria-label="모듈">
+              {GROUPS.map(group => (
+                <Fragment key={group}>
+                  <div className="grp">{group}</div>
+                  {SCREENS.filter(s => s.group === group).map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="nav"
+                      aria-current={item.id === screenId ? "page" : undefined}
+                      onClick={() => ui.goto(item.id)}
+                      title={item.hint}
+                    >
+                      <span
+                        className={`dot${item.stage === 1 ? " a" : item.stage === 2 ? " w" : ""}`}
+                      />
+                      {item.label}
+                      <span className="cnt">{item.stage}차</span>
+                    </button>
+                  ))}
+                </Fragment>
+              ))}
+            </nav>
+          </aside>
+
+          <div className="main">
+            <header className="top">
+              <div className="crumb">
+                <span>{screen.group}</span>
+                <span>›</span>
+                <b>{screen.label}</b>
               </div>
-            ))}
-            <div className="erp-rail-group">
-              <span>2 · 3차</span>
-              <p className="erp-null" style={{ padding: "0 8px", margin: 0 }}>
-                채권 · 부채 · 13주 · 전표 · 손익 · 재무제표 5종은 1차가 실사용에
-                들어간 뒤 붙입니다.
-              </p>
-            </div>
-          </nav>
-
-          <main className="erp-main">
-            <div className="erp-topbar">
-              <button
-                type="button"
-                className="erp-btn"
-                onClick={() => setPaletteOpen(true)}
-              >
-                화면 이동 <span className="erp-null">⌘K</span>
-              </button>
-              <input
-                value={query}
-                placeholder="이 화면의 표에서 검색 — 코드 · 항목 · 적요"
-                onChange={event => setQuery(event.target.value)}
-              />
-              {me.data ? (
-                <span className="erp-chip" data-tone="info">
-                  {me.data.role}
+              <div className="top-r">
+                <span className="qbox">
+                  <span className="k">⌕</span>
+                  <input
+                    value={query}
+                    placeholder="이 화면 행 검색"
+                    aria-label="현재 화면의 표 행 검색"
+                    onChange={event => setQuery(event.target.value)}
+                  />
                 </span>
-              ) : null}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setPaletteOpen(true)}
+                  title="화면 이동 (⌘K)"
+                >
+                  화면 이동{" "}
+                  <span className="m" style={{ opacity: 0.6 }}>
+                    ⌘K
+                  </span>
+                </button>
+                {me.data ? (
+                  <span className="pill live">{me.data.role}</span>
+                ) : null}
+                {me.error ? <span className="chip a">역할 미지정</span> : null}
+                {me.data ? <span>{me.data.id}</span> : null}
+              </div>
+            </header>
+
+            <section className="screen on">
               {me.error ? (
-                <span className="erp-chip" data-tone="alert">
-                  역할 미지정
-                </span>
-              ) : null}
-            </div>
-
-            {me.error ? <SignIn message={me.error.message} /> : screen.render()}
-          </main>
+                <SignIn message={me.error.message} />
+              ) : (
+                screen.render()
+              )}
+            </section>
+          </div>
         </div>
 
         {paletteOpen ? (
@@ -587,31 +602,31 @@ function SignIn({ message }: { message: string }) {
         </p>
       </header>
 
-      <section className="erp-card">
+      <section className="card">
         <div
-          className="erp-card-body"
+          className="card-b"
           style={{ display: "flex", flexDirection: "column", gap: 12 }}
         >
           {needsRole ? (
-            <p className="erp-note" data-tone="warn" style={{ margin: 0 }}>
+            <p className="note" data-tone="warn" style={{ margin: 0 }}>
               {message}
             </p>
           ) : null}
 
           {noMethod ? (
             <>
-              <p className="erp-note" data-tone="alert" style={{ margin: 0 }}>
+              <p className="note" data-tone="alert" style={{ margin: 0 }}>
                 서버에 로그인 수단이 설정되지 않았습니다. 들어올 수 있는 방법이
                 없는 상태입니다.
               </p>
-              <p className="erp-null" style={{ margin: 0 }}>
+              <p className="s" style={{ margin: 0 }}>
                 배포 환경변수에 <code>ERP_PASSWORD</code> (비밀번호 로그인) 또는{" "}
                 <code>GOOGLE_CLIENT_ID</code> ·{" "}
                 <code>GOOGLE_CLIENT_SECRET</code> (구글 SSO) 중 하나를 넣고{" "}
                 <b>재배포</b>해야 합니다. 환경변수는 배포 시점에 함께 굳으므로,
                 추가만 하고 재배포하지 않으면 반영되지 않습니다.
               </p>
-              <p className="erp-null" style={{ margin: 0 }}>
+              <p className="s" style={{ margin: 0 }}>
                 현재 설정 상태는 <a href="/api/diag">/api/diag</a> 에서 확인할
                 수 있습니다 (값은 나오지 않고 설정 여부만 표시됩니다).
               </p>
@@ -623,7 +638,7 @@ function SignIn({ message }: { message: string }) {
               onSubmit={submit}
               style={{ display: "flex", flexDirection: "column", gap: 10 }}
             >
-              <label className="erp-field">
+              <label className="field">
                 <span>회사 이메일</span>
                 <input
                   type="email"
@@ -635,7 +650,7 @@ function SignIn({ message }: { message: string }) {
                   placeholder="name@dinostudio.kr"
                 />
               </label>
-              <label className="erp-field">
+              <label className="field">
                 <span>비밀번호</span>
                 <input
                   type="password"
@@ -647,13 +662,13 @@ function SignIn({ message }: { message: string }) {
                 />
               </label>
               {error ? (
-                <p className="erp-note" data-tone="alert" style={{ margin: 0 }}>
+                <p className="note" data-tone="alert" style={{ margin: 0 }}>
                   {error}
                 </p>
               ) : null}
               <div>
                 <button
-                  className="erp-btn"
+                  className="btn"
                   data-variant="primary"
                   type="submit"
                   disabled={busy}
@@ -667,7 +682,7 @@ function SignIn({ message }: { message: string }) {
           {!needsRole && methods?.google ? (
             <div>
               <a
-                className="erp-btn"
+                className="btn"
                 href={`/api/auth/google/start?next=${encodeURIComponent(window.location.pathname || "/")}`}
               >
                 구글 워크스페이스 계정으로 로그인
@@ -675,7 +690,7 @@ function SignIn({ message }: { message: string }) {
             </div>
           ) : null}
 
-          <p className="erp-null" style={{ margin: 0 }}>
+          <p className="s" style={{ margin: 0 }}>
             허용된 도메인·계정만 들어올 수 있습니다. 로그인 후 역할(대표 ·
             부대표 · 재무 · 사업부 리더 · 담당자 · 외부 세무)에 따라 보이는
             화면과 승인 한도가 달라집니다.
@@ -711,7 +726,7 @@ function CommandPalette({
   }, [text]);
 
   return (
-    <div className="erp-palette" onClick={onClose}>
+    <div className="pal" onClick={onClose}>
       <div onClick={event => event.stopPropagation()}>
         <input
           ref={inputRef}
@@ -736,17 +751,16 @@ function CommandPalette({
             <li key={item.id} data-active={index === cursor}>
               <button type="button" onClick={() => onPick(item.id)}>
                 <span>
-                  {item.label}{" "}
-                  <span className="erp-null">· {item.stage}차</span>
+                  {item.label} <span className="s">· {item.stage}차</span>
                 </span>
-                <span className="erp-null">{item.hint}</span>
+                <span className="s">{item.hint}</span>
               </button>
             </li>
           ))}
           {matches.length === 0 ? (
             <li>
               <button type="button" disabled>
-                <span className="erp-null">일치하는 화면이 없습니다</span>
+                <span className="s">일치하는 화면이 없습니다</span>
               </button>
             </li>
           ) : null}

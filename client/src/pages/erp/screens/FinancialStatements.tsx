@@ -35,29 +35,31 @@ export function FinancialStatementsScreen() {
             : [];
 
   return (
-    <div className="erp-page">
-      <header>
-        <h1>재무제표 5종</h1>
-        <p>
-          재무상태표 · 손익계산서 · 현금흐름표 · 자본변동표 · 주석. 전부 전표
-          누계에서 생성되고 화면용 별도 집계 테이블을 두지 않습니다.
-          현금흐름표는 직접법이며 §8.3의 3구간 자동 판정을 그대로 씁니다.
-        </p>
-      </header>
+    <>
+      <div className="ph">
+        <div>
+          <h1>재무제표 5종</h1>
+          <div className="desc">
+            재무상태표 · 손익계산서 · 현금흐름표 · 자본변동표 · 주석. 전부 전표
+            누계에서 생성되고 화면용 별도 집계 테이블을 두지 않습니다.
+            현금흐름표는 직접법이며 §8.3의 3구간 자동 판정을 그대로 씁니다.
+          </div>
+        </div>
+      </div>
 
-      <div className="erp-filters">
+      <div className="filters">
         {KINDS.map(k => (
           <button
             key={k.key}
             type="button"
-            className="erp-btn"
+            className="btn"
             aria-pressed={kind === k.key}
             onClick={() => setKind(k.key)}
           >
             {k.label}
           </button>
         ))}
-        <label className="erp-field">
+        <label className="field">
           <span>기간 — 비우면 전체 누계</span>
           <input
             placeholder="2026-08"
@@ -66,7 +68,7 @@ export function FinancialStatementsScreen() {
           />
         </label>
         <span
-          className="erp-chip"
+          className="chip"
           data-tone={fs.data?.status === "확정" ? "ok" : "warn"}
         >
           {fs.data?.status ?? "—"}
@@ -93,8 +95,8 @@ export function FinancialStatementsScreen() {
           meta={ym || "전체 기간"}
           body={false}
         >
-          <div className="erp-scroll">
-            <table className="erp-table">
+          <div className="scroll">
+            <table>
               <thead>
                 <tr>
                   <th>항목</th>
@@ -115,12 +117,12 @@ export function FinancialStatementsScreen() {
                     <td>{row.label}</td>
                     <td className="num">
                       {row.amount == null ? (
-                        <span className="erp-null">계산 불가</span>
+                        <span className="s">계산 불가</span>
                       ) : (
                         signedWon(row.amount)
                       )}
                     </td>
-                    <td className="wrap erp-null">{row.note ?? ""}</td>
+                    <td className="wrap s">{row.note ?? ""}</td>
                   </tr>
                 ))}
               </tbody>
@@ -129,7 +131,7 @@ export function FinancialStatementsScreen() {
         </Card>
       )}
 
-      <div className="erp-tiles">
+      <div className="kpis">
         <Tile
           label="가결산 / 확정"
           value={fs.data?.status ?? "—"}
@@ -148,6 +150,6 @@ export function FinancialStatementsScreen() {
           note="조정 전표로 메우지 않습니다"
         />
       </div>
-    </div>
+    </>
   );
 }
