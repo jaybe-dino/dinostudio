@@ -514,6 +514,11 @@ function SignIn({ message }: { message: string }) {
     };
   }, []);
 
+  // 서버가 "둘 다 꺼져 있다"고 확실히 답한 경우에만 참이다.
+  // 조회가 실패해 methods 가 null 인 것과 구분해야 한다 — 그때는 폼을 계속 보여준다.
+  const noMethod =
+    !needsRole && methods != null && !methods.password && !methods.google;
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
@@ -593,7 +598,27 @@ function SignIn({ message }: { message: string }) {
             </p>
           ) : null}
 
-          {!needsRole && methods?.password !== false ? (
+          {noMethod ? (
+            <>
+              <p className="erp-note" data-tone="alert" style={{ margin: 0 }}>
+                서버에 로그인 수단이 설정되지 않았습니다. 들어올 수 있는 방법이
+                없는 상태입니다.
+              </p>
+              <p className="erp-null" style={{ margin: 0 }}>
+                배포 환경변수에 <code>ERP_PASSWORD</code> (비밀번호 로그인) 또는{" "}
+                <code>GOOGLE_CLIENT_ID</code> ·{" "}
+                <code>GOOGLE_CLIENT_SECRET</code> (구글 SSO) 중 하나를 넣고{" "}
+                <b>재배포</b>해야 합니다. 환경변수는 배포 시점에 함께 굳으므로,
+                추가만 하고 재배포하지 않으면 반영되지 않습니다.
+              </p>
+              <p className="erp-null" style={{ margin: 0 }}>
+                현재 설정 상태는 <a href="/api/diag">/api/diag</a> 에서 확인할
+                수 있습니다 (값은 나오지 않고 설정 여부만 표시됩니다).
+              </p>
+            </>
+          ) : null}
+
+          {!needsRole && !noMethod && methods?.password !== false ? (
             <form
               onSubmit={submit}
               style={{ display: "flex", flexDirection: "column", gap: 10 }}
