@@ -62,7 +62,11 @@ export function BurnRateScreen() {
         <Tile
           label="예약런웨이"
           value={metric(data?.reserved, "개월")}
-          note="(보유현금 − 승인대기) ÷ 월 번레이트"
+          note={
+            data?.reservedDeductions.taxPayable == null
+              ? "(보유현금 − 승인대기) ÷ 월 번레이트 · 예수금 미반영"
+              : `(보유현금 − 승인대기 ${won(data.reservedDeductions.pendingApproval)} − 예수금·세금 ${won(data.reservedDeductions.taxPayable)}) ÷ 월 번레이트`
+          }
           tone={data?.reserved.value == null ? "null" : undefined}
         />
       </div>

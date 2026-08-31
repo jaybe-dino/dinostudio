@@ -63,6 +63,10 @@ import {
   readyToStart,
   type ScoreInput,
   type ThresholdState,
+  INSURANCE_PAYABLE_ACCOUNT,
+  VAT_INPUT_ACCOUNT,
+  VAT_OUTPUT_ACCOUNT,
+  WITHHOLDING_PAYABLE_ACCOUNT,
 } from "../../shared/erp/index.js";
 import type {
   Account,
@@ -471,9 +475,35 @@ export class LedgerService {
             ? confirmedInterest.reduce((a, b) => a + b, 0)
             : null,
         expectedRunwayWeeks: forecast.expectedRunwayWeeks,
+        taxPayable: await this.taxPayableBalance(),
       }),
       opex: opexBreakdown(entries),
     };
+  }
+
+  /**
+   * 예수금 + 미지급세금 잔액 — 전표에서 계산한다.
+   *
+   * 부가세는 예수(매출세액) − 대급(매입세액) 차액만 납부하므로 상계한다.
+   * 원천세·4대보험은 상계 대상이 없어 잔액 그대로가 납부액이다.
+   */
+  private async taxPayableBalance(): Promise<number | null> {
+    const journals = await this.store.listJournals();
+    if (journals.length === 0) return null;
+
+    const balance = (code: string) =>
+      journals
+        .flatMap(j => j.lines)
+        .filter(l => l.accountCode === code)
+        .reduce((sum, l) => sum + l.credit - l.debit, 0);
+
+    // 부채 계정이므로 대변 잔액이 「내야 할 돈」이다
+    const vatNet = balance(VAT_OUTPUT_ACCOUNT) - balance(VAT_INPUT_ACCOUNT);
+    const withheld =
+      balance(WITHHOLDING_PAYABLE_ACCOUNT) + balance(INSURANCE_PAYABLE_ACCOUNT);
+
+    // 환급 상황(음수)은 0 으로 본다 — 받을 돈을 런웨이에 더해 주면 낙관 편향이 생긴다
+    return Math.max(0, vatNet) + Math.max(0, withheld);
   }
 
   /**

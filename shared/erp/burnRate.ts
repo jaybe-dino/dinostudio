@@ -80,6 +80,10 @@ export interface RunwaySet {
   simple: Metric;
   expected: Metric;
   reserved: Metric;
+  reservedDeductions: {
+    pendingApproval: number;
+    taxPayable: number | null;
+  };
   conditions: BurnCondition[];
   conditionsMet: number;
 }
@@ -92,6 +96,11 @@ export interface RunwayInput {
   payrollMonthly: number | null;
   /** 구독 원장 등록 여부 */
   subscriptionsRegistered: boolean;
+  /**
+   * 예수금 + 미지급세금 잔액 — 이미 확정된 유출이므로 예약런웨이에서 뺀다.
+   * 모르면 0 이 아니라 undefined 로 두고, 화면에 「반영 안 됨」을 표시한다.
+   */
+  taxPayable?: number | null;
   /** 차입 이자 월액 — 약정서 확인분 */
   debtMonthlyInterest: number | null;
   /** §9.5에서 나온 예상런웨이 (주) */
@@ -199,9 +208,22 @@ export function buildRunway(input: RunwayInput): RunwaySet {
     monthlyBurn && monthlyBurn > 0 && input.cashOnHand != null
       ? Number((input.cashOnHand / monthlyBurn).toFixed(2))
       : null;
+  /**
+   * 이미 확정된 유출 — 예수금과 미지급세금.
+   *
+   * 승인 대기만 빼면 「다음 달 납부할 부가세·원천세」가 안 보인다.
+   * 그건 결정을 기다리는 돈이 아니라 이미 남의 돈이다 (docs/erp-qa.md C1).
+   */
+  const taxPayable = input.taxPayable ?? 0;
+
   const reservedValue =
     monthlyBurn && monthlyBurn > 0 && input.cashOnHand != null
-      ? Number(((input.cashOnHand - reservedPending) / monthlyBurn).toFixed(2))
+      ? Number(
+          (
+            (input.cashOnHand - reservedPending - taxPayable) /
+            monthlyBurn
+          ).toFixed(2)
+        )
       : null;
 
   return {
@@ -219,6 +241,11 @@ export function buildRunway(input: RunwayInput): RunwaySet {
       blockedBy: input.expectedRunwayWeeks == null ? blockedBy : [],
     },
     reserved: metric("예약런웨이", reservedValue, "burn_rate_unavailable"),
+    /** 예약런웨이가 무엇을 뺐는지 — 숫자만 주면 왜 줄었는지 알 수 없다 */
+    reservedDeductions: {
+      pendingApproval: reservedPending,
+      taxPayable: input.taxPayable ?? null,
+    },
     conditions,
     conditionsMet: met,
   };

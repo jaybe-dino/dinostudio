@@ -1,3 +1,4 @@
+import type { IncomeType } from "./withholding.js";
 /**
  * 디노스튜디오 경영관리 시스템 — 1차 오픈 도메인 타입
  *
@@ -156,6 +157,13 @@ export interface Entry {
    * 지키려면 전사 총액 건과 개인 건을 구분할 수 있어야 한다. docs/erp-spec-gaps.md 참조.
    */
   isPersonal: boolean;
+  /**
+   * 지급 대상의 소득 구분 — 있으면 전표에서 원천징수를 분리한다 (docs/erp-qa.md A2).
+   * 없으면 분리하지 않는다. 모르는 세금을 만들어 내면 신고가 틀린다.
+   */
+  incomeType?: IncomeType | null;
+  /** 근로소득처럼 비율로 계산할 수 없는 경우의 원천징수 실액 */
+  withheldAmount?: number | null;
   /** 낙관적 잠금 (§4 동시성) */
   version: number;
   createdAt: string;

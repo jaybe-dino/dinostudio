@@ -4,6 +4,10 @@
  */
 import { counterAccountFor, findAccount } from "./accounts.js";
 import { VAT_INPUT_ACCOUNT, VAT_OUTPUT_ACCOUNT, splitVat } from "./vat.js";
+import {
+  WITHHOLDING_PAYABLE_ACCOUNT,
+  splitWithholding,
+} from "./withholding.js";
 import type { Entry, Journal, JournalLine } from "./types.js";
 
 export interface IdFactory {
@@ -55,12 +59,32 @@ export function buildJournal(
     projectId: entry.projectId,
   });
 
+  /**
+   * 원천징수 — 지급액과 비용이 다르다.
+   * amount 는 실제로 나간 현금(net)이므로 총액을 역산해 비용에 잡고,
+   * 차액을 예수금으로 남긴다. 예수금을 잡지 않으면 다음 달 납부액이 어디에도 없다.
+   */
+  const withholding = splitWithholding({
+    amount,
+    incomeType: entry.incomeType,
+    mode: "net",
+    withheldOverride: entry.withheldAmount ?? null,
+  });
+
   const lines: JournalLine[] = [];
   if (outward) {
-    // 비용·자산은 공급가액만, 세액은 자산(부가세대급금)으로 따로
-    lines.push(line(entry.accountCode, split.supply, 0));
-    if (split.vat !== 0) lines.push(line(VAT_INPUT_ACCOUNT, split.vat, 0));
-    lines.push(line(counter, 0, amount));
+    if (withholding.withheld !== 0) {
+      // 비용은 총액 · 현금은 실지급액 · 차액은 예수금
+      // (원천징수 건은 부가세 대상이 아니므로 세액 분리와 겹치지 않는다)
+      lines.push(line(entry.accountCode, withholding.gross, 0));
+      lines.push(line(WITHHOLDING_PAYABLE_ACCOUNT, 0, withholding.withheld));
+      lines.push(line(counter, 0, amount));
+    } else {
+      // 비용·자산은 공급가액만, 세액은 자산(부가세대급금)으로 따로
+      lines.push(line(entry.accountCode, split.supply, 0));
+      if (split.vat !== 0) lines.push(line(VAT_INPUT_ACCOUNT, split.vat, 0));
+      lines.push(line(counter, 0, amount));
+    }
   } else {
     lines.push(line(counter, amount, 0));
     lines.push(line(entry.accountCode, 0, split.supply));
