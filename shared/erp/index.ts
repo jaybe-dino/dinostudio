@@ -1,5 +1,6 @@
 export * from "./types.js";
 export * from "./time.js";
+export * from "./vat.js";
 export * from "./accounts.js";
 export * from "./codes.js";
 export * from "./status.js";

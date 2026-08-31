@@ -3,6 +3,7 @@
  * 사양서는 3차로 잡았지만 인수 기준 T1 ⑤가 1차에서 전표 1건 생성을 요구한다.
  */
 import { counterAccountFor, findAccount } from "./accounts.js";
+import { VAT_INPUT_ACCOUNT, VAT_OUTPUT_ACCOUNT, splitVat } from "./vat.js";
 import type { Entry, Journal, JournalLine } from "./types.js";
 
 export interface IdFactory {
@@ -12,16 +13,34 @@ export interface IdFactory {
 /**
  * 지출: 비용·자산 차변 · 현금(또는 카드미지급금) 대변
  * 수입: 현금 차변 · 수익·부채 대변
- * 차변 합 == 대변 합을 언제나 만족한다.
+ *
+ * 과세 건에 적격증빙이 붙어 있으면 세액을 분리해 3줄이 된다 —
+ *   지출: 비용(공급가액) + 부가세대급금(세액) / 현금(공급대가)
+ *   수입: 현금(공급대가) / 수익(공급가액) + 예수부가세(세액)
+ * 어느 경우에도 차변 합 == 대변 합이다 (assertBalanced 로 강제한다).
  */
-export function buildJournal(entry: Entry, newId: IdFactory): Journal | null {
+export function buildJournal(
+  entry: Entry,
+  newId: IdFactory,
+  /**
+   * 적격증빙(세금계산서·카드전표·현금영수증)이 붙어 있는가.
+   * 전표를 만드는 시점에만 알 수 있으므로 서비스가 넘겨 준다.
+   * 기본값을 false 로 두어, 모르면 세액을 만들지 않는다.
+   */
+  options: { hasQualifiedEvidence?: boolean } = {}
+): Journal | null {
   if (entry.amount == null || !entry.accountCode) return null;
   const journalId = newId();
   const counter = counterAccountFor(entry.payMethod);
   const amount = entry.amount; // 취소 전표(-C)는 음수 그대로 상계된다
   const outward = entry.direction === "out";
-  const debitAccount = outward ? entry.accountCode : counter;
-  const creditAccount = outward ? counter : entry.accountCode;
+
+  const split = splitVat({
+    amount,
+    accountCode: entry.accountCode,
+    hasQualifiedEvidence: options.hasQualifiedEvidence ?? false,
+  });
+
   const line = (
     accountCode: string,
     debit: number,
@@ -35,15 +54,47 @@ export function buildJournal(entry: Entry, newId: IdFactory): Journal | null {
     buCode: entry.buCode,
     projectId: entry.projectId,
   });
-  return {
+
+  const lines: JournalLine[] = [];
+  if (outward) {
+    // 비용·자산은 공급가액만, 세액은 자산(부가세대급금)으로 따로
+    lines.push(line(entry.accountCode, split.supply, 0));
+    if (split.vat !== 0) lines.push(line(VAT_INPUT_ACCOUNT, split.vat, 0));
+    lines.push(line(counter, 0, amount));
+  } else {
+    lines.push(line(counter, amount, 0));
+    lines.push(line(entry.accountCode, 0, split.supply));
+    if (split.vat !== 0) lines.push(line(VAT_OUTPUT_ACCOUNT, 0, split.vat));
+  }
+
+  const journal: Journal = {
     id: journalId,
     entryId: entry.id,
     journalDate: entry.cashDate ?? entry.accrualDate ?? "",
     memo: entry.title || entry.noteRaw,
     auto: true,
     reversedBy: null,
-    lines: [line(debitAccount, amount, 0), line(creditAccount, 0, amount)],
+    lines,
   };
+  assertBalanced(journal);
+  return journal;
+}
+
+/**
+ * 차변 합 == 대변 합을 단정한다.
+ *
+ * 2줄 분개일 때는 구조상 늘 맞았지만, 세액 분리로 3줄이 되면서 반올림 한 원에
+ * 균형이 깨질 수 있다. 균형이 깨진 전표는 저장되면 시산표 전체를 못 믿게 되므로
+ * 만드는 자리에서 막는다 (docs/erp-qa.md A9).
+ */
+export function assertBalanced(journal: Journal): void {
+  const debit = journal.lines.reduce((sum, l) => sum + l.debit, 0);
+  const credit = journal.lines.reduce((sum, l) => sum + l.credit, 0);
+  if (debit !== credit) {
+    throw new Error(
+      `전표 ${journal.id} 의 차변 ${debit} 과 대변 ${credit} 이 맞지 않습니다 — 저장하지 않습니다`
+    );
+  }
 }
 
 export interface TrialBalanceRow {

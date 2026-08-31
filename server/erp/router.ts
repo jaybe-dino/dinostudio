@@ -107,6 +107,7 @@ export const erpRouter = router({
           amount: z.number().int().nullable(),
           amountCandidate: z.number().int().nullable().optional(),
           cashDate: z.string(),
+          accrualDate: z.string().nullable().optional(),
           accountCode: z.string().nullable().optional(),
           nature: z
             .enum([

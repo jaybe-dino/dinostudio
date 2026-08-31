@@ -384,6 +384,38 @@ describe("T12 — 8월 마감 시도", () => {
   });
 });
 
+describe("D4 마감 차단 — 발생월·지급월 둘 다", () => {
+  it("발생월이 마감되면 지급월이 열려 있어도 수정되지 않는다", async () => {
+    const svc = freshService();
+    // 8월 발생 · 9월 지급 건을 만들고 8월만 마감한다
+    const created = await svc.createEntry(
+      {
+        direction: "out",
+        title: "발생 8월 · 지급 9월",
+        amount: 500_000,
+        accountCode: "6310",
+        accrualDate: "2026-08-20",
+        cashDate: "2026-09-05",
+      },
+      CFO
+    );
+    // 발생일과 지급일이 실제로 다르게 저장되어야 이 테스트가 의미를 갖는다
+    expect(created.entry.accrualDate).toBe("2026-08-20");
+    expect(created.entry.cashDate).toBe("2026-09-05");
+
+    await svc.putSetting("closed_periods", ["2026-08"], false, CEO);
+
+    await expect(
+      svc.patchEntry(
+        created.entry.code,
+        { title: "고침" },
+        created.entry.version,
+        CFO
+      )
+    ).rejects.toMatchObject({ code: "period_closed" });
+  });
+});
+
 describe("T13 — 셀릿 7,500,000과 같은 거래처·금액을 3일 내 재등록", () => {
   it("duplicate_suspected 경고 · 강행 시 사유가 감사로그에 남는다", async () => {
     const service = freshService();

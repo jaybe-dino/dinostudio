@@ -49,6 +49,7 @@ import {
   settingValue,
   STATUS_RULES,
   checkEvidenceInput,
+  evidenceKindSpec,
   evidenceRisk,
   type EvidenceStorage,
 } from "../../shared/erp/index.js";
@@ -921,7 +922,9 @@ export class LedgerService {
       risk: evidenceRisk({
         direction: entry.direction,
         amount: entry.amount,
-        isEntertainment: entry.accountCode === "6410",
+        // 접대비 계정이 마스터에 없다 (docs/erp-qa.md B2) — 생기면 여기서 판정한다.
+        // 6410 은 지급임차료이므로 접대비로 볼 수 없다.
+        isEntertainment: false,
         attachments: attachments.map(a => ({
           kind: a.kind,
           storage: a.storage,
@@ -968,6 +971,11 @@ export class LedgerService {
       amount: number | null;
       amountCandidate?: number | null;
       cashDate: string;
+      /**
+       * 귀속일(발생일). 없으면 지급일과 같다고 본다.
+       * 손익은 이 날짜를, 현금흐름은 cashDate 를 축으로 쓴다 (docs/erp-qa.md A4).
+       */
+      accrualDate?: string | null;
       accountCode?: string | null;
       nature?: Entry["nature"];
       buCode?: Entry["buCode"];
@@ -1013,7 +1021,7 @@ export class LedgerService {
       amountVat: null,
       currency: "KRW",
       cashDate: input.cashDate,
-      accrualDate: input.cashDate,
+      accrualDate: input.accrualDate ?? input.cashDate,
       startDate: null,
       deliverDate: null,
       requestDate: null,
@@ -1513,14 +1521,27 @@ export class LedgerService {
     if (!parsed) throw erpError("invalid_transition", { code });
     const settings = await this.store.listSettings();
     const closed = settingValue<string[]>(settings, "closed_periods") ?? [];
-    const ym = (entry.cashDate ?? entry.accrualDate ?? "").slice(0, 7);
-    if (ym && closed.includes(ym)) throw erpError("period_closed", { ym });
+    // 발생월과 지급월을 모두 본다 — 하나만 보면 발생월이 마감된 건이 통과한다
+    // (docs/erp-qa.md D4)
+    for (const date of [entry.accrualDate, entry.cashDate]) {
+      const ym = (date ?? "").slice(0, 7);
+      if (ym && closed.includes(ym)) throw erpError("period_closed", { ym });
+    }
     return entry;
   }
 
   /** 원장이 확정되는 순간 전표(분개)가 자동 생성된다. 사람이 분개를 만들지 않는다 (원칙 12). */
   private async createJournal(entry: Entry): Promise<Journal | null> {
-    const journal = buildJournal(entry, () => randomUUID());
+    // 세액을 분리할지는 붙어 있는 증빙으로 갈린다 — 적격증빙이 없으면 분리하지 않는다
+    const attachments = await this.store.listAttachments(entry.id);
+    const hasQualifiedEvidence = attachments.some(
+      a =>
+        a.storage !== "none" &&
+        (evidenceKindSpec(a.kind)?.vatDeductible ?? false)
+    );
+    const journal = buildJournal(entry, () => randomUUID(), {
+      hasQualifiedEvidence,
+    });
     if (journal) await this.store.appendJournal(journal);
     return journal;
   }
