@@ -20,6 +20,7 @@ import { ErpUiContext } from "./context";
 import "./design.css";
 import { AccountsScreen } from "./screens/Accounts";
 import { AgentsScreen } from "./screens/Agents";
+import { ReconcileScreen } from "./screens/Reconcile";
 import { ApprovalsScreen } from "./screens/Approvals";
 import { TodayScreen } from "./screens/Today";
 import { ArScreen } from "./screens/Ar";
@@ -348,6 +349,14 @@ const SCREENS: ScreenDef[] = [
     hint: "탭 구분 텍스트",
     stage: 3,
     render: () => <OpsScreen variant="report" />,
+  },
+  {
+    id: "reconcile",
+    label: "은행 대사",
+    group: "연결 · 자동화",
+    hint: "거래내역 붙여넣기 · 안 맞는 것만 남김",
+    stage: 2,
+    render: () => <ReconcileScreen />,
   },
   {
     id: "agents",
