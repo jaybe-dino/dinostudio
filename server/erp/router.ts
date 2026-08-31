@@ -415,6 +415,16 @@ export const erpRouter = router({
     return run(() => getLedgerService().runway());
   }),
 
+  /** GET /decisions — 오늘의 3가지 · 결정 큐 (E3) */
+  decisions: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().decisions(actorFrom(ctx)))
+  ),
+
+  /** GET /agents — 에이전트 13종 현황 */
+  agents: protectedProcedure.query(() =>
+    run(() => getLedgerService().agents())
+  ),
+
   pnl: protectedProcedure
     .input(
       z

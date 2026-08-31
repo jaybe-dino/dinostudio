@@ -52,6 +52,17 @@ import {
   evidenceKindSpec,
   evidenceRisk,
   type EvidenceStorage,
+  AGENTS,
+  BLOCKERS,
+  GATES,
+  LEVEL_POLICY,
+  PERMANENTLY_FORBIDDEN,
+  activeBlockers,
+  buildDecisionQueue,
+  ownerTop,
+  readyToStart,
+  type ScoreInput,
+  type ThresholdState,
 } from "../../shared/erp/index.js";
 import type {
   Account,
@@ -462,6 +473,101 @@ export class LedgerService {
         expectedRunwayWeeks: forecast.expectedRunwayWeeks,
       }),
       opex: opexBreakdown(entries),
+    };
+  }
+
+  /**
+   * GET /decisions — 오늘의 3가지 · 결정 큐 (E3 비서실장)
+   *
+   * 4축 점수를 서버에서 한 번 계산한다. 화면이 각자 계산하면 순위가 갈리고,
+   * 「같은 입력이면 같은 순위」라는 약속이 깨진다.
+   */
+  async decisions(actor: Actor) {
+    const [entries, settings, runway] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listSettings(),
+      this.runway(),
+    ]);
+
+    const monthlyBurn = runway.burnRate.value;
+    // 예상런웨이는 주 단위 지표로 나온다 (§9.6)
+    const expectedWeeks = runway.expected.value;
+
+    // 임계선은 회사 상태이므로 모든 안건에 같은 점수가 붙는다.
+    // 예상런웨이 4주 미만이 심각선, 8주 미만이 경보선이다 (조달은 8주가 협상 가능한 최소).
+    const threshold: ThresholdState =
+      expectedWeeks == null
+        ? "approaching"
+        : expectedWeeks < 4
+          ? "critical"
+          : expectedWeeks < 8
+            ? "warning"
+            : "clear";
+
+    const today = kstToday();
+    const openStatuses: Entry["status"][] = ["pending", "held", "undecided"];
+    const candidates: ScoreInput[] = entries
+      .filter(e => openStatuses.includes(e.status))
+      .map(e => ({
+        code: e.code,
+        title: e.title || e.noteRaw || e.code,
+        status: e.status,
+        priority: resolvePriority(e),
+        payMethod: e.payMethod,
+        amount: e.amount,
+        due: e.dueDate ?? e.cashDate,
+      }));
+
+    const queue = buildDecisionQueue(candidates, {
+      today,
+      monthlyBurn,
+      threshold,
+    });
+
+    return {
+      today,
+      threshold,
+      monthlyBurn,
+      expectedRunwayWeeks: expectedWeeks,
+      // 대표에게 올라가는 것과 걸러진 것을 나눠서 준다
+      owner: ownerTop(queue),
+      queue,
+      counts: {
+        owner: queue.filter(q => q.routing === "대표").length,
+        leader: queue.filter(q => q.routing === "리더").length,
+        held: queue.filter(q => q.routing === "보류함").length,
+      },
+      // 급여가 섞여 있으면 역할에 따라 금액이 가려진다
+      role: actor.role,
+    };
+  }
+
+  /**
+   * GET /agents — 에이전트 13종 현황
+   *
+   * 정확도·처리량은 내보내지 않는다. 측정된 적이 없으므로 목표치를 실측처럼
+   * 보여 주면 돌고 있다고 착각하게 된다.
+   */
+  async agents() {
+    const env = {
+      SLACK_NOTIFY_CHANNEL: Boolean(process.env.SLACK_NOTIFY_CHANNEL),
+      DATABASE_URL: Boolean(process.env.DATABASE_URL),
+      ANTHROPIC_API_KEY: Boolean(process.env.ANTHROPIC_API_KEY),
+    };
+    return {
+      agents: AGENTS,
+      levelPolicy: LEVEL_POLICY,
+      forbidden: PERMANENTLY_FORBIDDEN,
+      gates: GATES,
+      blockers: activeBlockers(env),
+      allBlockers: BLOCKERS,
+      readyToStart: readyToStart(),
+      env,
+      counts: {
+        designed: AGENTS.length,
+        implemented: AGENTS.filter(a => a.implemented).length,
+        ready: readyToStart().length,
+      },
     };
   }
 

@@ -26,3 +26,25 @@ export function kstIso(now: Date = new Date()): string {
 export function kstMonth(now: Date = new Date()): string {
   return kstToday(now).slice(0, 7);
 }
+
+/**
+ * 두 날짜 사이의 영업일 수 (주말 제외, 시작일 제외 · 종료일 포함).
+ *
+ * 「3영업일 내」 같은 기한 판정에 쓴다. 달력일로 세면 금요일 기한이
+ * 수요일에도 「2일 남음」으로 읽혀 실제보다 여유가 있어 보인다.
+ *
+ * 공휴일은 반영하지 않는다 — 공휴일 표를 들고 있지 않으므로,
+ * 세는 것보다 적게 남았을 수 있다는 쪽으로만 틀린다.
+ */
+export function businessDaysBetween(from: string, to: string): number {
+  if (to <= from) return 0;
+  let days = 0;
+  const cursor = new Date(`${from}T00:00:00+09:00`);
+  const end = new Date(`${to}T00:00:00+09:00`);
+  while (cursor < end) {
+    cursor.setDate(cursor.getDate() + 1);
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) days += 1;
+  }
+  return days;
+}

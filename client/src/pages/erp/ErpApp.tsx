@@ -18,7 +18,9 @@ import { EntryDrawer } from "./components/EntryDrawer";
 import { ErpUiContext } from "./context";
 import "./design.css";
 import { AccountsScreen } from "./screens/Accounts";
+import { AgentsScreen } from "./screens/Agents";
 import { ApprovalsScreen } from "./screens/Approvals";
+import { TodayScreen } from "./screens/Today";
 import { ArScreen } from "./screens/Ar";
 import { BurnRateScreen } from "./screens/BurnRate";
 import { CashPositionScreen } from "./screens/CashPosition";
@@ -97,6 +99,14 @@ const SCREENS: ScreenDef[] = [
     hint: "자동 판정 3종",
     stage: 1,
     render: () => <AccountsScreen />,
+  },
+  {
+    id: "today",
+    label: "오늘의 3가지",
+    group: "지금 쓰는 것",
+    hint: "4축 점수 · 결정 큐 · 리더 라우팅",
+    stage: 1,
+    render: () => <TodayScreen />,
   },
   {
     id: "cashflow",
@@ -337,6 +347,14 @@ const SCREENS: ScreenDef[] = [
     hint: "탭 구분 텍스트",
     stage: 3,
     render: () => <OpsScreen variant="report" />,
+  },
+  {
+    id: "agents",
+    label: "에이전트 13종",
+    group: "연결 · 자동화",
+    hint: "역할 · 의존 · 자동화 레벨 · 막는 것",
+    stage: 3,
+    render: () => <AgentsScreen />,
   },
 ];
 
