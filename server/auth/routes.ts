@@ -57,6 +57,8 @@ export function registerGoogleAuthRoutes(app: Express) {
       "Set-Cookie",
       serializeCookie(SESSION_COOKIE, token, {
         maxAge: SESSION_MAX_AGE_SECONDS,
+        // 다른 사이트에서 넘어온 요청에는 세션을 실어 보내지 않는다
+        sameSite: "Strict",
         secure,
       })
     );
@@ -115,6 +117,8 @@ export function registerGoogleAuthRoutes(app: Express) {
       res.setHeader("Set-Cookie", [
         serializeCookie(SESSION_COOKIE, token, {
           maxAge: SESSION_MAX_AGE_SECONDS,
+          // 다른 사이트에서 넘어온 요청에는 세션을 실어 보내지 않는다
+          sameSite: "Strict",
           secure,
         }),
         serializeCookie(STATE_COOKIE, "", { maxAge: 0, secure }),

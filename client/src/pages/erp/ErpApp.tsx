@@ -383,6 +383,9 @@ export default function ErpApp() {
 
   const me = trpc.erp.me.useQuery(undefined, { retry: false });
   const screen = SCREENS.find(s => s.id === screenId) ?? SCREENS[4];
+  // 서버가 역할까지 확인해 준 경우에만 화면 구조를 그린다.
+  // isLoading 동안에도 그리지 않는다 — 잠깐이라도 보이면 새는 것이다.
+  const authed = Boolean(me.data?.role);
 
   const ui = useMemo(
     () => ({
@@ -414,86 +417,113 @@ export default function ErpApp() {
   return (
     <ErpUiContext.Provider value={ui}>
       <div className="erp-app">
-        <div className="app">
-          <aside className="rail">
-            <div className="rail-top">
-              <div className="co">디노스튜디오</div>
-              <div className="sub">경영관리 시스템</div>
-            </div>
-            <nav aria-label="모듈">
-              {GROUPS.map(group => (
-                <Fragment key={group}>
-                  <div className="grp">{group}</div>
-                  {SCREENS.filter(s => s.group === group).map(item => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="nav"
-                      aria-current={item.id === screenId ? "page" : undefined}
-                      onClick={() => ui.goto(item.id)}
-                      title={item.hint}
-                    >
-                      <span
-                        className={`dot${item.stage === 1 ? " a" : item.stage === 2 ? " w" : ""}`}
-                      />
-                      {item.label}
-                      <span className="cnt">{item.stage}차</span>
-                    </button>
-                  ))}
-                </Fragment>
-              ))}
-            </nav>
-          </aside>
-
-          <div className="main">
-            <header className="top">
-              <div className="crumb">
-                <span>{screen.group}</span>
-                <span>›</span>
-                <b>{screen.label}</b>
+        {/*
+         * 로그인 전에는 껍데기를 보여 주지 않는다.
+         *
+         * 레일에는 36개 화면 이름이 있고 거기에 「급여」·「부채」·「재무제표」가 들어 있다.
+         * 주소만 알면 회사가 무엇을 관리하는지, 조직이 어떻게 생겼는지 읽힌다.
+         * 로그인 화면은 로그인 외에 아무것도 알려주지 않아야 한다.
+         */}
+        {authed ? (
+          <div className="app">
+            <aside className="rail">
+              <div className="rail-top">
+                <div className="co">디노스튜디오</div>
+                <div className="sub">경영관리 시스템</div>
               </div>
-              <div className="top-r">
-                <span className="qbox">
-                  <span className="k">⌕</span>
-                  <input
-                    value={query}
-                    placeholder="이 화면 행 검색"
-                    aria-label="현재 화면의 표 행 검색"
-                    onChange={event => setQuery(event.target.value)}
-                  />
-                </span>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setPaletteOpen(true)}
-                  title="화면 이동 (⌘K)"
-                >
-                  화면 이동{" "}
-                  <span className="m" style={{ opacity: 0.6 }}>
-                    ⌘K
+              <nav aria-label="모듈">
+                {GROUPS.map(group => (
+                  <Fragment key={group}>
+                    <div className="grp">{group}</div>
+                    {SCREENS.filter(s => s.group === group).map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className="nav"
+                        aria-current={item.id === screenId ? "page" : undefined}
+                        onClick={() => ui.goto(item.id)}
+                        title={item.hint}
+                      >
+                        <span
+                          className={`dot${item.stage === 1 ? " a" : item.stage === 2 ? " w" : ""}`}
+                        />
+                        {item.label}
+                        <span className="cnt">{item.stage}차</span>
+                      </button>
+                    ))}
+                  </Fragment>
+                ))}
+              </nav>
+            </aside>
+
+            <div className="main">
+              <header className="top">
+                <div className="crumb">
+                  <span>{screen.group}</span>
+                  <span>›</span>
+                  <b>{screen.label}</b>
+                </div>
+                <div className="top-r">
+                  <span className="qbox">
+                    <span className="k">⌕</span>
+                    <input
+                      value={query}
+                      placeholder="이 화면 행 검색"
+                      aria-label="현재 화면의 표 행 검색"
+                      onChange={event => setQuery(event.target.value)}
+                    />
                   </span>
-                </button>
-                {me.data ? (
-                  <span className="pill live">{me.data.role}</span>
-                ) : null}
-                {me.error ? <span className="chip a">역할 미지정</span> : null}
-                {me.data ? <span>{me.data.id}</span> : null}
-              </div>
-            </header>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setPaletteOpen(true)}
+                    title="화면 이동 (⌘K)"
+                  >
+                    화면 이동{" "}
+                    <span className="m" style={{ opacity: 0.6 }}>
+                      ⌘K
+                    </span>
+                  </button>
+                  <span className="pill live">{me.data?.role}</span>
+                  <span>{me.data?.id}</span>
+                  <a className="btn" href="/api/auth/logout">
+                    로그아웃
+                  </a>
+                </div>
+              </header>
 
-            <section className="screen on">
-              {me.error ? (
-                <SignIn message={me.error.message} />
-              ) : (
-                <>
-                  {/* 표를 읽기 전에 세 가지를 먼저 답한다 (E1·E2) */}
-                  {BRIEFED_SCREENS.has(screenId) ? <Brief /> : null}
-                  {screen.render()}
-                </>
-              )}
-            </section>
+              <section className="screen on">
+                {/* 표를 읽기 전에 세 가지를 먼저 답한다 (E1·E2) */}
+                {BRIEFED_SCREENS.has(screenId) ? <Brief /> : null}
+                {screen.render()}
+              </section>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="app" style={{ gridTemplateColumns: "1fr" }}>
+            <div className="main">
+              <section
+                className="screen on"
+                style={{
+                  // 로그인 화면은 좁은 단으로 가운데 둔다.
+                  // 넓게 펼치면 뒤에 뭔가 더 있는 것처럼 보인다 — 실제로는 없다.
+                  maxWidth: 480,
+                  margin: "0 auto",
+                  paddingTop: "12vh",
+                  width: "100%",
+                }}
+              >
+                <div className="rail-top" style={{ border: 0, padding: 0 }}>
+                  <div className="co">디노스튜디오</div>
+                  <div className="sub">경영관리 시스템</div>
+                </div>
+                {me.isLoading ? null : (
+                  <SignIn message={me.error?.message ?? ""} />
+                )}
+              </section>
+            </div>
+          </div>
+        )}
 
         {paletteOpen ? (
           <CommandPalette

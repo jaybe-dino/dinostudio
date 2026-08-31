@@ -89,6 +89,8 @@ export function serializeCookie(
     sameSite?: "Lax" | "Strict" | "None";
   } = {}
 ): string {
+  // 기본을 Lax 로 두는 이유는 STATE_COOKIE 때문이다 — 구글에서 돌아오는
+  // 교차 사이트 이동에서 살아남아야 한다. 세션 쿠키는 호출부에서 Strict 를 준다.
   const parts = [`${name}=${encodeURIComponent(value)}`, "Path=/", "HttpOnly"];
   parts.push(`SameSite=${options.sameSite ?? "Lax"}`);
   if (options.secure !== false) parts.push("Secure");
