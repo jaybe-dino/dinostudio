@@ -67,6 +67,9 @@ import {
   VAT_INPUT_ACCOUNT,
   VAT_OUTPUT_ACCOUNT,
   WITHHOLDING_PAYABLE_ACCOUNT,
+  checkBalanceChain,
+  parseBankStatement,
+  reconcile,
 } from "../../shared/erp/index.js";
 import type {
   Account,
@@ -504,6 +507,42 @@ export class LedgerService {
 
     // 환급 상황(음수)은 0 으로 본다 — 받을 돈을 런웨이에 더해 주면 낙관 편향이 생긴다
     return Math.max(0, vatNet) + Math.max(0, withheld);
+  }
+
+  /**
+   * POST /reconcile/preview — 은행 거래내역과 원장을 맞춰 본다.
+   *
+   * 저장하지 않는다. 「안 맞는 것」만 보여 주는 것이 목적이고,
+   * 무엇을 고칠지는 사람이 정한다 (원칙 7 — 시스템이 가져온 것도 사람이 승인한다).
+   */
+  async reconcilePreview(
+    input: { text: string; account?: string | null },
+    actor: Actor
+  ) {
+    const parsed = parseBankStatement(
+      input.text,
+      Number(kstToday().slice(0, 4))
+    );
+    const chain = checkBalanceChain(parsed.txns);
+    const entries = await this.store.listEntries();
+    const result = reconcile(parsed.txns, entries, {
+      accountFilter: input.account ?? null,
+    });
+
+    return {
+      parsed: { count: parsed.txns.length, skipped: parsed.skipped },
+      // 잔액 체인이 끊겼으면 대사 결과를 믿기 전에 그것부터 봐야 한다
+      chain,
+      matched: result.matched.map(m => ({
+        kind: m.kind,
+        dayGap: m.dayGap,
+        txn: m.txn,
+        entry: m.entry ? maskEntryForRole(m.entry, actor.role) : null,
+      })),
+      bankOnly: result.bankOnly,
+      ledgerOnly: result.ledgerOnly.map(e => maskEntryForRole(e, actor.role)),
+      difference: result.difference,
+    };
   }
 
   /**

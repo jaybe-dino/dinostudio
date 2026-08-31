@@ -416,6 +416,18 @@ export const erpRouter = router({
     return run(() => getLedgerService().runway());
   }),
 
+  /** POST /reconcile/preview — 은행 대사 (C6). 저장하지 않는다 */
+  reconcilePreview: protectedProcedure
+    .input(
+      z.object({
+        text: z.string().min(1),
+        account: z.string().nullable().optional(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      run(() => getLedgerService().reconcilePreview(input, actorFrom(ctx)))
+    ),
+
   /** GET /brief — 경영자 3줄 브리프 (E1 · E2) */
   brief: protectedProcedure.query(({ ctx }) =>
     run(() => getLedgerService().brief(actorFrom(ctx)))
