@@ -2,7 +2,11 @@
  * §10.1 엔드포인트 — 1차 오픈 범위. tRPC로 노출한다.
  * DELETE는 제공하지 않는다 (원칙 9).
  */
-import { ENTRY_STATUSES, PRIORITIES } from "../../shared/erp/index.js";
+import {
+  ENTRY_STATUSES,
+  PRIORITIES,
+  EVIDENCE_KIND_NAMES,
+} from "../../shared/erp/index.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc.js";
@@ -473,9 +477,12 @@ export const erpRouter = router({
       .input(
         z.object({
           code: z.string(),
-          kind: z.enum(["계산서", "영수증", "계약서", "이체확인증", "기타"]),
-          storage: z.enum(["file", "link"]),
-          url: z.string().min(1),
+          // 종류는 EVIDENCE_KINDS 가 유일한 출처다 — 여기에 목록을 또 적으면 어긋난다
+          kind: z.enum(EVIDENCE_KIND_NAMES as [string, ...string[]]),
+          storage: z.enum(["file", "link", "none"]),
+          // 증빙 없음(none)은 주소가 없고 사유가 온다
+          url: z.string().nullable().optional(),
+          reason: z.string().nullable().optional(),
           fileName: z.string().nullable().optional(),
           sizeBytes: z.number().int().nullable().optional(),
           contentType: z.string().nullable().optional(),

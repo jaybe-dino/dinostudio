@@ -214,14 +214,19 @@ export interface EntryRevision {
 export interface Attachment {
   id: string;
   entryId: string;
-  /** 계산서 · 영수증 · 계약서 · 기타 */
+  /** EVIDENCE_KINDS 의 종류 — 적격/비적격과 매입세액 공제 여부가 여기서 갈린다 */
   kind: string;
-  /** 원본 파일명 (링크만 등록한 경우 null) */
+  /** 원본 파일명 (링크·증빙없음은 null) */
   fileName: string | null;
-  /** 열람 주소 — 업로드분은 스토리지 키, 링크 등록분은 원본 URL */
+  /** 열람 주소 — 업로드분은 스토리지 키, 링크 등록분은 원본 URL, 증빙없음은 빈 문자열 */
   url: string;
-  /** file = 이 시스템에 올린 파일 · link = 드라이브 등 외부 링크 */
-  storage: "file" | "link";
+  /**
+   * file = 이 시스템에 올린 파일 · link = 드라이브 등 외부 링크
+   * none = 증빙이 실제로 없는 건. 사유를 반드시 받고 손해액을 계산해 보여 준다.
+   */
+  storage: "file" | "link" | "none";
+  /** 증빙 없이(none) 등록한 사유 — 그 경우 필수 */
+  reason: string | null;
   sizeBytes: number | null;
   contentType: string | null;
   uploadedBy: string;

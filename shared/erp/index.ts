@@ -11,6 +11,7 @@ export * from "./migrationChecks.js";
 export * from "./journal.js";
 export * from "./ar.js";
 export * from "./debt.js";
+export * from "./evidence.js";
 export * from "./forecast.js";
 export * from "./notifications.js";
 export * from "./burnRate.js";

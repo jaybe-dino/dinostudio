@@ -205,8 +205,15 @@ export const erpAttachments = mysqlTable(
     kind: varchar("kind", { length: 40 }).notNull(),
     fileName: varchar("fileName", { length: 300 }),
     url: text("url").notNull(),
-    /** file = 이 시스템에 올린 파일 · link = 드라이브 등 외부 링크 (§11.2) */
-    storage: mysqlEnum("storage", ["file", "link"]).notNull().default("link"),
+    /**
+     * file = 이 시스템에 올린 파일 · link = 드라이브 등 외부 링크 (§11.2)
+     * none = 증빙이 실제로 없는 건 — 사유(reason)를 반드시 함께 받는다
+     */
+    storage: mysqlEnum("storage", ["file", "link", "none"])
+      .notNull()
+      .default("link"),
+    /** 증빙 없이 등록한 사유. storage=none 일 때만 채워진다 */
+    reason: text("reason"),
     sizeBytes: bigint("sizeBytes", { mode: "number" }),
     contentType: varchar("contentType", { length: 120 }),
     uploadedBy: varchar("uploadedBy", { length: 64 }).notNull(),

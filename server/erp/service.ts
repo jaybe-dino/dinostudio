@@ -48,6 +48,9 @@ import {
   runMigrationChecks,
   settingValue,
   STATUS_RULES,
+  checkEvidenceInput,
+  evidenceRisk,
+  type EvidenceStorage,
 } from "../../shared/erp/index.js";
 import type {
   Account,
@@ -838,15 +841,19 @@ export class LedgerService {
   }
 
   /**
-   * 증빙 등록 — 업로드가 끝난 파일이거나 외부 링크.
-   * 증빙이 하나라도 붙으면 hasEvidence가 켜져 확정이 가능해진다 (§13.2).
+   * 증빙 등록 — 파일 · 외부 링크 · 증빙 없음(사유 필수).
+   *
+   * 증빙이 하나라도 붙으면 hasEvidence 가 켜져 확정이 가능해진다 (§13.2).
+   * 「증빙 없음」도 여기에 포함된다 — 막는 대신 사유를 남기고 손해액을 보여 준다.
+   * 세무상 결과(매입세액·가산세)는 evidenceRisk 가 계산해 화면에 표시한다.
    */
   async addEvidence(
     input: {
       code: string;
       kind: string;
-      storage: "file" | "link";
-      url: string;
+      storage: EvidenceStorage;
+      url?: string | null;
+      reason?: string | null;
       fileName?: string | null;
       sizeBytes?: number | null;
       contentType?: string | null;
@@ -856,21 +863,28 @@ export class LedgerService {
   ) {
     const entry = await this.store.getEntry(input.code);
     if (!entry) throw erpError("not_found", { code: input.code });
-    if (input.storage === "link" && !/^https?:\/\//i.test(input.url)) {
-      throw erpError(
-        "evidence_required",
-        {},
-        "http(s) 로 시작하는 링크만 등록할 수 있습니다"
-      );
-    }
+
+    const problem = checkEvidenceInput({
+      kind: input.kind,
+      storage: input.storage,
+      url: input.url,
+      reason: input.reason,
+    });
+    if (problem) throw erpError("evidence_required", {}, problem);
 
     const attachment: Attachment = {
       id: input.attachmentId ?? randomUUID(),
       entryId: entry.id,
       kind: input.kind,
       fileName: input.fileName ?? null,
-      url: input.storage === "file" ? viewPath(input.url) : input.url,
+      url:
+        input.storage === "file"
+          ? viewPath(input.url ?? "")
+          : input.storage === "link"
+            ? (input.url ?? "")
+            : "",
       storage: input.storage,
+      reason: input.storage === "none" ? (input.reason ?? "").trim() : null,
       sizeBytes: input.sizeBytes ?? null,
       contentType: input.contentType ?? null,
       uploadedBy: actor.id,
@@ -899,9 +913,20 @@ export class LedgerService {
   async evidence(code: string) {
     const entry = await this.store.getEntry(code);
     if (!entry) throw erpError("not_found", { code });
+    const attachments = await this.store.listAttachments(entry.id);
     return {
-      attachments: await this.store.listAttachments(entry.id),
+      attachments,
       storageConfigured: storageConfigured(),
+      // 손해액은 서버에서 한 번만 계산한다 — 화면이 각자 계산하면 숫자가 갈린다 (원칙 12)
+      risk: evidenceRisk({
+        direction: entry.direction,
+        amount: entry.amount,
+        isEntertainment: entry.accountCode === "6410",
+        attachments: attachments.map(a => ({
+          kind: a.kind,
+          storage: a.storage,
+        })),
+      }),
     };
   }
 

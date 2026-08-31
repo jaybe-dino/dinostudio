@@ -61,12 +61,54 @@ describe("§13.2 증빙", () => {
     ).rejects.toMatchObject({ code: "evidence_required" });
   });
 
+  it("증빙 없음으로 등록해도 확정이 가능해진다", async () => {
+    // 대표 요청 — 실제로 증빙을 받을 수 없는 지출이 있으므로 길을 열어 둔다.
+    // 다만 사유를 남기고 손해액을 계산해 보여 주는 것이 조건이다.
+    const svc = service();
+    const before = await svc.evidence("EX-260901-01");
+    expect(before.attachments).toHaveLength(0);
+
+    await svc.addEvidence(
+      {
+        code: "EX-260901-01",
+        kind: "기타",
+        storage: "none",
+        reason: "해외 결제로 세금계산서 발급 불가",
+      },
+      CFO
+    );
+
+    const after = await svc.evidence("EX-260901-01");
+    expect(after.attachments[0]).toMatchObject({
+      storage: "none",
+      reason: "해외 결제로 세금계산서 발급 불가",
+      // 주소는 비워 둔다 — 열 수 있는 것이 없는데 링크처럼 보이면 안 된다
+      url: "",
+    });
+    // 적격증빙으로 세어 주지 않는다
+    expect(after.risk.qualified).toBe(false);
+    expect(after.risk.vatLost).not.toBeNull();
+
+    const entry = await svc.getEntry("EX-260901-01", CFO);
+    expect(entry.entry.hasEvidence).toBe(true);
+  });
+
+  it("증빙 없음은 사유 없이 등록되지 않는다", async () => {
+    const svc = service();
+    await expect(
+      svc.addEvidence(
+        { code: "EX-260901-01", kind: "기타", storage: "none", reason: "" },
+        CFO
+      )
+    ).rejects.toMatchObject({ code: "evidence_required" });
+  });
+
   it("증빙 등록은 감사로그에 남는다", async () => {
     const svc = service();
     await svc.addEvidence(
       {
         code: "EX-260901-01",
-        kind: "영수증",
+        kind: "간이영수증",
         storage: "link",
         url: "https://example.com/a.pdf",
       },
