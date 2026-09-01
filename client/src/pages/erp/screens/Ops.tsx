@@ -216,7 +216,23 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
 
   if (variant === "budget") {
     const projects = masters.data?.projects ?? [];
-    const withBudget = projects.filter(p => p.budget != null);
+    // 비교하는 값은 **원가 예산**이다. 계약 금액과 섞지 않는다 — 섞으면
+    // 매출 목표와 지출 한도를 같은 칸에서 비교하게 된다
+    const withBudget = projects.filter(p => p.costBudget != null);
+    const spentByProject = new Map<string, number>();
+    for (const entry of entries) {
+      if (
+        entry.status !== "confirmed" ||
+        entry.direction !== "out" ||
+        entry.amount == null ||
+        !entry.projectId
+      )
+        continue;
+      spentByProject.set(
+        entry.projectId,
+        (spentByProject.get(entry.projectId) ?? 0) + entry.amount
+      );
+    }
     return (
       <>
         <div className="ph">
@@ -231,10 +247,26 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
 
         <div className="kpis">
           <Tile
-            label="예산 등록 프로젝트"
+            label="원가 예산 등록"
             value={`${withBudget.length} / ${projects.length}`}
             note="예산이 없으면 비교 불가"
             tone={withBudget.length ? undefined : "alert"}
+          />
+          <Tile
+            label="예산 초과 프로젝트"
+            value={`${
+              withBudget.filter(
+                p => (spentByProject.get(p.id) ?? 0) > (p.costBudget ?? 0)
+              ).length
+            }건`}
+            note="집행 원가가 예산을 넘은 것"
+            tone={
+              withBudget.some(
+                p => (spentByProject.get(p.id) ?? 0) > (p.costBudget ?? 0)
+              )
+                ? "alert"
+                : undefined
+            }
           />
           <Tile
             label="번레이트 예산"
@@ -245,10 +277,16 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
         </div>
 
         <Note tone="warn">
-          예산이 등록된 단위가 {withBudget.length}개입니다. 프로젝트 원장에서
-          예산을 등록하면 이 화면이 살아납니다. 9월 번레이트 예산 73,088,790과
-          예산 대비 189% 같은 수치는 추정 분모에서 나온 것이라 전부
-          폐기했습니다.
+          원가 예산이 등록된 단위가 {withBudget.length}개입니다. 프로젝트
+          마스터에서 <b>원가 예산</b>을 넣으면 이 화면이 살아납니다. 9월
+          번레이트 예산 73,088,790과 예산 대비 189% 같은 수치는 추정 분모에서
+          나온 것이라 전부 폐기했습니다.
+        </Note>
+
+        <Note>
+          <b>계약 금액과 원가 예산은 다른 칸입니다.</b> 예산 하나로 두 가지를
+          받으면 프로젝트 마진(계약 − 원가)과 예산 대비 실적(집행 − 예산) 중
+          한쪽이 반드시 틀립니다. 마스터에 두 칸으로 나눠 두었습니다.
         </Note>
 
         <Card title="프로젝트별" meta={`${projects.length}건`} body={false}>
@@ -257,31 +295,55 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
               <thead>
                 <tr>
                   <th>프로젝트</th>
-                  <th className="n">예산</th>
-                  <th className="n">기여이익 (실적)</th>
-                  <th>비교</th>
+                  <th className="n">원가 예산</th>
+                  <th className="n">집행 원가</th>
+                  <th className="n">잔여</th>
+                  <th className="n">소진율</th>
+                  <th className="n">계약 금액</th>
                 </tr>
               </thead>
               <tbody>
                 {projects.map(project => {
-                  const actual = pnl.data?.byProject.find(
-                    s => s.key === project.id
-                  );
+                  const spent = spentByProject.get(project.id) ?? 0;
+                  const budget = project.costBudget;
+                  const rate =
+                    budget == null || budget === 0
+                      ? null
+                      : Math.round((spent / budget) * 1000) / 10;
+                  const over = rate != null && rate > 100;
                   return (
                     <tr key={project.id}>
                       <td>
                         {project.code} {project.name}
                       </td>
                       <td className="n">
-                        {won(project.budget) ?? (
-                          <span className="s">미등록</span>
+                        {won(budget) ?? <span className="s">미등록</span>}
+                      </td>
+                      <td className="n">{won(spent)}</td>
+                      <td className="n">
+                        {budget == null ? (
+                          <span className="s">—</span>
+                        ) : (
+                          <span
+                            style={{ color: over ? "var(--alert)" : undefined }}
+                          >
+                            {won(budget - spent)}
+                          </span>
                         )}
                       </td>
                       <td className="n">
-                        {won(actual?.contributionProfit ?? 0)}
+                        {rate == null ? (
+                          <span className="s">예산 없음</span>
+                        ) : (
+                          <span className={over ? "chip a" : "chip g"}>
+                            {rate}%
+                          </span>
+                        )}
                       </td>
-                      <td className="s">
-                        {project.budget == null ? "예산 없음 — 비교 불가" : "—"}
+                      <td className="n">
+                        {won(project.contractAmount) ?? (
+                          <span className="s">미등록</span>
+                        )}
                       </td>
                     </tr>
                   );
@@ -412,9 +474,9 @@ export function OpsScreen({ variant }: { variant: OpsVariant }) {
         <div>
           <h1>보고서 빌더</h1>
           <div className="desc">
-            화면의 표를 탭 구분 텍스트로 뽑습니다. 브라우저 정책상 파일 저장이
-            막혀 있어 복사로 넘기고, 시트에 붙여 쓰십시오 — 다만 그 시트는
-            참고용이고 원본은 계속 이 원장입니다.
+            화면의 표를 엑셀(.xls) · CSV 파일로 내려받거나 탭 구분 텍스트로
+            복사합니다. 내려받은 파일은 참고용이고 원본은 계속 이 원장입니다 —
+            파일을 고쳐도 원장은 바뀌지 않습니다.
           </div>
         </div>
       </div>

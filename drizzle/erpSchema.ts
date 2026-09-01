@@ -378,7 +378,15 @@ export const erpProjects = mysqlTable(
     name: varchar("name", { length: 200 }).notNull(),
     buCode: mysqlEnum("buCode", BU_VALUES),
     status: varchar("status", { length: 40 }).notNull().default("진행"),
+    /**
+     * @deprecated 「예산」이라는 이름으로 계약 금액과 원가 예산 두 가지에 쓰이고 있었다.
+     * 두 값을 아래 두 컬럼으로 나눴다. 데이터가 없어 지우지 않고 두었을 뿐 읽지 않는다.
+     */
     budget: bigint("budget", { mode: "number" }),
+    /** 계약 금액 — 매출 쪽. 프로젝트 마진의 분자다 */
+    contractAmount: bigint("contractAmount", { mode: "number" }),
+    /** 원가 예산 — 지출 쪽. 예산 대비 실적이 비교하는 값이다 */
+    costBudget: bigint("costBudget", { mode: "number" }),
     startDate: date("startDate", { mode: "string" }),
     endDate: date("endDate", { mode: "string" }),
   },

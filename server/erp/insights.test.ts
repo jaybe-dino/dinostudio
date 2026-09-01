@@ -152,7 +152,10 @@ describe("E4 프로젝트 예상 마진", () => {
     name: "테스트",
     buCode: null,
     status: "진행",
-    budget: 50_000_000,
+    budget: null,
+    // 계약 금액과 원가 예산은 다른 필드다 — 하나로 두면 한쪽이 반드시 틀린다
+    contractAmount: 50_000_000,
+    costBudget: null,
     startDate: null,
     endDate: null,
   };
@@ -186,7 +189,11 @@ describe("E4 프로젝트 예상 마진", () => {
   });
 
   it("계약 금액이 없으면 그 사실을 말한다", () => {
-    const [row] = projectMargins([{ ...project, budget: null }], [], new Map());
+    const [row] = projectMargins(
+      [{ ...project, contractAmount: null }],
+      [],
+      new Map()
+    );
     expect(row.blockedBy).toContain("계약 금액");
   });
 

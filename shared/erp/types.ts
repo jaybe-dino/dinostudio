@@ -394,7 +394,16 @@ export interface Project {
   name: string;
   buCode: BuCode | null;
   status: string;
+  /**
+   * @deprecated 「예산」 하나가 계약 금액(매출)과 원가 예산(지출)에 동시에 쓰이고 있었다.
+   * 프로젝트 마진은 이것을 계약 금액으로 읽고, 예산 대비 실적은 원가 예산으로 읽었다 —
+   * 무엇을 넣어도 한쪽이 틀린다. 아래 두 필드로 나눴다.
+   */
   budget: number | null;
+  /** 계약 금액 — 매출 쪽. 프로젝트 마진의 분자다 */
+  contractAmount: number | null;
+  /** 원가 예산 — 지출 쪽. 예산 대비 실적이 비교하는 값이다 */
+  costBudget: number | null;
   startDate: string | null;
   endDate: string | null;
 }

@@ -156,8 +156,7 @@ export function projectMargins(
       .filter(e => e.direction === "out")
       .reduce((sum, e) => sum + (e.amount ?? 0), 0);
 
-    // 이 모델에서 계약 금액은 budget 이다
-    const contractAmount = project.budget ?? null;
+    const contractAmount = project.contractAmount ?? null;
     const remainingEstimate = remainingEstimates.get(project.id) ?? null;
     const done = project.status === "완료";
 

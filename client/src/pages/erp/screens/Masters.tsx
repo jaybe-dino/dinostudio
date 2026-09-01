@@ -156,11 +156,18 @@ export function MastersScreen({ kind }: { kind: Kind }) {
         render: p => p.status,
       },
       {
-        key: "budget",
-        header: "예산",
+        key: "contractAmount",
+        header: "계약 금액",
         numeric: true,
-        sortValue: p => p.budget,
-        render: p => won(p.budget) ?? <span className="s">미등록</span>,
+        sortValue: p => p.contractAmount,
+        render: p => won(p.contractAmount) ?? <span className="s">미등록</span>,
+      },
+      {
+        key: "costBudget",
+        header: "원가 예산",
+        numeric: true,
+        sortValue: p => p.costBudget,
+        render: p => won(p.costBudget) ?? <span className="s">미등록</span>,
       },
     ];
     return (
