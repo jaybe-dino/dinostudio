@@ -23,6 +23,16 @@ export interface FinancialStatements {
   period: { from: string | null; to: string | null; ym: string | null };
   /** 마감된 기간만 「확정」이고 그 외는 가결산이다 */
   status: "가결산" | "확정";
+  /**
+   * 어느 보고서가 어느 날짜를 축으로 쓰는가 (docs/erp-qa.md A4).
+   * 화면이 이걸 표시해야 한다 — 같은 달의 손익과 현금이 다르면 사람은
+   * 「어느 쪽이 틀렸나」를 먼저 의심하지만, 둘 다 맞고 축이 다를 뿐이다.
+   */
+  basis: {
+    incomeStatement: string;
+    cashflowStatement: string;
+    balanceSheet: string;
+  };
   balanceSheet: StatementRow[];
   incomeStatement: StatementRow[];
   cashflowStatement: StatementRow[];
@@ -120,6 +130,9 @@ export function buildFinancialStatements(
   ];
 
   // ── 현금흐름표 (직접법) ── §8.3 3구간 자동 판정을 그대로 사용
+  //
+  // 축이 다르다. 손익은 발생일(accrualDate), 현금흐름은 지급일(cashDate) 이다.
+  // 같은 달의 두 숫자가 안 맞는 것이 정상이고, 안 맞는 이유가 이것이다 (A4).
   const cashEntries = entries.filter(
     e =>
       e.status === "confirmed" &&
@@ -204,6 +217,17 @@ export function buildFinancialStatements(
   return {
     period: { from, to, ym },
     status: closed ? "확정" : "가결산",
+    /**
+     * 어느 보고서가 어느 날짜를 축으로 쓰는가 (A4).
+     *
+     * 화면이 이걸 표시해야 한다. 손익과 현금흐름의 같은 달 숫자가 다르면
+     * 사람은 「어느 쪽이 틀렸나」를 먼저 의심한다 — 둘 다 맞고 축이 다를 뿐이다.
+     */
+    basis: {
+      incomeStatement: "발생주의 (귀속일)",
+      cashflowStatement: "현금주의 (실제 입출금일)",
+      balanceSheet: "기말 시점",
+    },
     balanceSheet,
     incomeStatement,
     cashflowStatement,
@@ -220,21 +244,18 @@ export function closingBlockers(
   migrationFailures: string[]
 ): string[] {
   const blockers: string[] = [...migrationFailures];
-  const undecided = entries.filter(
-    e =>
-      e.status === "undecided" &&
-      (e.cashDate ?? e.accrualDate ?? "").startsWith(ym)
-  );
+  // 발생월과 지급월을 모두 본다 — 하나만 보면 발생월이 이 달인 건이 빠진다 (A4 · D4)
+  const inMonth = (e: Entry) =>
+    (e.accrualDate ?? "").startsWith(ym) || (e.cashDate ?? "").startsWith(ym);
+
+  const undecided = entries.filter(e => e.status === "undecided" && inMonth(e));
   if (undecided.length > 0) {
     blockers.push(
       `판정 대기 ${undecided.length}건 — ${undecided.map(e => e.code).join(" · ")}`
     );
   }
   const noAccount = entries.filter(
-    e =>
-      e.status === "confirmed" &&
-      e.accountCode == null &&
-      (e.cashDate ?? e.accrualDate ?? "").startsWith(ym)
+    e => e.status === "confirmed" && e.accountCode == null && inMonth(e)
   );
   if (noAccount.length > 0)
     blockers.push(`계정 미지정 확정 건 ${noAccount.length}건 — 전표 생성 불가`);

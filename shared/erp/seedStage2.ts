@@ -42,6 +42,8 @@ export const SEED_PROJECTS: Project[] = [
     buCode: "IP",
     status: "진행",
     budget: null,
+    contractAmount: null,
+    costBudget: null,
     startDate: null,
     endDate: null,
   },

@@ -18,9 +18,15 @@ import { Brief } from "./components/Brief";
 import { EntryDrawer } from "./components/EntryDrawer";
 import { ErpUiContext } from "./context";
 import "./design.css";
+import { AccountLedgerScreen } from "./screens/AccountLedger";
 import { AccountsScreen } from "./screens/Accounts";
+import { CreditScreen } from "./screens/Credit";
+import { PaymentOrderScreen } from "./screens/PaymentOrder";
+import { TaxPackageScreen } from "./screens/TaxPackage";
 import { AgentsScreen } from "./screens/Agents";
 import { ReconcileScreen } from "./screens/Reconcile";
+import { InsightsScreen } from "./screens/Insights";
+import { TaxScreen } from "./screens/Tax";
 import { ApprovalsScreen } from "./screens/Approvals";
 import { TodayScreen } from "./screens/Today";
 import { ArScreen } from "./screens/Ar";
@@ -351,12 +357,60 @@ const SCREENS: ScreenDef[] = [
     render: () => <OpsScreen variant="report" />,
   },
   {
+    id: "insights",
+    label: "경영 지표",
+    group: "손익 · 재무제표 (3차)",
+    hint: "매출 집중도 · 프로젝트 마진 · 인당 생산성",
+    stage: 3,
+    render: () => <InsightsScreen />,
+  },
+  {
+    id: "tax",
+    label: "세무 일정",
+    group: "손익 · 재무제표 (3차)",
+    hint: "계산서 발행 의무 · 신고 캘린더 · 부가세 과세기간",
+    stage: 3,
+    render: () => <TaxScreen />,
+  },
+  {
     id: "reconcile",
     label: "은행 대사",
     group: "연결 · 자동화",
     hint: "거래내역 붙여넣기 · 안 맞는 것만 남김",
     stage: 2,
     render: () => <ReconcileScreen />,
+  },
+  {
+    id: "account-ledger",
+    label: "계정별 원장",
+    group: "손익 · 재무제표 (3차)",
+    hint: "한 계정에 들어온 전표 · 누계 잔액",
+    stage: 3,
+    render: () => <AccountLedgerScreen />,
+  },
+  {
+    id: "tax-package",
+    label: "세무 제출 패키지",
+    group: "손익 · 재무제표 (3차)",
+    hint: "계정별 집계 + 증빙 목록 · 매달 같은 양식",
+    stage: 3,
+    render: () => <TaxPackageScreen />,
+  },
+  {
+    id: "credit",
+    label: "여신 · 한도",
+    group: "현금 · 승인 (1차)",
+    hint: "마이너스통장 · 카드 한도 · 즉시 동원 가능액",
+    stage: 2,
+    render: () => <CreditScreen />,
+  },
+  {
+    id: "payment-order",
+    label: "지급 순서",
+    group: "현금 · 승인 (1차)",
+    hint: "같은 등급 안 연체 · 기한 · 금액 순",
+    stage: 2,
+    render: () => <PaymentOrderScreen />,
   },
   {
     id: "agents",

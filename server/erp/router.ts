@@ -5,7 +5,10 @@
 import {
   ENTRY_STATUSES,
   PRIORITIES,
+  CANCEL_REASONS,
   EVIDENCE_KIND_NAMES,
+  type CancelReasonCode,
+  ROLES,
 } from "../../shared/erp/index.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -18,6 +21,7 @@ import type { Actor } from "./service.js";
 function actorFrom(ctx: {
   user: { openId: string; email: string | null } | null;
   req: { ip?: string };
+  stepUpFresh?: boolean;
 }): Actor {
   const role = resolveErpRole(ctx.user?.email ?? null);
   if (!role) {
@@ -31,6 +35,8 @@ function actorFrom(ctx: {
     id: ctx.user?.email ?? ctx.user?.openId ?? "unknown",
     role,
     ip: ctx.req.ip ?? null,
+    // 민감 조회는 세션이 아니라 재인증 시각으로 열린다 (D7)
+    stepUpFresh: ctx.stepUpFresh ?? false,
   };
 }
 
@@ -132,6 +138,29 @@ export const erpRouter = router({
           hasEvidence: z.boolean().optional(),
           noteRaw: z.string().nullable().optional(),
           note: z.string().nullable().optional(),
+          /** 입출금 계좌 — 계좌별 잔액·대사의 단위 (C5) */
+          bankAccount: z.string().nullable().optional(),
+          /** 원천징수 (A2) */
+          incomeType: z
+            .enum(["사업소득", "기타소득", "근로소득"])
+            .nullable()
+            .optional(),
+          withheldAmount: z.number().int().min(0).nullable().optional(),
+          /** 차입 상환의 원금 몫 (C3) */
+          principalAmount: z.number().int().nullable().optional(),
+          /** 4대보험 분리 (B6) */
+          employeeInsurance: z.number().int().min(0).nullable().optional(),
+          employerInsurance: z.number().int().min(0).nullable().optional(),
+          /** 외화 (A8) — 환율이 없으면 환산하지 않는다 */
+          currency: z
+            .string()
+            .regex(/^[A-Za-z]{3}$/)
+            .nullable()
+            .optional(),
+          amountForeign: z.number().int().nullable().optional(),
+          fxRate: z.number().positive().nullable().optional(),
+          /** 이연 개월 수 (A7) — 손익만 월할로 나눈다 */
+          deferralMonths: z.number().int().min(1).max(60).nullable().optional(),
           duplicateOverrideReason: z.string().optional(),
         })
       )
@@ -194,6 +223,10 @@ export const erpRouter = router({
           code: z.string(),
           version: z.number().int(),
           reason: z.string().min(1),
+          // 사유 분류 — 자유 텍스트만 받으면 무엇을 개선할지 셀 수 없다 (D6)
+          reasonCode: z
+            .enum(CANCEL_REASONS.map(r => r.code) as [string, ...string[]])
+            .optional(),
         })
       )
       .mutation(({ ctx, input }) =>
@@ -202,7 +235,8 @@ export const erpRouter = router({
             input.code,
             input.reason,
             input.version,
-            actorFrom(ctx)
+            actorFrom(ctx),
+            (input.reasonCode ?? null) as CancelReasonCode | null
           )
         )
       ),
@@ -361,10 +395,9 @@ export const erpRouter = router({
     return run(() => getLedgerService().ar());
   }),
 
-  debt: protectedProcedure.query(({ ctx }) => {
-    actorFrom(ctx);
-    return run(() => getLedgerService().debt());
-  }),
+  debt: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().debt(actorFrom(ctx)))
+  ),
 
   forecast: protectedProcedure
     .input(
@@ -415,6 +448,68 @@ export const erpRouter = router({
     actorFrom(ctx);
     return run(() => getLedgerService().runway());
   }),
+
+  /** GET /tax-package — 세무대리인 제출용 (E11) */
+  taxPackage: protectedProcedure
+    .input(z.object({ ym: z.string().regex(/^\d{4}-\d{2}$/) }))
+    .query(({ ctx, input }) =>
+      run(() => getLedgerService().taxPackage(input, actorFrom(ctx)))
+    ),
+
+  /** GET /account-ledger — 계정별 원장 (A13) */
+  accountLedger: protectedProcedure
+    .input(
+      z.object({
+        accountCode: z.string().min(1),
+        from: z.string().nullable().optional(),
+        to: z.string().nullable().optional(),
+      })
+    )
+    .query(({ ctx, input }) =>
+      run(() => getLedgerService().accountLedger(input, actorFrom(ctx)))
+    ),
+
+  /** GET /credit — 여신 한도 (C4) */
+  credit: protectedProcedure.query(() =>
+    run(() => getLedgerService().credit())
+  ),
+
+  /** GET /deferrals — 선급비용 · 선수수익 배분 (A7) */
+  deferrals: protectedProcedure.query(() =>
+    run(() => getLedgerService().deferrals())
+  ),
+
+  /** GET /bank-accounts — 계좌별 잔액 (C5) */
+  bankAccounts: protectedProcedure.query(() =>
+    run(() => getLedgerService().bankAccounts())
+  ),
+
+  /** GET /fs-mapping — 계정 → 재무제표 줄 (A10) */
+  fsMapping: protectedProcedure.query(() =>
+    run(() => getLedgerService().fsMapping())
+  ),
+
+  /** GET /payment-order — 같은 등급 안 지급 순서 (C8) */
+  paymentOrder: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().paymentOrder(actorFrom(ctx)))
+  ),
+
+  /** GET /insights — 경영 판단 지표 (E4 · E5 · E7) */
+  insights: protectedProcedure.query(() =>
+    run(() => getLedgerService().insights())
+  ),
+
+  /** GET /tax — 세금계산서 발행 의무 + 신고 캘린더 (B4 · B5 · B10) */
+  tax: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().tax(actorFrom(ctx)))
+  ),
+
+  /** GET /vat — 과세기간별 부가세 정산 (A15 · B7) */
+  vat: protectedProcedure
+    .input(
+      z.object({ year: z.number().int().nullable().optional() }).optional()
+    )
+    .query(({ input }) => run(() => getLedgerService().vat(input ?? {}))),
 
   /** POST /reconcile/preview — 은행 대사 (C6). 저장하지 않는다 */
   reconcilePreview: protectedProcedure
@@ -534,14 +629,8 @@ export const erpRouter = router({
           id: z.string().min(1),
           email: z.string().email(),
           name: z.string().min(1),
-          role: z.enum([
-            "대표",
-            "부대표",
-            "재무",
-            "사업부리더",
-            "담당자",
-            "외부세무",
-          ]),
+          // 역할은 ROLES 가 유일한 출처다 — 여기에 또 적으면 역할을 추가할 때 어긋난다
+          role: z.enum(ROLES),
           active: z.boolean().default(true),
         })
       )

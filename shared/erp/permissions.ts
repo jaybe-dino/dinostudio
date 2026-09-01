@@ -91,7 +91,30 @@ export const ROLE_MATRIX: Record<Role, Record<Resource, Permission>> = {
     period_close: N,
     audit: R,
   },
+  /**
+   * 외부열람 (docs/erp-qa.md D5) — 감사인·투자자에게 보여 줄 때.
+   * 급여는 아예 내려가지 않고, 내보내기도 막는다 (canExport).
+   */
+  외부열람: {
+    entry: R,
+    priority_override: N,
+    payroll: N,
+    debt: R,
+    account: R,
+    setting: N,
+    period_close: N,
+    audit: N,
+  },
 };
+
+/**
+ * 내보내기 가능 여부 (D5).
+ * 화면에서 보는 것과 파일로 들고 나가는 것은 다른 위험이다 —
+ * 외부열람은 보되 들고 나가지 못한다.
+ */
+export function canExport(role: Role): boolean {
+  return role !== "외부열람";
+}
 
 export function permissionFor(role: Role, resource: Resource): Permission {
   return ROLE_MATRIX[role][resource];

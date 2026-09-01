@@ -4,6 +4,7 @@
  */
 import { ACCOUNTS } from "../../shared/erp/index.js";
 import type {
+  IncomeType,
   Account,
   AppUser,
   Approval,
@@ -45,11 +46,15 @@ import {
   erpProjects,
   erpUsers,
   erpSettings,
+  FX_RATE_SCALE,
   type ErpEntryRow,
 } from "../../drizzle/erpSchema.js";
 import type { EntryFilter, LedgerStore } from "./store.js";
 
 type Db = MySql2Database<Record<string, never>>;
+
+/** 아는 소득구분만 도메인으로 올린다 — 모르는 값으로 원천징수율을 만들면 신고가 틀린다 */
+const INCOME_TYPES: IncomeType[] = ["근로소득", "사업소득", "기타소득"];
 
 function toEntry(row: ErpEntryRow): Entry {
   return {
@@ -94,6 +99,17 @@ function toEntry(row: ErpEntryRow): Entry {
     undecidedReason: row.undecidedReason,
     hasEvidence: row.hasEvidence,
     isPersonal: row.isPersonal,
+    incomeType: INCOME_TYPES.includes(row.incomeType as IncomeType)
+      ? (row.incomeType as IncomeType)
+      : null,
+    withheldAmount: row.withheldAmount,
+    principalAmount: row.principalAmount,
+    employeeInsurance: row.employeeInsurance,
+    employerInsurance: row.employerInsurance,
+    amountForeign: row.amountForeign,
+    deferralMonths: row.deferralMonths,
+    // 정수로 저장된 환율을 되돌린다 (A8)
+    fxRate: row.fxRateScaled == null ? null : row.fxRateScaled / FX_RATE_SCALE,
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     createdBy: row.createdBy,
@@ -101,8 +117,29 @@ function toEntry(row: ErpEntryRow): Entry {
 }
 
 function toRow(entry: Entry) {
-  const { createdAt, ...rest } = entry;
-  return { ...rest, createdAt: new Date(createdAt) };
+  const { createdAt, fxRate, ...rest } = entry;
+  return {
+    ...rest,
+    createdAt: new Date(createdAt),
+    // 환율은 정수로 저장한다 — 이 스키마는 DECIMAL/FLOAT 를 쓰지 않는다 (A8)
+    fxRateScaled: fxRate == null ? null : Math.round(fxRate * FX_RATE_SCALE),
+  };
+}
+
+/**
+ * DB 의 varchar 를 도메인 유니온으로 좁힌다.
+ * 목록에 없는 값은 null 로 둔다 — 모르는 소득구분으로 원천징수율을 만들면 신고가 틀린다.
+ */
+function narrowParty(row: {
+  incomeType: string | null;
+  [key: string]: unknown;
+}): Party {
+  return {
+    ...(row as unknown as Party),
+    incomeType: INCOME_TYPES.includes(row.incomeType as IncomeType)
+      ? (row.incomeType as IncomeType)
+      : null,
+  };
 }
 
 export class DrizzleLedgerStore implements LedgerStore {
@@ -368,7 +405,7 @@ export class DrizzleLedgerStore implements LedgerStore {
   async listParties(): Promise<Party[]> {
     return (
       await this.db.select().from(erpParties).orderBy(asc(erpParties.name))
-    ).map(r => ({ ...r }));
+    ).map(narrowParty);
   }
 
   async upsertParty(party: Party): Promise<Party> {

@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile, chipClass } from "../components/Bits";
+import { won } from "../format";
 
 export function ClosingScreen() {
   const utils = trpc.useUtils();
@@ -15,14 +16,20 @@ export function ClosingScreen() {
   const masters = trpc.erp.masters.useQuery();
   const migration = trpc.erp.migration.useQuery();
   const ledger = trpc.erp.entries.list.useQuery({});
+  const settings = trpc.erp.settings.useQuery();
 
   const close = trpc.erp.closePeriod.useMutation({
     onSuccess: async period => {
-      setResult(`${period.ym} 마감 완료 — 이 기간의 원장 수정이 거부됩니다.`);
+      setResult(
+        period.carryForward.value == null
+          ? `${period.ym} 마감 완료 — 이 기간의 원장 수정이 거부됩니다. ${period.carryForward.blockedBy}`
+          : `${period.ym} 마감 완료 — 이 기간의 원장 수정이 거부됩니다. ${period.carryForward.ym} 기초잔액 ${won(period.carryForward.value)} 을 이월했습니다.`
+      );
       setBlockers([]);
       await Promise.all([
         utils.erp.masters.invalidate(),
         utils.erp.financialStatements.invalidate(),
+        utils.erp.settings.invalidate(),
       ]);
     },
     onError: async error => {
@@ -34,6 +41,10 @@ export function ClosingScreen() {
   });
 
   const periods = masters.data?.periods ?? [];
+  // 마감이 만들어 둔 이월 기초잔액 (A12)
+  const carried = (settings.data ?? [])
+    .filter(item => item.key.startsWith("opening_cash:"))
+    .sort((a, b) => a.key.localeCompare(b.key));
   const undecided = ledger.data?.out.excluded.undecided.n ?? 0;
   const failing = (migration.data?.checks ?? []).filter(
     c => c.verdict === "fail"
@@ -104,6 +115,52 @@ export function ClosingScreen() {
           </ul>
         ) : null}
       </Card>
+
+      <Card
+        title="월별 기초잔액 — 마감이 만든 이월"
+        meta={`${carried.length}개월`}
+        body={false}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>기간</th>
+              <th className="n">기초잔액</th>
+              <th>출처</th>
+            </tr>
+          </thead>
+          <tbody>
+            {carried.length === 0 ? (
+              <tr>
+                <td colSpan={3} style={{ color: "var(--muted)" }}>
+                  아직 이월된 기초잔액이 없습니다 — 첫 마감이 끝나면 다음 달
+                  기초잔액이 여기에 생깁니다
+                </td>
+              </tr>
+            ) : (
+              carried.map(item => (
+                <tr key={item.key}>
+                  <td style={{ fontFamily: "var(--mono)" }}>
+                    {item.key.replace("opening_cash:", "")}
+                  </td>
+                  <td className="n">{won(Number(item.value))}</td>
+                  <td>
+                    <span className={chipClass("ok")}>마감 자동 이월</span>{" "}
+                    {item.updatedBy ?? ""}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </Card>
+
+      <Note>
+        기초잔액은 마감이 끝난 달의 현금 증감으로 계산해 다음 달로 넘깁니다 —
+        사람이 매달 넣지 않습니다. 손으로 넣는 것은 이관 첫 달{" "}
+        <code>cash_on_hand</code> 하나뿐이고, 그 달의 기초는 원장 밖에 있기
+        때문입니다.
+      </Note>
 
       <Card title="기간" meta={`${periods.length}개`} body={false}>
         <div className="scroll">

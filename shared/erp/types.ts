@@ -75,6 +75,11 @@ export const ROLES = [
   "사업부리더",
   "담당자",
   "외부세무",
+  /**
+   * 읽기 전용 (docs/erp-qa.md D5).
+   * 감사인·투자자에게 보여 줄 때 쓴다. 금액은 총액만 보이고 내보내기가 막힌다.
+   */
+  "외부열람",
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -164,6 +169,34 @@ export interface Entry {
   incomeType?: IncomeType | null;
   /** 근로소득처럼 비율로 계산할 수 없는 경우의 원천징수 실액 */
   withheldAmount?: number | null;
+  /**
+   * 차입 상환 건의 원금 몫 (docs/erp-qa.md C3).
+   * 있으면 전표를 원금(부채 감소) + 이자(비용)로 나눈다.
+   * 나머지가 이자이므로 이자액을 따로 받지 않는다 — 두 값을 받으면 합이 어긋날 수 있다.
+   */
+  principalAmount?: number | null;
+  /**
+   * 4대보험 근로자 부담분 (docs/erp-qa.md B6).
+   * 급여 계정에 하나로 잡히면 사업주 부담분(비용)과 근로자 부담분(예수금)이
+   * 구분되지 않는다. 있으면 전표를 급여 · 사업주부담 · 예수금 3분할한다.
+   */
+  employeeInsurance?: number | null;
+  /** 4대보험 사업주 부담분 — 비용이면서 동시에 공단에 낼 예수금이다 (B6) */
+  employerInsurance?: number | null;
+  /**
+   * 외화 원문 금액 (docs/erp-qa.md A8). amount 는 항상 원화다 —
+   * 원장·손익·재무제표가 한 통화여야 합계가 성립한다. 외화는 근거로 남긴다.
+   */
+  amountForeign?: number | null;
+  /** 적용 환율 — 1 외화당 원화. 없으면 환산하지 않는다 */
+  fxRate?: number | null;
+  /**
+   * 이연 개월 수 (docs/erp-qa.md A7).
+   * 연간 결제를 결제월에 전액 잡으면 그 달만 손익이 튀고 나머지 11개월은
+   * 실제보다 좋아 보인다. 값이 있으면 손익에서 발생월부터 월할로 나눈다.
+   * 현금흐름은 나누지 않는다 — 돈은 한 번에 나갔다.
+   */
+  deferralMonths?: number | null;
   /** 낙관적 잠금 (§4 동시성) */
   version: number;
   createdAt: string;
@@ -303,6 +336,11 @@ export interface JournalLine {
 }
 
 export interface Journal {
+  /**
+   * 사람이 읽는 전표 번호 — `2026-08-0001` (docs/erp-qa.md A14).
+   * UUID 는 감사·세무조정에서 참조할 수 없다. UUID 는 내부 키로 남기고 이것을 쓴다.
+   */
+  journalNo?: string | null;
   id: string;
   entryId: string;
   journalDate: string;
@@ -322,6 +360,12 @@ export interface Party {
   bankAccount: string | null;
   /** "vat별도" · "VAT포함" · null(미확정) — B3 */
   vatMode: string | null;
+  /**
+   * 소득 구분 (docs/erp-qa.md B9).
+   * 근로/사업/기타가 원천징수율과 제출할 지급명세서를 다르게 만든다.
+   * 프리랜서인지 직원인지가 여기서 갈린다.
+   */
+  incomeType?: IncomeType | null;
   contact: string | null;
   memo: string | null;
 }
@@ -350,7 +394,16 @@ export interface Project {
   name: string;
   buCode: BuCode | null;
   status: string;
+  /**
+   * @deprecated 「예산」 하나가 계약 금액(매출)과 원가 예산(지출)에 동시에 쓰이고 있었다.
+   * 프로젝트 마진은 이것을 계약 금액으로 읽고, 예산 대비 실적은 원가 예산으로 읽었다 —
+   * 무엇을 넣어도 한쪽이 틀린다. 아래 두 필드로 나눴다.
+   */
   budget: number | null;
+  /** 계약 금액 — 매출 쪽. 프로젝트 마진의 분자다 */
+  contractAmount: number | null;
+  /** 원가 예산 — 지출 쪽. 예산 대비 실적이 비교하는 값이다 */
+  costBudget: number | null;
   startDate: string | null;
   endDate: string | null;
 }

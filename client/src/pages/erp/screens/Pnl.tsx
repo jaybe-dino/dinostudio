@@ -5,6 +5,7 @@
 import { accountLabel } from "@shared/erp";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile } from "../components/Bits";
+import { AllocationBasis, Confidence } from "../components/Confidence";
 import { DataTable, type Column } from "../components/DataTable";
 import { matchesQuery, useErpUi } from "../context";
 import { signedWon, won } from "../format";
@@ -17,6 +18,7 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
   const pnl = trpc.erp.pnl.useQuery({});
   const runway = trpc.erp.runway.useQuery();
   const ledger = trpc.erp.entries.list.useQuery({ direction: "out" });
+  const deferrals = trpc.erp.deferrals.useQuery();
 
   const total = pnl.data?.total;
   const segments =
@@ -330,8 +332,83 @@ export function PnlScreen({ variant }: { variant: "bu" | "project" | "cost" }) {
       </div>
 
       <Card
-        title={variant === "project" ? "프로젝트별" : "사업부별"}
-        meta={`${segments.length}개`}
+        title="이연 배분 — 연간 결제를 월할로"
+        meta={`${deferrals.data?.rows.length ?? 0}건 · 이번 달 ${signedWon(deferrals.data?.thisMonthTotal ?? 0)}`}
+        body={false}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>집행원장</th>
+              <th>항목</th>
+              <th>기간</th>
+              <th className="n">총액</th>
+              <th className="n">이번 달</th>
+              <th className="n">남은 몫</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(deferrals.data?.rows ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ color: "var(--muted)" }}>
+                  이연으로 잡은 건이 없습니다 — 연간 결제 건에 이연 개월을
+                  넣으면 손익이 그 달만 튀지 않습니다
+                </td>
+              </tr>
+            ) : (
+              (deferrals.data?.rows ?? []).map(row => (
+                <tr key={row.code}>
+                  <td style={{ fontFamily: "var(--mono)" }}>
+                    <button className="m" onClick={() => openEntry(row.code)}>
+                      {row.code}
+                    </button>
+                  </td>
+                  <td className="wrap">{row.title}</td>
+                  <td className="nw">
+                    {row.startMonth} ~ {row.endMonth}
+                    <div className="s">{row.months}개월</div>
+                  </td>
+                  <td className="n">{won(row.total)}</td>
+                  <td className="n">
+                    {row.thisMonth == null ? (
+                      <span className="s">해당 없음</span>
+                    ) : (
+                      won(row.thisMonth)
+                    )}
+                  </td>
+                  <td className="n">{won(row.remaining)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </Card>
+
+      <Note>
+        <b>손익만 나눕니다 — 현금흐름은 나누지 않습니다.</b> 돈은 결제월에 한
+        번에 나갔고 비용만 열두 달에 걸립니다. 남은 몫{" "}
+        {won(deferrals.data?.remainingTotal ?? 0)} 은 아직 손익에 들어가지 않은
+        선급비용·선수수익 잔액입니다. 반올림 잔차는 마지막 달에 몰아 넣어 합이
+        총액과 어긋나지 않게 했습니다.
+      </Note>
+
+      <Card
+        title={
+          <>
+            {variant === "project" ? "프로젝트별" : "사업부별"}{" "}
+            <AllocationBasis basis={pnl.data?.allocationBasis ?? "미확정"} />
+          </>
+        }
+        meta={
+          <>
+            {segments.length}개{" "}
+            <Confidence
+              confirmed={pnl.data?.confidence.confirmed ?? 0}
+              estimated={pnl.data?.confidence.estimated ?? 0}
+              undecided={pnl.data?.confidence.undecided ?? 0}
+            />
+          </>
+        }
         body={false}
       >
         <DataTable

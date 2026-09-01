@@ -233,19 +233,80 @@ export function ApprovalsScreen() {
         meta={`${rows.length}건 · 합계 ${won(pendingTotal)}`}
         body={false}
       >
-        <DataTable
-          columns={columns}
-          rows={rows}
-          rowKey={e => e.code}
-          initialSort={{ key: "date", dir: "asc" }}
-          footer={
-            <tr>
-              <td colSpan={6}>합계</td>
-              <td className="n">{won(pendingTotal)}</td>
-              <td colSpan={2} />
-            </tr>
-          }
-        />
+        {/*
+          모바일 승인 (docs/erp-qa.md E10) — 좁은 화면에서는 표 대신 카드가 뜬다.
+          표를 가로로 밀며 체크박스를 누르는 것은 실제로 못 쓴다.
+          어느 쪽이 보이는지는 design.css 의 미디어 쿼리가 정한다.
+        */}
+        <div className="approve-cards">
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={e => e.code}
+            initialSort={{ key: "date", dir: "asc" }}
+            footer={
+              <tr>
+                <td colSpan={6}>합계</td>
+                <td className="n">{won(pendingTotal)}</td>
+                <td colSpan={2} />
+              </tr>
+            }
+          />
+
+          {rows.map(entry => (
+            <div className="approve-card" key={`m-${entry.code}`}>
+              <div className="top-row">
+                <button
+                  type="button"
+                  className="m"
+                  style={{
+                    border: 0,
+                    background: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "var(--accent)",
+                    font: "inherit",
+                  }}
+                  onClick={() => openEntry(entry.code)}
+                >
+                  {entry.code}
+                </button>
+                <span className="amt">{won(entry.amount)}</span>
+              </div>
+              <div>{entry.title || entry.noteRaw}</div>
+              <div className="s">
+                {entry.cashDate ?? "지급일 미정"} ·{" "}
+                {entry.accountCode ?? "계정 미지정"}
+              </div>
+              <div className="acts">
+                <button
+                  type="button"
+                  className="btn pri"
+                  onClick={() =>
+                    bulk.mutate({ codes: [entry.code], decision: "approve" })
+                  }
+                >
+                  승인
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={!reason.trim()}
+                  title={reason.trim() ? undefined : "반려는 사유가 필요합니다"}
+                  onClick={() =>
+                    bulk.mutate({
+                      codes: [entry.code],
+                      decision: "reject",
+                      reason,
+                    })
+                  }
+                >
+                  반려
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </Card>
 
       <Card title="자금 소요 계산" meta="승인 대기까지 합친 실제 여력">

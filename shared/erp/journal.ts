@@ -2,9 +2,20 @@
  * 전표 · 분개장 — 원장이 확정되는 순간 자동 생성된다. 사람이 분개를 만들지 않는다 (원칙 12).
  * 사양서는 3차로 잡았지만 인수 기준 T1 ⑤가 1차에서 전표 1건 생성을 요구한다.
  */
-import { counterAccountFor, findAccount } from "./accounts.js";
+import {
+  PAYABLE_ACCOUNT,
+  RECEIVABLE_ACCOUNT,
+  counterAccountFor,
+  findAccount,
+} from "./accounts.js";
+
+/** 이자비용 계정 — 상환에서 원금과 나뉜다 */
+const INTEREST_EXPENSE_ACCOUNT = "8110";
+/** 4대보험 사업주 부담분 계정 — 급여와 섞이면 인건비 총액이 실제보다 작다 (B6) */
+const EMPLOYER_INSURANCE_ACCOUNT = "6130";
 import { VAT_INPUT_ACCOUNT, VAT_OUTPUT_ACCOUNT, splitVat } from "./vat.js";
 import {
+  INSURANCE_PAYABLE_ACCOUNT,
   WITHHOLDING_PAYABLE_ACCOUNT,
   splitWithholding,
 } from "./withholding.js";
@@ -119,6 +130,224 @@ export function assertBalanced(journal: Journal): void {
       `전표 ${journal.id} 의 차변 ${debit} 과 대변 ${credit} 이 맞지 않습니다 — 저장하지 않습니다`
     );
   }
+}
+
+/**
+ * 한 원장 건에서 나오는 전표 전부.
+ *
+ * 대부분은 1건이지만 두 경우에 2건이 된다 —
+ *   ① 발생월 ≠ 지급월 → 발생 시 「비용/미지급금」, 지급 시 「미지급금/현금」 (A5)
+ *   ② 차입 상환 → 원금(부채 감소)과 이자(비용)를 나눈다 (C3)
+ *
+ * ①이 없으면 발생과 지급이 다른 건이 부채로 안 잡혀, 다음 달 낼 돈이 재무상태표에 없다.
+ */
+export function buildJournals(
+  entry: Entry,
+  newId: IdFactory,
+  options: { hasQualifiedEvidence?: boolean } = {}
+): Journal[] {
+  if (entry.amount == null || !entry.accountCode) return [];
+
+  // ② 차입 상환 — 원금과 이자를 나눈다
+  if (entry.principalAmount != null && entry.direction === "out") {
+    const repayment = buildRepaymentJournal(entry, newId);
+    if (repayment) return [repayment];
+  }
+
+  // ③ 급여 — 급여 · 사업주부담 · 예수금 3분할 (B6)
+  if (
+    entry.direction === "out" &&
+    (entry.employeeInsurance != null || entry.employerInsurance != null)
+  ) {
+    const payroll = buildPayrollJournal(entry, newId);
+    if (payroll) return [payroll];
+  }
+
+  const accrualMonth = (entry.accrualDate ?? "").slice(0, 7);
+  const cashMonth = (entry.cashDate ?? "").slice(0, 7);
+  const straddles =
+    accrualMonth !== "" && cashMonth !== "" && accrualMonth !== cashMonth;
+
+  if (!straddles) {
+    const single = buildJournal(entry, newId, options);
+    return single ? [single] : [];
+  }
+
+  // ① 발생과 지급이 다른 달 — 2단으로 나눈다
+  const bridge =
+    entry.direction === "out" ? PAYABLE_ACCOUNT : RECEIVABLE_ACCOUNT;
+
+  // 발생 전표는 상대계정을 현금이 아니라 미지급금/미수금으로 둔다.
+  // 세액 분리는 발생 시점에 한다 — 세금계산서 날짜가 그때다.
+  const accrual = buildJournal(
+    { ...entry, cashDate: entry.accrualDate, payMethod: null },
+    newId,
+    options
+  );
+  if (!accrual) return [];
+  for (const line of accrual.lines) {
+    if (line.accountCode === counterAccountFor(entry.payMethod))
+      line.accountCode = bridge;
+  }
+  accrual.journalDate = entry.accrualDate ?? accrual.journalDate;
+  accrual.memo = `발생 — ${accrual.memo ?? ""}`.trim();
+  assertBalanced(accrual);
+
+  // 지급 전표는 미지급금을 없애고 현금을 뺀다
+  const settleId = newId();
+  const counter = counterAccountFor(entry.payMethod);
+  const amount = entry.amount;
+  const settle: Journal = {
+    id: settleId,
+    entryId: entry.id,
+    journalDate: entry.cashDate ?? "",
+    memo: `지급 — ${entry.title || entry.noteRaw}`.trim(),
+    auto: true,
+    reversedBy: null,
+    lines:
+      entry.direction === "out"
+        ? [
+            {
+              id: newId(),
+              journalId: settleId,
+              accountCode: bridge,
+              debit: amount,
+              credit: 0,
+              buCode: entry.buCode,
+              projectId: entry.projectId,
+            },
+            {
+              id: newId(),
+              journalId: settleId,
+              accountCode: counter,
+              debit: 0,
+              credit: amount,
+              buCode: entry.buCode,
+              projectId: entry.projectId,
+            },
+          ]
+        : [
+            {
+              id: newId(),
+              journalId: settleId,
+              accountCode: counter,
+              debit: amount,
+              credit: 0,
+              buCode: entry.buCode,
+              projectId: entry.projectId,
+            },
+            {
+              id: newId(),
+              journalId: settleId,
+              accountCode: bridge,
+              debit: 0,
+              credit: amount,
+              buCode: entry.buCode,
+              projectId: entry.projectId,
+            },
+          ],
+  };
+  assertBalanced(settle);
+  return [accrual, settle];
+}
+
+/**
+ * 차입 상환 전표 — 원금은 부채를 줄이고 이자는 비용이다 (C3).
+ * 원금만 잡으면 이자가 손익에서 빠지고, 전액을 이자로 잡으면 부채가 안 줄어든다.
+ */
+function buildRepaymentJournal(entry: Entry, newId: IdFactory): Journal | null {
+  const total = entry.amount;
+  const principal = entry.principalAmount;
+  if (total == null || principal == null || !entry.accountCode) return null;
+  if (Math.abs(principal) > Math.abs(total)) return null;
+
+  const interest = total - principal;
+  const journalId = newId();
+  const counter = counterAccountFor(entry.payMethod);
+  const line = (accountCode: string, debit: number, credit: number) => ({
+    id: newId(),
+    journalId,
+    accountCode,
+    debit,
+    credit,
+    buCode: entry.buCode,
+    projectId: entry.projectId,
+  });
+
+  const lines = [line(entry.accountCode, principal, 0)];
+  // 이자가 0 이면 줄을 만들지 않는다 — 0 짜리 줄은 전표를 읽기 어렵게만 한다
+  if (interest !== 0) lines.push(line(INTEREST_EXPENSE_ACCOUNT, interest, 0));
+  lines.push(line(counter, 0, total));
+
+  const journal: Journal = {
+    id: journalId,
+    entryId: entry.id,
+    journalDate: entry.cashDate ?? entry.accrualDate ?? "",
+    memo: `상환 — ${entry.title || entry.noteRaw}`.trim(),
+    auto: true,
+    reversedBy: null,
+    lines,
+  };
+  assertBalanced(journal);
+  return journal;
+}
+
+/**
+ * 급여 전표 — 급여 · 사업주부담 · 예수금 3분할 (docs/erp-qa.md B6).
+ *
+ * `6110 급여` 하나로 잡으면 두 가지가 사라진다.
+ *   ① 사업주 부담분은 **우리 비용**이다 — 급여에 섞이면 인건비 총액이 실제보다 작다
+ *   ② 근로자 부담분은 **우리 돈이 아니다** — 예수금으로 잡히지 않으면 공단에
+ *      낼 돈이 재무제표에 없다
+ *
+ * amount 는 통장에서 나간 실지급액이다. 총급여는 실지급액에 근로자가 낼 것
+ * (원천세 + 4대보험 근로자분)을 더해 역산한다.
+ *
+ * 사업주 부담분은 비용(차변 6130)이면서 동시에 공단에 낼 예수금(대변 2132)이다 —
+ * 한쪽만 잡으면 전표가 맞지 않는다.
+ */
+function buildPayrollJournal(entry: Entry, newId: IdFactory): Journal | null {
+  const net = entry.amount;
+  if (net == null || !entry.accountCode) return null;
+
+  const employee = entry.employeeInsurance ?? 0;
+  const employer = entry.employerInsurance ?? 0;
+  const withheldTax = entry.withheldAmount ?? 0;
+  if (employee < 0 || employer < 0 || withheldTax < 0) return null;
+
+  const gross = net + employee + withheldTax;
+  const journalId = newId();
+  const counter = counterAccountFor(entry.payMethod);
+  const line = (accountCode: string, debit: number, credit: number) => ({
+    id: newId(),
+    journalId,
+    accountCode,
+    debit,
+    credit,
+    buCode: entry.buCode,
+    projectId: entry.projectId,
+  });
+
+  const lines = [line(entry.accountCode, gross, 0)];
+  if (employer !== 0) lines.push(line(EMPLOYER_INSURANCE_ACCOUNT, employer, 0));
+  lines.push(line(counter, 0, net));
+  if (withheldTax !== 0)
+    lines.push(line(WITHHOLDING_PAYABLE_ACCOUNT, 0, withheldTax));
+  // 근로자분과 사업주분을 함께 공단에 낸다 — 예수금은 하나로 모인다
+  if (employee + employer !== 0)
+    lines.push(line(INSURANCE_PAYABLE_ACCOUNT, 0, employee + employer));
+
+  const journal: Journal = {
+    id: journalId,
+    entryId: entry.id,
+    journalDate: entry.cashDate ?? entry.accrualDate ?? "",
+    memo: `급여 — ${entry.title || entry.noteRaw}`.trim(),
+    auto: true,
+    reversedBy: null,
+    lines,
+  };
+  assertBalanced(journal);
+  return journal;
 }
 
 export interface TrialBalanceRow {

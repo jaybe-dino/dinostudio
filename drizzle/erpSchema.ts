@@ -21,6 +21,12 @@ import {
   varchar,
 } from "drizzle-orm/mysql-core";
 
+/**
+ * 환율 저장 배율 (A8). 이 파일은 DECIMAL/FLOAT 를 쓰지 않으므로 환율도 정수로
+ * 저장한다 — 1,350.25 원/USD → 13,502,500.
+ */
+export const FX_RATE_SCALE = 10_000;
+
 export const ENTRY_STATUS_VALUES = [
   "undecided",
   "pending",
@@ -69,6 +75,8 @@ export const ROLE_VALUES = [
   "사업부리더",
   "담당자",
   "외부세무",
+  // 읽기 전용 — 감사인·투자자 (docs/erp-qa.md D5)
+  "외부열람",
 ] as const;
 
 /** §8.1 계정과목 마스터 — 자동 판정 3종이 전부 이 테이블 컬럼에서 나온다 */
@@ -136,6 +144,27 @@ export const erpEntries = mysqlTable(
     hasEvidence: boolean("hasEvidence").notNull().default(false),
     /** 개인이 식별되는 인건비 건 — 응답 단계 마스킹 대상 (§13.3) */
     isPersonal: boolean("isPersonal").notNull().default(false),
+    /**
+     * 원천징수 · 상환 · 급여 분할의 근거값 (docs/erp-qa.md A2 · C3 · B6).
+     * 전표가 이 값들로 갈라지므로 원장에 남아야 한다 — 화면에서만 받으면
+     * DB 를 한 번 돌고 온 뒤 전표를 다시 만들 수 없다.
+     */
+    incomeType: varchar("incomeType", { length: 20 }),
+    withheldAmount: bigint("withheldAmount", { mode: "number" }),
+    principalAmount: bigint("principalAmount", { mode: "number" }),
+    /** 4대보험 근로자 부담분 — 예수금 (B6) */
+    employeeInsurance: bigint("employeeInsurance", { mode: "number" }),
+    /** 4대보험 사업주 부담분 — 비용이자 예수금 (B6) */
+    employerInsurance: bigint("employerInsurance", { mode: "number" }),
+    /** 외화 원문 금액 — amount 는 항상 원화다 (A8) */
+    amountForeign: bigint("amountForeign", { mode: "number" }),
+    /**
+     * 적용 환율 × 10,000 (1 외화당 원화). 이 파일의 규칙대로 DECIMAL/FLOAT 를
+     * 쓰지 않기 위해 정수로 저장한다 — 1,350.25 원/USD 는 13,502,500 이다.
+     */
+    fxRateScaled: bigint("fxRateScaled", { mode: "number" }),
+    /** 이연 개월 수 — 손익만 월할로 나눈다 (A7) */
+    deferralMonths: int("deferralMonths"),
     /** 낙관적 잠금 (§4) */
     version: int("version").notNull().default(1),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -258,6 +287,8 @@ export const erpJournals = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     entryId: varchar("entryId", { length: 36 }).notNull(),
+    /** 사람이 읽는 전표 번호 — 2026-08-0001 (docs/erp-qa.md A14) */
+    journalNo: varchar("journalNo", { length: 16 }),
     journalDate: date("journalDate", { mode: "string" }).notNull(),
     memo: text("memo"),
     auto: boolean("auto").notNull().default(true),
@@ -314,6 +345,8 @@ export const erpParties = mysqlTable("erp_party", {
   bizNo: varchar("bizNo", { length: 20 }),
   bankAccount: varchar("bankAccount", { length: 64 }),
   vatMode: varchar("vatMode", { length: 20 }),
+  /** 소득 구분 — 원천징수율과 지급명세서가 갈린다 (docs/erp-qa.md B9) */
+  incomeType: varchar("incomeType", { length: 20 }),
   contact: varchar("contact", { length: 120 }),
   memo: text("memo"),
 });
@@ -345,7 +378,15 @@ export const erpProjects = mysqlTable(
     name: varchar("name", { length: 200 }).notNull(),
     buCode: mysqlEnum("buCode", BU_VALUES),
     status: varchar("status", { length: 40 }).notNull().default("진행"),
+    /**
+     * @deprecated 「예산」이라는 이름으로 계약 금액과 원가 예산 두 가지에 쓰이고 있었다.
+     * 두 값을 아래 두 컬럼으로 나눴다. 데이터가 없어 지우지 않고 두었을 뿐 읽지 않는다.
+     */
     budget: bigint("budget", { mode: "number" }),
+    /** 계약 금액 — 매출 쪽. 프로젝트 마진의 분자다 */
+    contractAmount: bigint("contractAmount", { mode: "number" }),
+    /** 원가 예산 — 지출 쪽. 예산 대비 실적이 비교하는 값이다 */
+    costBudget: bigint("costBudget", { mode: "number" }),
     startDate: date("startDate", { mode: "string" }),
     endDate: date("endDate", { mode: "string" }),
   },

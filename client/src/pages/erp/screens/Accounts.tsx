@@ -2,7 +2,7 @@
  * 계정과목 체계 (§8) — 계정 하나를 정하면 나머지 세 가지가 자동으로 정해진다.
  * 사람은 계정만 고른다.
  */
-import { autoPriority, type Account } from "@shared/erp";
+import { autoPriority, fsLineOf, type Account } from "@shared/erp";
 import { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, PriorityChip, chipClass } from "../components/Bits";
@@ -40,6 +40,16 @@ export function AccountsScreen() {
       header: "대분류",
       sortValue: a => a.type,
       render: a => a.type,
+    },
+    {
+      key: "fs",
+      header: "재무제표 줄",
+      sortValue: a => fsLineOf(a.code),
+      render: a => (
+        <span className="tag n" title="결산 시 이 계정이 앉는 자리">
+          {fsLineOf(a.code)}
+        </span>
+      ),
     },
     {
       key: "cf",

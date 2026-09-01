@@ -39,15 +39,19 @@ export const ACCOUNTS: Account[] = [
   // 1110 · 2120은 §8.1 마스터에 없다. 전표 자동 생성(T1 ⑤)에는 상대계정이 반드시 필요하므로
   // 결제수단에 대응하는 두 계정을 추가했다. docs/erp-spec-gaps.md 참조.
   a("1110", "보통예금", "자산", "영업", false, null),
+  a("2110", "미지급금", "부채", "영업", false, "P2"),
   a("2120", "미지급금 (법인카드)", "부채", "영업", false, null),
   a("1210", "비품·장비", "유형자산", "투자", false, "P3"),
   a("1310", "보증금", "기타자산", "투자", false, "P3"),
+  a("1220", "미수금", "자산", "영업", false, null),
   a("1450", "부가세대급금 (매입세액)", "자산", "영업", false, "P1"),
   a("2130", "예수부가세", "부채", "영업", false, "P1"),
   // 원천징수 예수금 — 다음 달 10일에 납부한다 (docs/erp-qa.md A2)
   a("2131", "예수금 (원천세)", "부채", "영업", false, "P1"),
   a("2132", "예수금 (4대보험)", "부채", "영업", false, "P1"),
   a("2140", "선수금", "부채", "영업", false, null),
+  // 부가세 예수·대급을 상계한 뒤 실제로 낼 금액 (docs/erp-qa.md B7)
+  a("2150", "미지급세금", "부채", "영업", false, "P1"),
   a("2210", "단기차입금", "부채", "재무", false, "P1"),
   a("2310", "장기차입금", "부채", "재무", false, "P1"),
   a("3100", "자본금", "자본", "재무", false, null),
@@ -160,6 +164,14 @@ export function isOpex(
 /** 전표 상대계정 — 결제수단에 대응한다 (§6.3 journal_line) */
 export const CASH_ACCOUNT = "1110";
 export const CARD_PAYABLE_ACCOUNT = "2120";
+
+/**
+ * 발생과 지급이 다른 달일 때 거쳐 가는 계정 (docs/erp-qa.md A5).
+ * 2120 은 법인카드 전용이라 따로 둔다 — 섞으면 카드 미결제와 일반 미지급이 구분되지 않는다.
+ */
+export const PAYABLE_ACCOUNT = "2110";
+/** 미수금 — 수입의 발생과 입금이 다른 달일 때. 1210 은 비품·장비이므로 쓸 수 없다 */
+export const RECEIVABLE_ACCOUNT = "1220";
 
 export function counterAccountFor(
   payMethod: string | null | undefined

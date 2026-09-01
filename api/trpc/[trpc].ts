@@ -13,6 +13,7 @@ import {
   SESSION_COOKIE,
   parseCookies,
   serializeCookie,
+  stepUpFresh,
   verifySessionToken,
 } from "../../server/auth/session.js";
 
@@ -46,13 +47,15 @@ function shim(req: Request, cookies: string[]) {
   return { request, response };
 }
 
-async function sessionUser(req: Request): Promise<User | null> {
+async function sessionUser(
+  req: Request
+): Promise<{ user: User | null; stepUpFresh: boolean }> {
   const token = parseCookies(req.headers.get("cookie"))[SESSION_COOKIE];
-  if (!token) return null;
+  if (!token) return { user: null, stepUpFresh: false };
   const session = await verifySessionToken(token);
-  if (!session) return null;
+  if (!session) return { user: null, stepUpFresh: false };
   // 세션이 곧 사용자다 — 별도 사용자 테이블 조회 없이 역할은 이메일로 해석한다 (§13.1)
-  return {
+  const user = {
     id: 0,
     openId: session.sub,
     name: session.name,
@@ -63,18 +66,25 @@ async function sessionUser(req: Request): Promise<User | null> {
     updatedAt: new Date(),
     lastSignedIn: new Date(),
   } as User;
+  // 민감 조회는 세션이 아니라 재인증 시각으로 열린다 (docs/erp-qa.md D7)
+  return { user, stepUpFresh: stepUpFresh(session) };
 }
 
 async function handler(req: Request): Promise<Response> {
   const cookies: string[] = [];
   const { request, response } = shim(req, cookies);
-  const user = await sessionUser(req);
+  const { user, stepUpFresh: fresh } = await sessionUser(req);
 
   const result = await fetchRequestHandler({
     endpoint: "/api/trpc",
     req,
     router: appRouter,
-    createContext: () => ({ req: request, res: response, user }),
+    createContext: () => ({
+      req: request,
+      res: response,
+      user,
+      stepUpFresh: fresh,
+    }),
   });
 
   if (cookies.length === 0) return result;

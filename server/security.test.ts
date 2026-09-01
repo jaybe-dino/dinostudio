@@ -126,3 +126,48 @@ describe("검색엔진 차단", () => {
     expect(txt).toContain("Disallow: /api/");
   });
 });
+
+describe("알림 크론 — 인증 없이 트리거되지 않는다 (api/cron/notifications.ts)", () => {
+  const load = async () => {
+    const mod = await import("../api/cron/notifications.js");
+    return mod.GET;
+  };
+
+  it("CRON_SECRET 이 없으면 아무 것도 하지 않는다", async () => {
+    const before = process.env.CRON_SECRET;
+    delete process.env.CRON_SECRET;
+    const GET = await load();
+    const res = await GET(new Request("https://admin.dinostudio.kr/api/cron/notifications"));
+    expect(res.status).toBe(503);
+    if (before !== undefined) process.env.CRON_SECRET = before;
+  });
+
+  it("토큰이 틀리면 거부한다 — 밖에서 알림을 무한히 트리거할 수 없다", async () => {
+    process.env.CRON_SECRET = "cron-secret-value";
+    const GET = await load();
+    const res = await GET(
+      new Request("https://admin.dinostudio.kr/api/cron/notifications", {
+        headers: { authorization: "Bearer wrong" },
+      })
+    );
+    expect(res.status).toBe(401);
+    delete process.env.CRON_SECRET;
+  });
+
+  it("토큰이 맞으면 알림을 계산하고 건수만 돌려준다 — 본문을 남기지 않는다", async () => {
+    process.env.CRON_SECRET = "cron-secret-value";
+    const GET = await load();
+    const res = await GET(
+      new Request("https://admin.dinostudio.kr/api/cron/notifications", {
+        headers: { authorization: "Bearer cron-secret-value" },
+      })
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    expect(typeof body.delivered).toBe("number");
+    // 알림 제목·본문이 응답에 실리지 않는다
+    expect(JSON.stringify(body)).not.toMatch(/부족|만기/);
+    delete process.env.CRON_SECRET;
+  });
+});

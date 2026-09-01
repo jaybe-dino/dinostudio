@@ -144,3 +144,102 @@ export function vatAccountsPresent(): boolean {
     findAccount(VAT_OUTPUT_ACCOUNT) != null
   );
 }
+
+/** 부가세를 상계한 뒤 실제로 낼 금액이 앉는 계정 */
+export const TAX_PAYABLE_ACCOUNT = "2150";
+
+/** 부가세 과세기간 — 1기 예정·확정, 2기 예정·확정 */
+export interface VatPeriod {
+  label: string;
+  from: string;
+  to: string;
+  /** 신고·납부 기한 */
+  dueDate: string;
+}
+
+/**
+ * 그 해의 부가세 과세기간 4개.
+ * 법인은 예정신고(4월·10월)와 확정신고(7월·1월)를 한다.
+ */
+export function vatPeriods(year: number): VatPeriod[] {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return [
+    {
+      label: `${year}년 1기 예정`,
+      from: `${year}-01-01`,
+      to: `${year}-03-31`,
+      dueDate: `${year}-04-25`,
+    },
+    {
+      label: `${year}년 1기 확정`,
+      from: `${year}-04-01`,
+      to: `${year}-06-30`,
+      dueDate: `${year}-07-25`,
+    },
+    {
+      label: `${year}년 2기 예정`,
+      from: `${year}-07-01`,
+      to: `${year}-09-30`,
+      dueDate: `${year}-10-25`,
+    },
+    {
+      label: `${year}년 2기 확정`,
+      from: `${year}-10-01`,
+      to: `${year}-12-31`,
+      // 확정신고 기한은 다음 해 1월 25일이다
+      dueDate: `${year + 1}-01-${pad(25)}`,
+    },
+  ];
+}
+
+/** 지금 날짜가 속한 과세기간 */
+export function vatPeriodOf(date: string): VatPeriod | null {
+  const year = Number(date.slice(0, 4));
+  return vatPeriods(year).find(p => date >= p.from && date <= p.to) ?? null;
+}
+
+export interface VatSettlement {
+  period: VatPeriod;
+  /** 매출세액 — 예수부가세 대변 잔액 */
+  output: number;
+  /** 매입세액 — 부가세대급금 차변 잔액 */
+  input: number;
+  /** 낼 돈. 음수면 환급이다 */
+  payable: number;
+  /** 환급 상황인가 — 낼 돈과 받을 돈은 성격이 다르므로 구분한다 */
+  isRefund: boolean;
+}
+
+/**
+ * 과세기간의 부가세 정산 (docs/erp-qa.md B7).
+ *
+ * 신고 시 매출세액에서 매입세액을 빼고 차액만 납부한다. 두 계정을 상계하지 않으면
+ * 재무상태표에 예수부가세와 부가세대급금이 양쪽에 그대로 남아, 실제로 낼 돈이 얼마인지
+ * 어디에도 없다.
+ */
+export function settleVat(
+  period: VatPeriod,
+  journalLines: {
+    accountCode: string;
+    debit: number;
+    credit: number;
+    journalDate: string;
+  }[]
+): VatSettlement {
+  const inRange = journalLines.filter(
+    l => l.journalDate >= period.from && l.journalDate <= period.to
+  );
+  const balance = (code: string, side: "credit" | "debit") =>
+    inRange
+      .filter(l => l.accountCode === code)
+      .reduce(
+        (sum, l) =>
+          sum + (side === "credit" ? l.credit - l.debit : l.debit - l.credit),
+        0
+      );
+
+  const output = balance(VAT_OUTPUT_ACCOUNT, "credit");
+  const input = balance(VAT_INPUT_ACCOUNT, "debit");
+  const payable = output - input;
+  return { period, output, input, payable, isRefund: payable < 0 };
+}

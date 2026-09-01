@@ -10,6 +10,14 @@ export const SESSION_COOKIE = "ds_session";
 export const STATE_COOKIE = "ds_oauth_state";
 /** 세션 수명 — 10명 내외 내부 사용이라 짧게 잡고 재로그인이 싸다 */
 export const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
+/**
+ * 민감 조회의 재인증 유효 시간 (docs/erp-qa.md D7).
+ *
+ * 세션 12시간은 「오늘 하루 일한다」에 맞춘 값이다. 급여 원장이나 세무 제출
+ * 파일은 그보다 짧아야 한다 — 자리를 비운 노트북에서 열리면 안 된다.
+ * 그래서 세션과 별도로 「방금 비밀번호를 다시 넣었는가」를 본다.
+ */
+export const STEP_UP_MAX_AGE_SECONDS = 15 * 60;
 
 export interface SessionPayload {
   /** 구글 sub — 이메일이 바뀌어도 사람은 같다 */
@@ -19,6 +27,21 @@ export interface SessionPayload {
   /** 구글 워크스페이스 도메인 (hd 클레임) */
   hd: string | null;
   picture: string | null;
+  /**
+   * 마지막 재인증 시각 (초 단위 epoch). 민감 조회는 이 값이 신선할 때만 열린다 (D7).
+   * 로그인 자체도 재인증이므로 로그인 시점에 채워진다.
+   */
+  stepUpAt?: number | null;
+}
+
+/** 재인증이 아직 유효한가 (D7) */
+export function stepUpFresh(
+  payload: Pick<SessionPayload, "stepUpAt"> | null | undefined,
+  nowSeconds = Math.floor(Date.now() / 1000)
+): boolean {
+  const at = payload?.stepUpAt;
+  if (at == null) return false;
+  return nowSeconds - at <= STEP_UP_MAX_AGE_SECONDS;
 }
 
 function secret(): Uint8Array {
@@ -59,6 +82,7 @@ export async function verifySessionToken(
       name: typeof payload.name === "string" ? payload.name : payload.email,
       hd: typeof payload.hd === "string" ? payload.hd : null,
       picture: typeof payload.picture === "string" ? payload.picture : null,
+      stepUpAt: typeof payload.stepUpAt === "number" ? payload.stepUpAt : null,
     };
   } catch {
     return null;
