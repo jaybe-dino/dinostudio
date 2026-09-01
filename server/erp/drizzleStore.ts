@@ -4,6 +4,7 @@
  */
 import { ACCOUNTS } from "../../shared/erp/index.js";
 import type {
+  IncomeType,
   Account,
   AppUser,
   Approval,
@@ -103,6 +104,23 @@ function toEntry(row: ErpEntryRow): Entry {
 function toRow(entry: Entry) {
   const { createdAt, ...rest } = entry;
   return { ...rest, createdAt: new Date(createdAt) };
+}
+
+/**
+ * DB 의 varchar 를 도메인 유니온으로 좁힌다.
+ * 목록에 없는 값은 null 로 둔다 — 모르는 소득구분으로 원천징수율을 만들면 신고가 틀린다.
+ */
+function narrowParty(row: {
+  incomeType: string | null;
+  [key: string]: unknown;
+}): Party {
+  const known: IncomeType[] = ["근로소득", "사업소득", "기타소득"];
+  return {
+    ...(row as unknown as Party),
+    incomeType: known.includes(row.incomeType as IncomeType)
+      ? (row.incomeType as IncomeType)
+      : null,
+  };
 }
 
 export class DrizzleLedgerStore implements LedgerStore {
@@ -368,7 +386,7 @@ export class DrizzleLedgerStore implements LedgerStore {
   async listParties(): Promise<Party[]> {
     return (
       await this.db.select().from(erpParties).orderBy(asc(erpParties.name))
-    ).map(r => ({ ...r }));
+    ).map(narrowParty);
   }
 
   async upsertParty(party: Party): Promise<Party> {

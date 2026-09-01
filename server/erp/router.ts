@@ -416,6 +416,11 @@ export const erpRouter = router({
     return run(() => getLedgerService().runway());
   }),
 
+  /** GET /tax — 세금계산서 발행 의무 + 신고 캘린더 (B4 · B5 · B10) */
+  tax: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().tax(actorFrom(ctx)))
+  ),
+
   /** GET /vat — 과세기간별 부가세 정산 (A15 · B7) */
   vat: protectedProcedure
     .input(

@@ -328,6 +328,12 @@ export interface Party {
   bankAccount: string | null;
   /** "vat별도" · "VAT포함" · null(미확정) — B3 */
   vatMode: string | null;
+  /**
+   * 소득 구분 (docs/erp-qa.md B9).
+   * 근로/사업/기타가 원천징수율과 제출할 지급명세서를 다르게 만든다.
+   * 프리랜서인지 직원인지가 여기서 갈린다.
+   */
+  incomeType?: IncomeType | null;
   contact: string | null;
   memo: string | null;
 }

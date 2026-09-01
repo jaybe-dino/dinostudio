@@ -74,6 +74,8 @@ import {
   settleVat,
   vatPeriodOf,
   vatPeriods,
+  invoiceObligations,
+  taxCalendar,
 } from "../../shared/erp/index.js";
 import type {
   Account,
@@ -511,6 +513,66 @@ export class LedgerService {
 
     // 환급 상황(음수)은 0 으로 본다 — 받을 돈을 런웨이에 더해 주면 낙관 편향이 생긴다
     return Math.max(0, vatNet) + Math.max(0, withheld);
+  }
+
+  /**
+   * GET /tax — 세금계산서 발행 의무 + 신고 캘린더 (B4 · B5 · B10)
+   *
+   * 놓치면 가산세가 붙는 것만 모은다. 「알아두면 좋은 것」은 넣지 않는다 —
+   * 캘린더가 길어지면 아무도 안 본다.
+   */
+  async tax(actor: Actor) {
+    const [entries, journals, vat] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listJournals(),
+      this.vat(),
+    ]);
+
+    const today = kstToday();
+    const obligations = invoiceObligations(entries, today);
+
+    // 예수금 잔액 — 부채 계정이므로 대변 잔액이 낼 돈이다
+    const withholdingPayable = journals
+      .flatMap(j => j.lines)
+      .filter(
+        l =>
+          l.accountCode === WITHHOLDING_PAYABLE_ACCOUNT ||
+          l.accountCode === INSURANCE_PAYABLE_ACCOUNT
+      )
+      .reduce((sum, l) => sum + l.credit - l.debit, 0);
+
+    // 마지막 급여 지급일 — 원천세 기한의 기준
+    const lastPayroll =
+      entries
+        .filter(e => e.accountCode === "6110" && e.cashDate != null)
+        .map(e => e.cashDate!)
+        .sort()
+        .pop() ?? null;
+
+    const current = vat.settlements.find(
+      s => s.period.label === vat.currentPeriod?.label
+    );
+
+    return {
+      today,
+      obligations,
+      counts: {
+        overdue: obligations.filter(o => o.status === "기한초과").length,
+        soon: obligations.filter(o => o.status === "기한임박").length,
+        pending: obligations.filter(o => o.status === "발행대기").length,
+        issued: obligations.filter(o => o.status === "발행완료").length,
+      },
+      calendar: taxCalendar(
+        {
+          withholdingPayable: Math.max(0, withholdingPayable) || null,
+          vatPayable: current && !current.isRefund ? current.payable : null,
+          lastPayrollDate: lastPayroll,
+        },
+        today
+      ),
+      vat: current ?? null,
+      role: actor.role,
+    };
   }
 
   /**

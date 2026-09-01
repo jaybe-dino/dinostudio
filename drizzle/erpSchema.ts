@@ -314,6 +314,8 @@ export const erpParties = mysqlTable("erp_party", {
   bizNo: varchar("bizNo", { length: 20 }),
   bankAccount: varchar("bankAccount", { length: 64 }),
   vatMode: varchar("vatMode", { length: 20 }),
+  /** 소득 구분 — 원천징수율과 지급명세서가 갈린다 (docs/erp-qa.md B9) */
+  incomeType: varchar("incomeType", { length: 20 }),
   contact: varchar("contact", { length: 120 }),
   memo: text("memo"),
 });

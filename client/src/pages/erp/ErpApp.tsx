@@ -21,6 +21,7 @@ import "./design.css";
 import { AccountsScreen } from "./screens/Accounts";
 import { AgentsScreen } from "./screens/Agents";
 import { ReconcileScreen } from "./screens/Reconcile";
+import { TaxScreen } from "./screens/Tax";
 import { ApprovalsScreen } from "./screens/Approvals";
 import { TodayScreen } from "./screens/Today";
 import { ArScreen } from "./screens/Ar";
@@ -349,6 +350,14 @@ const SCREENS: ScreenDef[] = [
     hint: "탭 구분 텍스트",
     stage: 3,
     render: () => <OpsScreen variant="report" />,
+  },
+  {
+    id: "tax",
+    label: "세무 일정",
+    group: "손익 · 재무제표 (3차)",
+    hint: "계산서 발행 의무 · 신고 캘린더 · 부가세 과세기간",
+    stage: 3,
+    render: () => <TaxScreen />,
   },
   {
     id: "reconcile",
