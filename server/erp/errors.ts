@@ -15,6 +15,7 @@ export type ErpErrorCode =
   | "evidence_required"
   | "self_approval"
   | "approval_limit"
+  | "export_forbidden"
   | "not_found"
   | "invalid_transition";
 
@@ -63,6 +64,10 @@ const MAP: Record<
   approval_limit: {
     trpc: "FORBIDDEN",
     message: "이 금액은 상위 승인자만 승인할 수 있습니다",
+  },
+  export_forbidden: {
+    trpc: "FORBIDDEN",
+    message: "이 역할은 파일로 내보낼 수 없습니다. 화면에서만 확인하십시오",
   },
   not_found: {
     trpc: "NOT_FOUND",

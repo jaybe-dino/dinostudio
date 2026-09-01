@@ -188,6 +188,66 @@ export function ArScreen() {
       </Card>
 
       <Card
+        title="채권 연령분석"
+        meta={`구간 ${(ar.data?.aging.buckets ?? []).join(" · ")}일`}
+        body={false}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>경과 구간</th>
+              <th className="n">건수</th>
+              <th className="n">금액</th>
+              <th className="n">비중</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(ar.data?.aging.rows ?? []).map((row, i, rows) => (
+              <tr key={row.label}>
+                <td className="k">
+                  {row.label}
+                  {i === rows.length - 1 && row.amount > 0 ? (
+                    <span className="tag a">회수 위험</span>
+                  ) : null}
+                </td>
+                <td className="n">{row.count}건</td>
+                <td className="n">{won(row.amount)}</td>
+                <td className="n">
+                  {row.share == null
+                    ? "—"
+                    : `${Math.round(row.share * 1000) / 10}%`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td className="k">구간 반영 합계</td>
+              <td className="n">
+                {(ar.data?.aging.rows ?? []).reduce((s, r) => s + r.count, 0)}건
+              </td>
+              <td className="n">{won(ar.data?.aging.total ?? 0)}</td>
+              <td className="n" />
+            </tr>
+          </tfoot>
+        </table>
+      </Card>
+
+      {(ar.data?.aging.unknown ?? 0) > 0 ? (
+        <Note tone="warn">
+          경과일을 모르는 미수 {ar.data!.aging.unknown}건은 어느 구간에도 넣지
+          않았습니다 — 계산서 발행일이 없으면 며칠 지났는지 알 수 없고, 임의로
+          넣으면 그 칸의 숫자가 거짓이 됩니다.
+        </Note>
+      ) : null}
+
+      <Note>
+        연령 구간은 업종마다 다릅니다. 기준값 화면의{" "}
+        <code>ar_aging_buckets</code> 에 <code>[15, 30, 60]</code> 처럼 넣으면 그
+        구간으로 다시 나눕니다 — 30·60·90 은 기본값일 뿐입니다.
+      </Note>
+
+      <Card
         title="발행 대기 — 채권 아님"
         meta={`${ar.data?.pendingIssue.length ?? 0}건`}
         body={false}

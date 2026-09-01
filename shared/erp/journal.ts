@@ -11,8 +11,11 @@ import {
 
 /** 이자비용 계정 — 상환에서 원금과 나뉜다 */
 const INTEREST_EXPENSE_ACCOUNT = "8110";
+/** 4대보험 사업주 부담분 계정 — 급여와 섞이면 인건비 총액이 실제보다 작다 (B6) */
+const EMPLOYER_INSURANCE_ACCOUNT = "6130";
 import { VAT_INPUT_ACCOUNT, VAT_OUTPUT_ACCOUNT, splitVat } from "./vat.js";
 import {
+  INSURANCE_PAYABLE_ACCOUNT,
   WITHHOLDING_PAYABLE_ACCOUNT,
   splitWithholding,
 } from "./withholding.js";
@@ -151,6 +154,15 @@ export function buildJournals(
     if (repayment) return [repayment];
   }
 
+  // ③ 급여 — 급여 · 사업주부담 · 예수금 3분할 (B6)
+  if (
+    entry.direction === "out" &&
+    (entry.employeeInsurance != null || entry.employerInsurance != null)
+  ) {
+    const payroll = buildPayrollJournal(entry, newId);
+    if (payroll) return [payroll];
+  }
+
   const accrualMonth = (entry.accrualDate ?? "").slice(0, 7);
   const cashMonth = (entry.cashDate ?? "").slice(0, 7);
   const straddles =
@@ -272,6 +284,64 @@ function buildRepaymentJournal(entry: Entry, newId: IdFactory): Journal | null {
     entryId: entry.id,
     journalDate: entry.cashDate ?? entry.accrualDate ?? "",
     memo: `상환 — ${entry.title || entry.noteRaw}`.trim(),
+    auto: true,
+    reversedBy: null,
+    lines,
+  };
+  assertBalanced(journal);
+  return journal;
+}
+
+/**
+ * 급여 전표 — 급여 · 사업주부담 · 예수금 3분할 (docs/erp-qa.md B6).
+ *
+ * `6110 급여` 하나로 잡으면 두 가지가 사라진다.
+ *   ① 사업주 부담분은 **우리 비용**이다 — 급여에 섞이면 인건비 총액이 실제보다 작다
+ *   ② 근로자 부담분은 **우리 돈이 아니다** — 예수금으로 잡히지 않으면 공단에
+ *      낼 돈이 재무제표에 없다
+ *
+ * amount 는 통장에서 나간 실지급액이다. 총급여는 실지급액에 근로자가 낼 것
+ * (원천세 + 4대보험 근로자분)을 더해 역산한다.
+ *
+ * 사업주 부담분은 비용(차변 6130)이면서 동시에 공단에 낼 예수금(대변 2132)이다 —
+ * 한쪽만 잡으면 전표가 맞지 않는다.
+ */
+function buildPayrollJournal(entry: Entry, newId: IdFactory): Journal | null {
+  const net = entry.amount;
+  if (net == null || !entry.accountCode) return null;
+
+  const employee = entry.employeeInsurance ?? 0;
+  const employer = entry.employerInsurance ?? 0;
+  const withheldTax = entry.withheldAmount ?? 0;
+  if (employee < 0 || employer < 0 || withheldTax < 0) return null;
+
+  const gross = net + employee + withheldTax;
+  const journalId = newId();
+  const counter = counterAccountFor(entry.payMethod);
+  const line = (accountCode: string, debit: number, credit: number) => ({
+    id: newId(),
+    journalId,
+    accountCode,
+    debit,
+    credit,
+    buCode: entry.buCode,
+    projectId: entry.projectId,
+  });
+
+  const lines = [line(entry.accountCode, gross, 0)];
+  if (employer !== 0) lines.push(line(EMPLOYER_INSURANCE_ACCOUNT, employer, 0));
+  lines.push(line(counter, 0, net));
+  if (withheldTax !== 0)
+    lines.push(line(WITHHOLDING_PAYABLE_ACCOUNT, 0, withheldTax));
+  // 근로자분과 사업주분을 함께 공단에 낸다 — 예수금은 하나로 모인다
+  if (employee + employer !== 0)
+    lines.push(line(INSURANCE_PAYABLE_ACCOUNT, 0, employee + employer));
+
+  const journal: Journal = {
+    id: journalId,
+    entryId: entry.id,
+    journalDate: entry.cashDate ?? entry.accrualDate ?? "",
+    memo: `급여 — ${entry.title || entry.noteRaw}`.trim(),
     auto: true,
     reversedBy: null,
     lines,

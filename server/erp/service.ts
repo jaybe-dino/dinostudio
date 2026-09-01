@@ -79,6 +79,22 @@ import {
   projectMargins,
   revenueConcentration,
   runwayDaysCost,
+  accountLedger,
+  cancelReasonLabel,
+  type CancelReasonCode,
+  DEFAULT_AGING_BUCKETS,
+  agingBucketLabel,
+  creditSummary,
+  deferralSchedule,
+  fsMapping,
+  journalChains,
+  nextJournalNumber,
+  paymentOrder,
+  toKrw,
+  canExport,
+  daysBetween,
+  findAccount,
+  fsLineOf,
 } from "../../shared/erp/index.js";
 import type {
   Account,
@@ -91,6 +107,7 @@ import type {
   Period,
   Project,
   Scenario,
+  Setting,
   CashflowUnit,
   Direction,
   Entry,
@@ -291,24 +308,92 @@ export class LedgerService {
     return settingValue<string>(settings, "today_override") ?? kstToday();
   }
 
-  /** GET /ar — 미수 / 발행 대기 / DSO (§9.3) */
+  /** GET /ar — 미수 / 발행 대기 / DSO (§9.3) + 연령분석 (C7) */
   async ar() {
-    const [entries, parties, contracts, today] = await Promise.all([
+    const [entries, parties, contracts, today, settings] = await Promise.all([
       this.store.listEntries(),
       this.store.listParties(),
       this.store.listContracts(),
       this.today(),
+      this.store.listSettings(),
     ]);
-    return buildArReport(entries, parties, contracts, today);
+    const report = buildArReport(entries, parties, contracts, today);
+
+    /*
+     * 연령 구간은 업종마다 다르다 (docs/erp-qa.md C7). 30·60·90 을 코드에 박아
+     * 두면 「우리는 15일이 이미 늦은 것」인 회사에서 아무 신호도 못 준다.
+     * 기준값 ar_aging_buckets 로 덮을 수 있게 하고, 없으면 기본값을 쓴다.
+     */
+    const buckets = (
+      settingValue<number[]>(settings, "ar_aging_buckets") ??
+      Array.from(DEFAULT_AGING_BUCKETS)
+    )
+      .filter(n => Number.isFinite(n) && n > 0)
+      .sort((a, b) => a - b);
+    const useBuckets = buckets.length > 0 ? buckets : [...DEFAULT_AGING_BUCKETS];
+
+    const aged = report.receivables.filter(
+      l => l.entry.amount != null && l.agingDays != null
+    );
+    const grouped = new Map<string, { count: number; amount: number }>();
+    for (const bucket of useBuckets)
+      grouped.set(`${bucket}일 이내`, { count: 0, amount: 0 });
+    grouped.set(`${useBuckets[useBuckets.length - 1]}일 초과`, {
+      count: 0,
+      amount: 0,
+    });
+    for (const line of aged) {
+      const label = agingBucketLabel(line.agingDays ?? 0, useBuckets);
+      const cell = grouped.get(label) ?? { count: 0, amount: 0 };
+      cell.count += 1;
+      cell.amount += line.entry.amount ?? 0;
+      grouped.set(label, cell);
+    }
+    const agedTotal = aged.reduce((sum, l) => sum + (l.entry.amount ?? 0), 0);
+
+    return {
+      ...report,
+      aging: {
+        buckets: useBuckets,
+        // 경과일을 모르는 건은 구간에 넣지 않는다 — 넣으면 어느 칸이든 거짓이 된다
+        unknown: report.receivables.length - aged.length,
+        total: agedTotal,
+        rows: Array.from(grouped.entries()).map(([label, cell]) => ({
+          label,
+          count: cell.count,
+          amount: cell.amount,
+          share: agedTotal === 0 ? null : cell.amount / agedTotal,
+        })),
+      },
+    };
   }
 
   /** GET /debt — 차입 원장 + D-day + 알람 상태 (§9.4) */
-  async debt() {
+  /**
+   * 민감 자료 조회를 기록한다 (docs/erp-qa.md D3).
+   * 급여만 기록하고 있었다 — 부채·계약도 밖으로 새면 같은 문제다.
+   */
+  private async recordSensitiveAccess(
+    table: string,
+    actor: Actor,
+    detail: Record<string, unknown> = {}
+  ): Promise<void> {
+    const watched = settingValue<string[]>(
+      await this.store.listSettings(),
+      "sensitive_tables"
+    ) ?? ["payroll", "debt", "contract"];
+    if (!watched.includes(table)) return;
+    await this.audit(table, "-", "read", null, detail, actor);
+  }
+
+  async debt(actor?: Actor) {
     const [debts, settings, today] = await Promise.all([
       this.store.listDebts(),
       this.store.listSettings(),
       this.today(),
     ]);
+    // 부채 열람도 기록한다 — 급여만 기록하던 것을 넓혔다 (D3)
+    if (actor) await this.recordSensitiveAccess("debt", actor);
     return buildDebtReport(
       debts,
       today,
@@ -342,12 +427,15 @@ export class LedgerService {
       this.store.listEntries(),
     ]);
     const byId = new Map(entries.map(e => [e.id, e]));
+    const withCode = journals.map(j => ({
+      ...j,
+      entryCode: byId.get(j.entryId)?.code ?? j.entryId,
+    }));
     return {
-      journals: journals.map(j => ({
-        ...j,
-        entryCode: byId.get(j.entryId)?.code ?? j.entryId,
-      })),
+      journals: withCode,
       trialBalance: trialBalance(journals),
+      // 수정된 건의 원본 · 역분개 · 재분개 대응 (A16)
+      chains: journalChains(withCode),
     };
   }
 
@@ -516,6 +604,270 @@ export class LedgerService {
 
     // 환급 상황(음수)은 0 으로 본다 — 받을 돈을 런웨이에 더해 주면 낙관 편향이 생긴다
     return Math.max(0, vatNet) + Math.max(0, withheld);
+  }
+
+  /**
+   * GET /tax-package — 세무대리인 제출용 (docs/erp-qa.md E11)
+   *
+   * 지금 내보내기는 탭 구분 텍스트 중심이다. 세무대리인이 원하는 것은
+   * 「계정별 집계 + 증빙 목록」이라는 고정 양식이고, 매달 같은 모양이어야 한다.
+   *
+   * 외부열람 역할은 내보내지 못한다 — 화면에서 보는 것과 파일로 들고 나가는 것은
+   * 다른 위험이다.
+   */
+  async taxPackage(input: { ym: string }, actor: Actor) {
+    if (!canExport(actor.role))
+      throw erpError("export_forbidden");
+
+    const [entries, journals, attachments] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listJournals(),
+      this.store.listAttachments(),
+    ]);
+
+    const inMonth = (date: string | null) => (date ?? "").startsWith(input.ym);
+    const monthEntries = entries.filter(
+      e =>
+        e.status === "confirmed" &&
+        (inMonth(e.accrualDate) || inMonth(e.cashDate))
+    );
+
+    // 계정별 집계 — 세무대리인 장부와 맞추는 단위
+    const byAccount = new Map<string, { debit: number; credit: number }>();
+    for (const journal of journals.filter(j => inMonth(j.journalDate)))
+      for (const line of journal.lines) {
+        const acc = byAccount.get(line.accountCode) ?? { debit: 0, credit: 0 };
+        acc.debit += line.debit;
+        acc.credit += line.credit;
+        byAccount.set(line.accountCode, acc);
+      }
+
+    const attachmentsByEntry = new Map<string, typeof attachments>();
+    for (const a of attachments) {
+      const list = attachmentsByEntry.get(a.entryId);
+      if (list) list.push(a);
+      else attachmentsByEntry.set(a.entryId, [a]);
+    }
+
+    await this.audit(
+      "export",
+      `tax-package:${input.ym}`,
+      "read",
+      null,
+      { ym: input.ym, entries: monthEntries.length },
+      actor
+    );
+
+    return {
+      ym: input.ym,
+      accountSummary: Array.from(byAccount.entries())
+        .map(([code, v]) => ({
+          code,
+          name: findAccount(code)?.name ?? code,
+          fsLine: fsLineOf(code),
+          debit: v.debit,
+          credit: v.credit,
+          net: v.debit - v.credit,
+        }))
+        .sort((a, b) => a.code.localeCompare(b.code)),
+      evidence: monthEntries.map(e => {
+        const own = attachmentsByEntry.get(e.id) ?? [];
+        return {
+          code: e.code,
+          date: e.accrualDate ?? e.cashDate,
+          title: e.title,
+          accountCode: e.accountCode,
+          amount: e.amount,
+          // 적격증빙이 있는지가 세무대리인이 가장 먼저 보는 것이다
+          kinds: own.map(a => a.kind),
+          qualified: own.some(
+            a => a.storage !== "none" && evidenceKindSpec(a.kind)?.qualified
+          ),
+          missing: own.length === 0,
+        };
+      }),
+      counts: {
+        entries: monthEntries.length,
+        missingEvidence: monthEntries.filter(
+          e => (attachmentsByEntry.get(e.id) ?? []).length === 0
+        ).length,
+      },
+    };
+  }
+
+  /**
+   * GET /account-ledger — 계정별 원장 (A13)
+   *
+   * 계정과목 체계는 있었지만 「그 계정에 무엇이 들어왔나」를 볼 방법이 없었다.
+   * 잔액이 이상할 때 이 화면 없이는 원인을 찾을 수 없다.
+   */
+  async accountLedger(
+    input: { accountCode: string; from?: string | null; to?: string | null },
+    actor: Actor
+  ) {
+    const journals = await this.store.listJournals();
+    // 급여 계정 열람은 기록한다 — 금액이 개인별로 읽힐 수 있다
+    if (input.accountCode.startsWith("61"))
+      await this.audit(
+        "journal",
+        input.accountCode,
+        "read",
+        null,
+        { accountCode: input.accountCode },
+        actor
+      );
+    return accountLedger(input.accountCode, journals, {
+      from: input.from,
+      to: input.to,
+    });
+  }
+
+  /**
+   * GET /credit — 여신 한도 (C4)
+   *
+   * 마이너스통장·카드 한도는 실질 유동성인데 현금 현황에 안 보였다.
+   * 「즉시 동원 가능액」을 알아야 부족액의 의미가 달라진다.
+   */
+  async credit() {
+    const settings = await this.store.listSettings();
+    const lines =
+      settingValue<
+        {
+          id: string;
+          name: string;
+          kind: "마이너스통장" | "법인카드" | "기타";
+          limit: number;
+          used: number;
+        }[]
+      >(settings, "credit_lines") ?? [];
+    const summary = creditSummary(lines);
+    const cashOnHand = settingValue<number>(settings, "cash_on_hand");
+    return {
+      ...summary,
+      cashOnHand,
+      // 한도는 빌리는 돈이다 — 현금과 합쳐 하나로 보여 주면 착각한다
+      immediatelyAvailable:
+        cashOnHand == null ? null : cashOnHand + summary.totalAvailable,
+      note: "한도는 빌리는 돈입니다. 현금과 성격이 달라 따로 표시합니다.",
+    };
+  }
+
+  /**
+   * GET /bank-accounts — 계좌별 잔액 (docs/erp-qa.md C5)
+   *
+   * `1110 보통예금` 하나로 합쳐져 있었다. 실제로는 계좌가 여러 개이고,
+   * 대사(reconciliation)는 계좌 단위로만 성립한다 — 합계가 맞아도 계좌별로
+   * 어긋나 있으면 어느 쪽이 틀렸는지 알 수 없다.
+   *
+   * 잔액은 은행이 가진 숫자다. 원장에서 만들어 내지 않고, 사람이 넣은 잔액과
+   * 원장 증감을 **나란히** 보여 준다. 차이가 있으면 그것이 대사 대상이다.
+   */
+  async bankAccounts() {
+    const [entries, settings] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listSettings(),
+    ]);
+    const declared =
+      settingValue<
+        { code: string; name: string; bank: string; balance: number | null }[]
+      >(settings, "bank_accounts") ?? [];
+
+    const movementOf = (code: string | null) =>
+      entries
+        .filter(
+          e =>
+            e.status === "confirmed" &&
+            e.amount != null &&
+            (e.bankAccount ?? null) === code
+        )
+        .reduce(
+          (sum, e) => sum + (e.direction === "in" ? e.amount! : -e.amount!),
+          0
+        );
+
+    const rows = declared.map(account => ({
+      ...account,
+      ledgerMovement: movementOf(account.code),
+      entries: entries.filter(e => e.bankAccount === account.code).length,
+    }));
+
+    // 계좌가 안 붙은 확정 건 — 대사가 불가능한 부분이다
+    const unassignedEntries = entries.filter(
+      e => e.status === "confirmed" && e.amount != null && !e.bankAccount
+    );
+
+    const declaredTotal = rows.every(r => r.balance == null)
+      ? null
+      : rows.reduce((sum, r) => sum + (r.balance ?? 0), 0);
+
+    return {
+      rows,
+      declaredTotal,
+      cashOnHand: settingValue<number>(settings, "cash_on_hand"),
+      unassigned: {
+        n: unassignedEntries.length,
+        amount: unassignedEntries.reduce(
+          (sum, e) => sum + (e.direction === "in" ? e.amount! : -e.amount!),
+          0
+        ),
+      },
+      note: "잔액은 은행이 가진 숫자입니다. 원장 증감과 나란히 두어, 차이가 있으면 그것을 대사 대상으로 봅니다.",
+    };
+  }
+
+  /** GET /fs-mapping — 계정 → 재무제표 줄 매핑 (A10) */
+  async fsMapping() {
+    return { rows: fsMapping() };
+  }
+
+  /**
+   * GET /payment-order — 같은 등급 안에서의 지급 순서 (C8)
+   *
+   * 연체가 먼저다 — 이자·신뢰 비용이 붙는다. 금액을 마지막에 두는 이유는
+   * 큰 건을 먼저 내면 작은 건 여러 개가 동시에 연체되기 때문이다.
+   */
+  async paymentOrder(actor: Actor) {
+    const [entries, parties] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listParties(),
+    ]);
+    const partyName = new Map(parties.map(p => [p.id, p.name]));
+    const today = kstToday();
+    const open = entries.filter(
+      e =>
+        e.direction === "out" &&
+        (e.status === "pending" || e.status === "confirmed") &&
+        e.paidAt == null &&
+        e.amount != null
+    );
+    const byPriority = new Map<string, Entry[]>();
+    for (const entry of open) {
+      const key = resolvePriority(entry) ?? "미지정";
+      const list = byPriority.get(key);
+      if (list) list.push(entry);
+      else byPriority.set(key, [entry]);
+    }
+    return {
+      today,
+      groups: Array.from(byPriority.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([priority, list]) => ({
+          priority,
+          total: list.reduce((s, e) => s + (e.amount ?? 0), 0),
+          entries: paymentOrder(list, today).map(e => {
+            const due = e.dueDate ?? e.cashDate;
+            return {
+              entry: maskEntryForRole(e, actor.role),
+              partyName: e.partyId
+                ? (partyName.get(e.partyId) ?? "거래처 미등록")
+                : null,
+              due,
+              // 음수는 연체 일수다 — 화면에서 부호로 갈라 쓴다
+              daysToDue: due == null ? null : daysBetween(today, due),
+            };
+          }),
+        })),
+    };
   }
 
   /**
@@ -881,9 +1233,10 @@ export class LedgerService {
 
   /** POST /periods/:ym/close — blockers가 비어야만 성공 (T12) */
   async closePeriod(ym: string, actor: Actor) {
-    const [entries, snapshots] = await Promise.all([
+    const [entries, snapshots, settings] = await Promise.all([
       this.store.listEntries(),
       this.store.listSnapshots(),
+      this.store.listSettings(),
     ]);
     const failures = runMigrationChecks(entries, snapshots)
       .filter(c => c.verdict === "fail")
@@ -911,7 +1264,69 @@ export class LedgerService {
         { ym, blockers },
         `${ym} 마감 불가 — ${blockers.length}건이 막고 있습니다`
       );
-    return period;
+
+    /*
+     * 다음 달 기초잔액을 여기서 만든다 (docs/erp-qa.md A12).
+     *
+     * 지금까지 시작 잔액은 사람이 cash_on_hand 에 넣던 숫자였다. 매달 손으로
+     * 넣으면 ① 넣는 것을 잊고 ② 원장과 어긋나도 아무도 모른다. 마감이
+     * 끝난 달의 현금 증감은 더 바뀌지 않으므로, 그 시점에 계산해 두는 것이
+     * 유일하게 안전한 자동화다.
+     *
+     * 수동 입력은 이관 첫 달에만 남는다 — 그 달의 기초는 원장 밖에 있다.
+     */
+    const opening = this.openingCashFor(ym, settings);
+    const nextYm = this.nextMonth(ym);
+    const movement = entries
+      .filter(e => e.status === "confirmed" && (e.cashDate ?? "").startsWith(ym))
+      .reduce(
+        (sum, e) =>
+          sum + (e.direction === "in" ? (e.amount ?? 0) : -(e.amount ?? 0)),
+        0
+      );
+    const carried =
+      opening == null
+        ? null
+        : await this.putSetting(
+            `opening_cash:${nextYm}`,
+            opening + movement,
+            // 원장에서 계산한 값이므로 임시가 아니다
+            false,
+            actor,
+            `${ym} 마감 이월 — 기초 ${opening} + 증감 ${movement}`
+          );
+
+    return {
+      ...period,
+      carryForward:
+        carried == null
+          ? {
+              ym: nextYm,
+              value: null,
+              blockedBy:
+                "이 달의 기초잔액이 없어 이월을 계산하지 못했습니다 — 이관 첫 달은 cash_on_hand 를 먼저 넣어야 합니다",
+            }
+          : { ym: nextYm, value: carried.value as number, blockedBy: null },
+    };
+  }
+
+  /** 다음 달 (YYYY-MM) */
+  private nextMonth(ym: string): string {
+    const [y, m] = ym.split("-").map(Number);
+    return m === 12
+      ? `${y + 1}-01`
+      : `${y}-${String(m + 1).padStart(2, "0")}`;
+  }
+
+  /**
+   * 그 달의 기초잔액. 마감으로 만들어진 이월값이 있으면 그것이 우선이고,
+   * 없으면 이관 첫 달로 보고 cash_on_hand 를 쓴다 (A12).
+   */
+  private openingCashFor(ym: string, settings: Setting[]): number | null {
+    return (
+      settingValue<number>(settings, `opening_cash:${ym}`) ??
+      settingValue<number>(settings, "cash_on_hand")
+    );
   }
 
   /**
@@ -1361,6 +1776,20 @@ export class LedgerService {
       note?: string | null;
       source?: Entry["source"];
       sourceRef?: string | null;
+      /** 입출금 계좌 — 계좌별 잔액·대사의 단위다 (docs/erp-qa.md C5) */
+      bankAccount?: string | null;
+      /** 원천징수 근거 (A2) */
+      incomeType?: Entry["incomeType"];
+      withheldAmount?: number | null;
+      /** 차입 상환의 원금 몫 (C3) */
+      principalAmount?: number | null;
+      /** 4대보험 분리 (B6) */
+      employeeInsurance?: number | null;
+      employerInsurance?: number | null;
+      /** 외화 (A8) — amount 는 환산된 원화다 */
+      currency?: string | null;
+      amountForeign?: number | null;
+      fxRate?: number | null;
       /** 중복 경고를 확인하고 강행할 때의 사유 — 감사로그에 남는다 (§13.2) */
       duplicateOverrideReason?: string;
     },
@@ -1373,12 +1802,28 @@ export class LedgerService {
       existing.map(e => e.code)
     );
 
+    /*
+     * 외화는 여기서 원화로 환산한다 (docs/erp-qa.md A8).
+     * 환율을 모르면 환산하지 않고 금액을 비운 채 판정 대기로 둔다 — 임의 환율로
+     * 원장에 넣으면 나중에 어느 줄이 추정이었는지 구분할 수 없다.
+     */
+    const currency = (input.currency ?? "KRW").toUpperCase();
+    const fx =
+      currency === "KRW" || input.amountForeign == null
+        ? { krw: input.amount, reason: null }
+        : toKrw({
+            amount: input.amountForeign,
+            currency,
+            rate: input.fxRate ?? null,
+          });
+    const amount = currency === "KRW" ? input.amount : fx.krw;
+
     // 항목명이 없거나 금액이 확정되지 않으면 판정 대기다 (§7.2 · §6.2)
     const undecidedReason =
       input.title.trim() === ""
         ? "항목명 없음"
-        : input.amount == null
-          ? "금액 미확정"
+        : amount == null
+          ? (fx.reason ?? "금액 미확정")
           : null;
 
     const entry: Entry = {
@@ -1390,11 +1835,13 @@ export class LedgerService {
       title: input.title,
       noteRaw: input.noteRaw ?? null,
       note: input.note ?? null,
-      amount: input.amount,
+      amount,
       amountCandidate: input.amountCandidate ?? null,
       amountSupply: null,
       amountVat: null,
-      currency: "KRW",
+      currency,
+      amountForeign: input.amountForeign ?? null,
+      fxRate: input.fxRate ?? null,
       cashDate: input.cashDate,
       accrualDate: input.accrualDate ?? input.cashDate,
       startDate: null,
@@ -1413,7 +1860,7 @@ export class LedgerService {
       priorityOverride: null,
       priorityReason: null,
       payMethod: input.payMethod ?? null,
-      bankAccount: null,
+      bankAccount: input.bankAccount ?? null,
       invoiceIssued: null,
       invoiceNo: null,
       invoiceDate: null,
@@ -1424,6 +1871,11 @@ export class LedgerService {
       undecidedReason,
       hasEvidence: input.hasEvidence ?? false,
       isPersonal: false,
+      incomeType: input.incomeType ?? null,
+      withheldAmount: input.withheldAmount ?? null,
+      principalAmount: input.principalAmount ?? null,
+      employeeInsurance: input.employeeInsurance ?? null,
+      employerInsurance: input.employerInsurance ?? null,
       version: 1,
       createdAt: nowIso(),
       createdBy: actor.id,
@@ -1610,7 +2062,13 @@ export class LedgerService {
     code: string,
     reason: string,
     expectedVersion: number,
-    actor: Actor
+    actor: Actor,
+    /**
+     * 취소 사유 분류 (docs/erp-qa.md D6).
+     * 자유 텍스트만 받으면 「중복 입력이 몇 건인지」를 셀 수 없어
+     * 개선할 곳을 못 찾는다.
+     */
+    reasonCode?: CancelReasonCode | null
   ) {
     if (!reason?.trim()) throw erpError("reason_required");
     const entry = await this.requireWritable(code, actor);
@@ -1647,9 +2105,10 @@ export class LedgerService {
       entry.id,
       "cancel",
       entry,
-      counter,
+      // 분류를 함께 남긴다 — 「중복 입력 몇 건」을 셀 수 있어야 개선할 곳이 보인다
+      { ...counter, cancelReasonCode: reasonCode ?? "other" },
       actor,
-      reason
+      reasonCode ? `${cancelReasonLabel(reasonCode)} — ${reason}` : reason
     );
     return { cancelledCode: entry.code, counterCode: counter.code };
   }
@@ -1976,7 +2435,15 @@ export class LedgerService {
     const journals = buildJournals(entry, () => randomUUID(), {
       hasQualifiedEvidence,
     });
-    for (const journal of journals) await this.store.appendJournal(journal);
+
+    // 사람이 읽는 번호를 붙인다 (A14). 같은 달 안에서 순번이 이어져야 하므로
+    // 기존 번호를 보고 다음 값을 찾는다.
+    const existing = (await this.store.listJournals()).map(j => j.journalNo);
+    for (const journal of journals) {
+      journal.journalNo = nextJournalNumber(journal.journalDate, existing);
+      existing.push(journal.journalNo);
+      await this.store.appendJournal(journal);
+    }
     return journals[0] ?? null;
   }
 

@@ -75,6 +75,11 @@ export const ROLES = [
   "사업부리더",
   "담당자",
   "외부세무",
+  /**
+   * 읽기 전용 (docs/erp-qa.md D5).
+   * 감사인·투자자에게 보여 줄 때 쓴다. 금액은 총액만 보이고 내보내기가 막힌다.
+   */
+  "외부열람",
 ] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -170,6 +175,21 @@ export interface Entry {
    * 나머지가 이자이므로 이자액을 따로 받지 않는다 — 두 값을 받으면 합이 어긋날 수 있다.
    */
   principalAmount?: number | null;
+  /**
+   * 4대보험 근로자 부담분 (docs/erp-qa.md B6).
+   * 급여 계정에 하나로 잡히면 사업주 부담분(비용)과 근로자 부담분(예수금)이
+   * 구분되지 않는다. 있으면 전표를 급여 · 사업주부담 · 예수금 3분할한다.
+   */
+  employeeInsurance?: number | null;
+  /** 4대보험 사업주 부담분 — 비용이면서 동시에 공단에 낼 예수금이다 (B6) */
+  employerInsurance?: number | null;
+  /**
+   * 외화 원문 금액 (docs/erp-qa.md A8). amount 는 항상 원화다 —
+   * 원장·손익·재무제표가 한 통화여야 합계가 성립한다. 외화는 근거로 남긴다.
+   */
+  amountForeign?: number | null;
+  /** 적용 환율 — 1 외화당 원화. 없으면 환산하지 않는다 */
+  fxRate?: number | null;
   /** 낙관적 잠금 (§4 동시성) */
   version: number;
   createdAt: string;
@@ -309,6 +329,11 @@ export interface JournalLine {
 }
 
 export interface Journal {
+  /**
+   * 사람이 읽는 전표 번호 — `2026-08-0001` (docs/erp-qa.md A14).
+   * UUID 는 감사·세무조정에서 참조할 수 없다. UUID 는 내부 키로 남기고 이것을 쓴다.
+   */
+  journalNo?: string | null;
   id: string;
   entryId: string;
   journalDate: string;

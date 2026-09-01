@@ -2154,3 +2154,57 @@
     transition: none !important;
   }
 }
+
+/*
+ * 모바일 승인 (docs/erp-qa.md E10)
+ *
+ * 반응형은 되어 있었지만 승인 흐름이 데스크톱 전제였다 — 좁은 화면에서
+ * 표를 가로로 밀어 가며 체크박스를 누르는 것은 실제로 못 쓴다.
+ * 좁은 화면에서는 표를 카드로 바꾼다.
+ */
+@media (max-width: 720px) {
+  .erp-app .approve-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .erp-app .approve-cards table {
+    display: none;
+  }
+  .erp-app .approve-card {
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .erp-app .approve-card .top-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .erp-app .approve-card .amt {
+    margin-left: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 15px;
+  }
+  /* 손가락으로 누를 수 있는 크기 — 44px 아래로는 오타가 난다 */
+  .erp-app .approve-card .acts button {
+    min-height: 44px;
+    flex: 1;
+  }
+  .erp-app .approve-card .acts {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+}
+
+@media (min-width: 721px) {
+  .erp-app .approve-card {
+    display: none;
+  }
+}

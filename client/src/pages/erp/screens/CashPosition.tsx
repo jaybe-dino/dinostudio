@@ -38,6 +38,7 @@ export function CashPositionScreen() {
   });
 
   const live = trpc.erp.views.cashPosition.useQuery({ includeUndecided });
+  const banks = trpc.erp.bankAccounts.useQuery();
   const simulate = trpc.erp.views.simulate.useMutation();
 
   // 시뮬레이션 결과가 있으면 그것을 보여준다 — 저장하지 않는다 (§10.1)
@@ -262,6 +263,64 @@ export function CashPositionScreen() {
           }
         />
       </Card>
+
+      <Card
+        title="계좌별 잔액"
+        meta={`${banks.data?.rows.length ?? 0}개 계좌 · 대사의 전제`}
+        body={false}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>계좌</th>
+              <th>은행</th>
+              <th className="n">은행 잔액</th>
+              <th className="n">원장 증감</th>
+              <th className="n">확정 건수</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(banks.data?.rows ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ color: "var(--muted)" }}>
+                  등록된 계좌가 없습니다 — 기준값 화면의{" "}
+                  <code>bank_accounts</code> 에 넣습니다
+                </td>
+              </tr>
+            ) : (
+              (banks.data?.rows ?? []).map(row => (
+                <tr key={row.code}>
+                  <td style={{ fontFamily: "var(--mono)" }}>
+                    {row.code}
+                    <div className="s">{row.name}</div>
+                  </td>
+                  <td>{row.bank}</td>
+                  <td className="n">
+                    {row.balance == null ? (
+                      <span className="s">미입력</span>
+                    ) : (
+                      won(row.balance)
+                    )}
+                  </td>
+                  <td className="n">{signedWon(row.ledgerMovement)}</td>
+                  <td className="n">{row.entries}건</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </Card>
+
+      {(banks.data?.unassigned.n ?? 0) > 0 ? (
+        <Note tone="warn">
+          계좌가 지정되지 않은 확정 건이 {banks.data!.unassigned.n}건 있습니다
+          (순증감 {signedWon(banks.data!.unassigned.amount)}). 이 건들은 계좌
+          단위 대사에 들어가지 않습니다 — 합계는 맞아도 어느 계좌가 어긋났는지
+          알 수 없습니다.
+        </Note>
+      ) : null}
+
+      <Note>{banks.data?.note}</Note>
 
       <Card
         title="우선순위 자동 판정"

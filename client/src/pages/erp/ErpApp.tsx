@@ -18,7 +18,11 @@ import { Brief } from "./components/Brief";
 import { EntryDrawer } from "./components/EntryDrawer";
 import { ErpUiContext } from "./context";
 import "./design.css";
+import { AccountLedgerScreen } from "./screens/AccountLedger";
 import { AccountsScreen } from "./screens/Accounts";
+import { CreditScreen } from "./screens/Credit";
+import { PaymentOrderScreen } from "./screens/PaymentOrder";
+import { TaxPackageScreen } from "./screens/TaxPackage";
 import { AgentsScreen } from "./screens/Agents";
 import { ReconcileScreen } from "./screens/Reconcile";
 import { InsightsScreen } from "./screens/Insights";
@@ -375,6 +379,38 @@ const SCREENS: ScreenDef[] = [
     hint: "거래내역 붙여넣기 · 안 맞는 것만 남김",
     stage: 2,
     render: () => <ReconcileScreen />,
+  },
+  {
+    id: "account-ledger",
+    label: "계정별 원장",
+    group: "손익 · 재무제표 (3차)",
+    hint: "한 계정에 들어온 전표 · 누계 잔액",
+    stage: 3,
+    render: () => <AccountLedgerScreen />,
+  },
+  {
+    id: "tax-package",
+    label: "세무 제출 패키지",
+    group: "손익 · 재무제표 (3차)",
+    hint: "계정별 집계 + 증빙 목록 · 매달 같은 양식",
+    stage: 3,
+    render: () => <TaxPackageScreen />,
+  },
+  {
+    id: "credit",
+    label: "여신 · 한도",
+    group: "현금 · 승인 (1차)",
+    hint: "마이너스통장 · 카드 한도 · 즉시 동원 가능액",
+    stage: 2,
+    render: () => <CreditScreen />,
+  },
+  {
+    id: "payment-order",
+    label: "지급 순서",
+    group: "현금 · 승인 (1차)",
+    hint: "같은 등급 안 연체 · 기한 · 금액 순",
+    stage: 2,
+    render: () => <PaymentOrderScreen />,
   },
   {
     id: "agents",

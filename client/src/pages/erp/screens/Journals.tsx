@@ -20,6 +20,7 @@ export function JournalsScreen() {
     )
   );
   const tb = data.data?.trialBalance;
+  const chains = data.data?.chains ?? [];
 
   return (
     <>
@@ -142,6 +143,85 @@ export function JournalsScreen() {
           </table>
         </div>
       </Card>
+
+      <Card
+        title="수정 이력 대응 — 원본 · 역분개 · 재분개"
+        meta={`${chains.length}건`}
+        body={false}
+      >
+        <table>
+          <thead>
+            <tr>
+              <th>집행원장</th>
+              <th>구분</th>
+              <th>전표번호</th>
+              <th>일자</th>
+              <th>적요</th>
+              <th className="n">차변 합</th>
+            </tr>
+          </thead>
+          <tbody>
+            {chains.length === 0 ? (
+              <tr>
+                <td colSpan={6} style={{ color: "var(--muted)" }}>
+                  확정 후 수정된 건이 없습니다 — 수정이 생기면 여기에 세 줄로
+                  대응이 남습니다
+                </td>
+              </tr>
+            ) : (
+              chains.flatMap(chain =>
+                chain.rows.map((row, i) => (
+                  <tr key={row.journalId}>
+                    <td style={{ fontFamily: "var(--mono)" }}>
+                      {i === 0 ? (
+                        <>
+                          <button
+                            className="m"
+                            onClick={() => openEntry(chain.baseCode)}
+                          >
+                            {chain.baseCode}
+                          </button>
+                          {chain.balanced ? null : (
+                            <span className="tag a">순액 확인 필요</span>
+                          )}
+                        </>
+                      ) : (
+                        ""
+                      )}
+                    </td>
+                    <td className="nw">
+                      <span
+                        className={
+                          row.role === "역분개"
+                            ? "chip w"
+                            : row.role === "재분개"
+                              ? "chip g"
+                              : "chip"
+                        }
+                      >
+                        {row.role}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: "var(--mono)" }}>
+                      {row.journalNo ?? "—"}
+                      <div className="s">{row.entryCode}</div>
+                    </td>
+                    <td className="nw">{shortDate(row.journalDate)}</td>
+                    <td className="wrap">{row.memo ?? "—"}</td>
+                    <td className="n">{won(row.debitTotal)}</td>
+                  </tr>
+                ))
+              )
+            )}
+          </tbody>
+        </table>
+      </Card>
+
+      <Note>
+        원본과 역분개는 서로 지워지고, 원장에 남는 것은 재분개 한 건입니다 —
+        그래서 수정해도 금액이 두 번 잡히지 않습니다. 「순액 확인 필요」가 붙은
+        건은 그 관계가 성립하지 않은 것이므로 사람이 봐야 합니다.
+      </Note>
 
       {tb && tb.difference !== 0 ? (
         <Note tone="alert">
