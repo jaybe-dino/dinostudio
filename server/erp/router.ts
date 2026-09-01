@@ -416,6 +416,11 @@ export const erpRouter = router({
     return run(() => getLedgerService().runway());
   }),
 
+  /** GET /insights — 경영 판단 지표 (E4 · E5 · E7) */
+  insights: protectedProcedure.query(() =>
+    run(() => getLedgerService().insights())
+  ),
+
   /** GET /tax — 세금계산서 발행 의무 + 신고 캘린더 (B4 · B5 · B10) */
   tax: protectedProcedure.query(({ ctx }) =>
     run(() => getLedgerService().tax(actorFrom(ctx)))

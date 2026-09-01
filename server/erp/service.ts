@@ -60,7 +60,6 @@ import {
   activeBlockers,
   buildDecisionQueue,
   buildJournals,
-  ownerTop,
   readyToStart,
   type ScoreInput,
   type ThresholdState,
@@ -76,6 +75,10 @@ import {
   vatPeriods,
   invoiceObligations,
   taxCalendar,
+  productivity,
+  projectMargins,
+  revenueConcentration,
+  runwayDaysCost,
 } from "../../shared/erp/index.js";
 import type {
   Account,
@@ -516,6 +519,44 @@ export class LedgerService {
   }
 
   /**
+   * GET /insights — 경영 판단 지표 (E4 · E5 · E7)
+   *
+   * 회계 숫자가 아니라 판단에 쓰는 숫자다. 회계 계단과 섞지 않는다.
+   */
+  async insights() {
+    const [entries, parties, projects, settings, runway, pnl] =
+      await Promise.all([
+        this.store.listEntries(),
+        this.store.listParties(),
+        this.store.listProjects(),
+        this.store.listSettings(),
+        this.runway(),
+        this.pnl({}),
+      ]);
+
+    const names = new Map(parties.map(p => [p.id, p.name]));
+    const estimates = new Map<string, number>(
+      Object.entries(
+        settingValue<Record<string, number>>(
+          settings,
+          "project_remaining_estimates"
+        ) ?? {}
+      )
+    );
+
+    return {
+      concentration: revenueConcentration(entries, names),
+      projects: projectMargins(projects, entries, estimates),
+      productivity: productivity({
+        headcount: settingValue<number>(settings, "headcount"),
+        monthlyRevenue: pnl.total.accounting.revenue,
+        monthlyProfit: pnl.total.accounting.operatingProfit,
+      }),
+      monthlyBurn: runway.burnRate.value,
+    };
+  }
+
+  /**
    * GET /tax — 세금계산서 발행 의무 + 신고 캘린더 (B4 · B5 · B10)
    *
    * 놓치면 가산세가 붙는 것만 모은다. 「알아두면 좋은 것」은 넣지 않는다 —
@@ -732,15 +773,31 @@ export class LedgerService {
       today,
       monthlyBurn,
       threshold,
-    });
+    }).map(item => ({
+      ...item,
+      // 건별 런웨이 비용 — 승인 화면에서 이걸 보고 결정한다
+      runwayDays: runwayDaysCost(
+        candidates.find(c => c.code === item.code)?.amount ?? null,
+        monthlyBurn
+      ),
+    }));
 
     return {
       today,
       threshold,
       monthlyBurn,
       expectedRunwayWeeks: expectedWeeks,
+      /**
+       * 이 안건들을 다 승인하면 런웨이가 며칠 줄어드는가 (E3).
+       * 금액이 큰지 작은지는 사람마다 다르지만 「6일」은 누구에게나 같다.
+       */
+      runwayDaysIfApproved: runwayDaysCost(
+        candidates.reduce((sum, c) => sum + (c.amount ?? 0), 0),
+        monthlyBurn
+      ),
       // 대표에게 올라가는 것과 걸러진 것을 나눠서 준다
-      owner: ownerTop(queue),
+      // ownerTop 은 DecisionItem[] 으로 좁혀 runwayDays 를 잃으므로 여기서 직접 걸러낸다
+      owner: queue.filter(q => q.routing === "대표"),
       queue,
       counts: {
         owner: queue.filter(q => q.routing === "대표").length,

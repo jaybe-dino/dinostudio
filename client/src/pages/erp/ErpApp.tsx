@@ -21,6 +21,7 @@ import "./design.css";
 import { AccountsScreen } from "./screens/Accounts";
 import { AgentsScreen } from "./screens/Agents";
 import { ReconcileScreen } from "./screens/Reconcile";
+import { InsightsScreen } from "./screens/Insights";
 import { TaxScreen } from "./screens/Tax";
 import { ApprovalsScreen } from "./screens/Approvals";
 import { TodayScreen } from "./screens/Today";
@@ -350,6 +351,14 @@ const SCREENS: ScreenDef[] = [
     hint: "탭 구분 텍스트",
     stage: 3,
     render: () => <OpsScreen variant="report" />,
+  },
+  {
+    id: "insights",
+    label: "경영 지표",
+    group: "손익 · 재무제표 (3차)",
+    hint: "매출 집중도 · 프로젝트 마진 · 인당 생산성",
+    stage: 3,
+    render: () => <InsightsScreen />,
   },
   {
     id: "tax",

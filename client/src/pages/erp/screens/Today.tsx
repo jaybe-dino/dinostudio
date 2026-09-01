@@ -116,6 +116,9 @@ export function TodayScreen() {
           sub={
             <>
               합계 {item.score.total}점
+              {item.runwayDays != null
+                ? ` · 승인하면 런웨이 −${item.runwayDays}일`
+                : ""}
               {item.exception ? ` · ${item.exception}` : ""}
             </>
           }
@@ -175,6 +178,7 @@ export function TodayScreen() {
                 <th className="n">금액</th>
                 <th className="n">임계선</th>
                 <th className="n">합계</th>
+                <th className="n">런웨이</th>
                 <th>도달</th>
               </tr>
             </thead>
@@ -208,6 +212,13 @@ export function TodayScreen() {
                   <td className="n">{item.score.amount}</td>
                   <td className="n">{item.score.threshold}</td>
                   <td className="n">{item.score.total}</td>
+                  <td className="n">
+                    {item.runwayDays == null ? (
+                      <span className="s">—</span>
+                    ) : (
+                      `−${item.runwayDays}일`
+                    )}
+                  </td>
                   <td className="nw">
                     <span
                       className={
@@ -228,7 +239,7 @@ export function TodayScreen() {
               ))}
               {(d?.queue.length ?? 0) === 0 && !data.isLoading ? (
                 <tr>
-                  <td colSpan={8} className="s">
+                  <td colSpan={9} className="s">
                     열려 있는 안건이 없습니다
                   </td>
                 </tr>
