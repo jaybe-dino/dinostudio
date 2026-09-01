@@ -59,6 +59,7 @@ import {
   PERMANENTLY_FORBIDDEN,
   activeBlockers,
   buildDecisionQueue,
+  buildJournals,
   ownerTop,
   readyToStart,
   type ScoreInput,
@@ -70,6 +71,9 @@ import {
   checkBalanceChain,
   parseBankStatement,
   reconcile,
+  settleVat,
+  vatPeriodOf,
+  vatPeriods,
 } from "../../shared/erp/index.js";
 import type {
   Account,
@@ -507,6 +511,32 @@ export class LedgerService {
 
     // 환급 상황(음수)은 0 으로 본다 — 받을 돈을 런웨이에 더해 주면 낙관 편향이 생긴다
     return Math.max(0, vatNet) + Math.max(0, withheld);
+  }
+
+  /**
+   * GET /vat — 과세기간별 부가세 정산 (docs/erp-qa.md A15 · B7)
+   *
+   * 마감은 월 단위인데 신고는 분기 단위다. 그 축이 달라서 월 마감만으로는
+   * 「이번 분기에 얼마 내야 하나」를 답할 수 없었다.
+   */
+  async vat(options: { year?: number | null } = {}) {
+    const journals = await this.store.listJournals();
+    const lines = journals.flatMap(j =>
+      j.lines.map(l => ({
+        accountCode: l.accountCode,
+        debit: l.debit,
+        credit: l.credit,
+        journalDate: j.journalDate,
+      }))
+    );
+    const year = options.year ?? Number(kstToday().slice(0, 4));
+    const periods = vatPeriods(year);
+    const current = vatPeriodOf(kstToday());
+    return {
+      year,
+      currentPeriod: current,
+      settlements: periods.map(p => settleVat(p, lines)),
+    };
   }
 
   /**
@@ -1823,11 +1853,12 @@ export class LedgerService {
         a.storage !== "none" &&
         (evidenceKindSpec(a.kind)?.vatDeductible ?? false)
     );
-    const journal = buildJournal(entry, () => randomUUID(), {
+    // 한 건에서 전표가 2건 나올 수 있다 — 발생/지급이 다른 달이거나 차입 상환일 때
+    const journals = buildJournals(entry, () => randomUUID(), {
       hasQualifiedEvidence,
     });
-    if (journal) await this.store.appendJournal(journal);
-    return journal;
+    for (const journal of journals) await this.store.appendJournal(journal);
+    return journals[0] ?? null;
   }
 
   private async audit(

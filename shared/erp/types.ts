@@ -164,6 +164,12 @@ export interface Entry {
   incomeType?: IncomeType | null;
   /** 근로소득처럼 비율로 계산할 수 없는 경우의 원천징수 실액 */
   withheldAmount?: number | null;
+  /**
+   * 차입 상환 건의 원금 몫 (docs/erp-qa.md C3).
+   * 있으면 전표를 원금(부채 감소) + 이자(비용)로 나눈다.
+   * 나머지가 이자이므로 이자액을 따로 받지 않는다 — 두 값을 받으면 합이 어긋날 수 있다.
+   */
+  principalAmount?: number | null;
   /** 낙관적 잠금 (§4 동시성) */
   version: number;
   createdAt: string;

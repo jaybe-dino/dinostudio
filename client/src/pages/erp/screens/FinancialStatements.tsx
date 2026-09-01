@@ -47,6 +47,16 @@ export function FinancialStatementsScreen() {
         </div>
       </div>
 
+      {fs.data?.basis ? (
+        <div className="note">
+          <b>보고서마다 날짜 축이 다릅니다.</b> 손익계산서는{" "}
+          <b>{fs.data.basis.incomeStatement}</b>, 현금흐름표는{" "}
+          <b>{fs.data.basis.cashflowStatement}</b>, 재무상태표는{" "}
+          <b>{fs.data.basis.balanceSheet}</b> 기준입니다. 같은 달의 손익과
+          현금이 다른 것은 정상이고, 다른 이유가 이것입니다.
+        </div>
+      ) : null}
+
       <div className="filters">
         {KINDS.map(k => (
           <button

@@ -416,6 +416,13 @@ export const erpRouter = router({
     return run(() => getLedgerService().runway());
   }),
 
+  /** GET /vat — 과세기간별 부가세 정산 (A15 · B7) */
+  vat: protectedProcedure
+    .input(
+      z.object({ year: z.number().int().nullable().optional() }).optional()
+    )
+    .query(({ input }) => run(() => getLedgerService().vat(input ?? {}))),
+
   /** POST /reconcile/preview — 은행 대사 (C6). 저장하지 않는다 */
   reconcilePreview: protectedProcedure
     .input(
