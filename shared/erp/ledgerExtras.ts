@@ -236,6 +236,33 @@ export function deferralSchedule(
   return rows;
 }
 
+/**
+ * 이연 건을 월별 가상 건으로 펼친다 (A7).
+ *
+ * 손익은 이 펼친 결과를 쓰고, 현금흐름은 원래 건을 그대로 쓴다 — 돈은 한 번에
+ * 나갔고 비용만 나뉜다. 코드는 그대로 유지한다: 귀속 누락·차단 목록에서
+ * 사람이 원래 건을 찾을 수 있어야 한다.
+ */
+export function expandDeferrals(entries: Entry[]): Entry[] {
+  const out: Entry[] = [];
+  for (const entry of entries) {
+    const months = entry.deferralMonths ?? null;
+    const start = (entry.accrualDate ?? entry.cashDate ?? "").slice(0, 7);
+    if (months == null || months <= 1 || entry.amount == null || start === "") {
+      out.push(entry);
+      continue;
+    }
+    for (const row of deferralSchedule(entry.amount, start, months))
+      out.push({
+        ...entry,
+        amount: row.amount,
+        // 그 달 1일로 귀속시킨다 — 손익은 월 단위로만 읽힌다
+        accrualDate: `${row.month}-01`,
+      });
+  }
+  return out;
+}
+
 /* ── A8 외화 ───────────────────────────────────────────────────────────── */
 
 export interface FxInput {

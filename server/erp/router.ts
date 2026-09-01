@@ -21,6 +21,7 @@ import type { Actor } from "./service.js";
 function actorFrom(ctx: {
   user: { openId: string; email: string | null } | null;
   req: { ip?: string };
+  stepUpFresh?: boolean;
 }): Actor {
   const role = resolveErpRole(ctx.user?.email ?? null);
   if (!role) {
@@ -34,6 +35,8 @@ function actorFrom(ctx: {
     id: ctx.user?.email ?? ctx.user?.openId ?? "unknown",
     role,
     ip: ctx.req.ip ?? null,
+    // 민감 조회는 세션이 아니라 재인증 시각으로 열린다 (D7)
+    stepUpFresh: ctx.stepUpFresh ?? false,
   };
 }
 
@@ -156,6 +159,8 @@ export const erpRouter = router({
             .optional(),
           amountForeign: z.number().int().nullable().optional(),
           fxRate: z.number().positive().nullable().optional(),
+          /** 이연 개월 수 (A7) — 손익만 월할로 나눈다 */
+          deferralMonths: z.number().int().min(1).max(60).nullable().optional(),
           duplicateOverrideReason: z.string().optional(),
         })
       )
@@ -467,6 +472,11 @@ export const erpRouter = router({
   /** GET /credit — 여신 한도 (C4) */
   credit: protectedProcedure.query(() =>
     run(() => getLedgerService().credit())
+  ),
+
+  /** GET /deferrals — 선급비용 · 선수수익 배분 (A7) */
+  deferrals: protectedProcedure.query(() =>
+    run(() => getLedgerService().deferrals())
   ),
 
   /** GET /bank-accounts — 계좌별 잔액 (C5) */

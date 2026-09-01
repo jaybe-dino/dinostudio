@@ -243,8 +243,8 @@ export function ArScreen() {
 
       <Note>
         연령 구간은 업종마다 다릅니다. 기준값 화면의{" "}
-        <code>ar_aging_buckets</code> 에 <code>[15, 30, 60]</code> 처럼 넣으면 그
-        구간으로 다시 나눕니다 — 30·60·90 은 기본값일 뿐입니다.
+        <code>ar_aging_buckets</code> 에 <code>[15, 30, 60]</code> 처럼 넣으면
+        그 구간으로 다시 나눕니다 — 30·60·90 은 기본값일 뿐입니다.
       </Note>
 
       <Card

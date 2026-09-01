@@ -10,18 +10,11 @@
  */
 import { trpc } from "@/lib/trpc";
 import { shortDate, won } from "../format";
-import {
-  AlertBox,
-  Card,
-  Note,
-  PageHead,
-  Scroll,
-} from "../components/Proto";
+import { AlertBox, Card, Note, PageHead, Scroll } from "../components/Proto";
 
 function dueChip(daysToDue: number | null) {
   if (daysToDue == null) return <span className="chip n">기한 미입력</span>;
-  if (daysToDue < 0)
-    return <span className="chip a">{-daysToDue}일 연체</span>;
+  if (daysToDue < 0) return <span className="chip a">{-daysToDue}일 연체</span>;
   if (daysToDue === 0) return <span className="chip a">오늘</span>;
   if (daysToDue <= 7) return <span className="chip w">{daysToDue}일 남음</span>;
   return <span className="chip">{daysToDue}일 남음</span>;

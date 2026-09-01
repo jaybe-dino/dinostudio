@@ -13,6 +13,7 @@
  * 두 계단의 영업이익이 다르면 배부 로직이 틀린 것이다. 이 일치 검증을 자동 테스트로 둔다.
  */
 import { findAccount } from "./accounts.js";
+import { expandDeferrals } from "./ledgerExtras.js";
 import type { Entry } from "./types.js";
 
 export interface AccountingLadder {
@@ -69,7 +70,12 @@ export function buildPnl(
     projectId?: string | null;
   } = {}
 ): PnlResult {
-  const scoped = entries.filter(e => {
+  /*
+   * 이연 건은 월별로 펼친 다음 기간을 자른다 (docs/erp-qa.md A7).
+   * 연간 결제를 결제월에 전액 잡으면 그 달만 적자로 보이고 나머지 11개월은
+   * 실제보다 좋아 보인다. 현금흐름은 펼치지 않는다 — 돈은 한 번에 나갔다.
+   */
+  const scoped = expandDeferrals(entries).filter(e => {
     if (!inScope(e, options.from, options.to)) return false;
     if (options.buCode && e.buCode !== options.buCode) return false;
     if (options.projectId && e.projectId !== options.projectId) return false;

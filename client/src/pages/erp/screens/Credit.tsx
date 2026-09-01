@@ -133,8 +133,8 @@ export function CreditScreen() {
 
       <Note>
         <b>사용액은 시스템이 계산하지 않습니다.</b> 마이너스통장 사용액과 카드
-        미결제액은 은행·카드사가 가진 숫자이고, 원장에서 추정하면 결제일 시차만큼
-        어긋납니다. 기준값 화면의 <code>credit_lines</code> 에{" "}
+        미결제액은 은행·카드사가 가진 숫자이고, 원장에서 추정하면 결제일
+        시차만큼 어긋납니다. 기준값 화면의 <code>credit_lines</code> 에{" "}
         <code>{`[{ id, name, kind, limit, used }]`}</code> 형태로 넣고, 은행
         연동이 붙으면 이 자리에서 자동으로 채워집니다.
       </Note>

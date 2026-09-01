@@ -1,6 +1,10 @@
 /**
  * POST /api/auth/password — 이메일 + 지정 비밀번호로 세션 쿠키를 만든다.
  * 구글 SSO를 붙이기 전까지 쓰는 임시 경로이고, 발급하는 쿠키는 SSO와 완전히 같다.
+ *
+ * 같은 경로가 재인증(step-up)도 처리한다 (docs/erp-qa.md D7). 민감 조회는
+ * 세션 12시간이 아니라 「방금 비밀번호를 다시 넣었는가」로 열린다 — 이미
+ * 로그인한 사람이 같은 비밀번호를 다시 넣으면 그 시각이 쿠키에 새로 찍힌다.
  */
 import { verifyPasswordLogin } from "../../server/auth/password.js";
 import {

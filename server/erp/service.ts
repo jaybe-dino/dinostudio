@@ -134,6 +134,12 @@ export interface Actor {
   id: string;
   role: Role;
   ip?: string | null;
+  /**
+   * 방금 비밀번호를 다시 넣었는가 (docs/erp-qa.md D7).
+   * 급여 원장·세무 제출 파일은 세션 12시간이 아니라 이 값으로 열린다.
+   * 테스트·내부 호출에서 값이 없으면 재인증한 적 없는 것으로 본다.
+   */
+  stepUpFresh?: boolean;
 }
 
 // §14 — 모든 시각·일자는 KST 기준으로 만든다
@@ -330,7 +336,8 @@ export class LedgerService {
     )
       .filter(n => Number.isFinite(n) && n > 0)
       .sort((a, b) => a - b);
-    const useBuckets = buckets.length > 0 ? buckets : [...DEFAULT_AGING_BUCKETS];
+    const useBuckets =
+      buckets.length > 0 ? buckets : [...DEFAULT_AGING_BUCKETS];
 
     const aged = report.receivables.filter(
       l => l.entry.amount != null && l.agingDays != null
@@ -616,8 +623,9 @@ export class LedgerService {
    * 다른 위험이다.
    */
   async taxPackage(input: { ym: string }, actor: Actor) {
-    if (!canExport(actor.role))
-      throw erpError("export_forbidden");
+    if (!canExport(actor.role)) throw erpError("export_forbidden");
+    // 파일로 들고 나가는 것은 재인증 뒤에만 (D7)
+    if (!actor.stepUpFresh) throw erpError("reauth_required");
 
     const [entries, journals, attachments] = await Promise.all([
       this.store.listEntries(),
@@ -707,7 +715,13 @@ export class LedgerService {
   ) {
     const journals = await this.store.listJournals();
     // 급여 계정 열람은 기록한다 — 금액이 개인별로 읽힐 수 있다
-    if (input.accountCode.startsWith("61"))
+    if (input.accountCode.startsWith("61")) {
+      /*
+       * 재인증을 요구한다 (docs/erp-qa.md D7). 세션 12시간은 「오늘 하루
+       * 일한다」에 맞춘 값이고, 급여 원장은 그보다 짧아야 한다 — 자리를 비운
+       * 노트북에서 열리면 안 된다.
+       */
+      if (!actor.stepUpFresh) throw erpError("reauth_required");
       await this.audit(
         "journal",
         input.accountCode,
@@ -716,6 +730,7 @@ export class LedgerService {
         { accountCode: input.accountCode },
         actor
       );
+    }
     return accountLedger(input.accountCode, journals, {
       from: input.from,
       to: input.to,
@@ -749,6 +764,62 @@ export class LedgerService {
       immediatelyAvailable:
         cashOnHand == null ? null : cashOnHand + summary.totalAvailable,
       note: "한도는 빌리는 돈입니다. 현금과 성격이 달라 따로 표시합니다.",
+    };
+  }
+
+  /**
+   * GET /deferrals — 선급비용 · 선수수익 이연 (docs/erp-qa.md A7)
+   *
+   * 연간 SaaS·보험료를 결제월에 전액 잡으면 그 달만 손익이 튀고 나머지
+   * 11개월은 실제보다 좋아 보인다. 손익은 이 배분표대로 나뉘고, 현금흐름은
+   * 나누지 않는다 — 돈은 한 번에 나갔다.
+   */
+  async deferrals() {
+    const [entries, today] = await Promise.all([
+      this.store.listEntries(),
+      this.today(),
+    ]);
+    const thisMonth = today.slice(0, 7);
+    const deferred = entries.filter(
+      e =>
+        (e.deferralMonths ?? 0) > 1 &&
+        e.amount != null &&
+        e.status === "confirmed"
+    );
+
+    const rows = deferred.map(entry => {
+      const start = (entry.accrualDate ?? entry.cashDate ?? "").slice(0, 7);
+      const schedule = deferralSchedule(
+        entry.amount ?? 0,
+        start,
+        entry.deferralMonths ?? 0
+      );
+      const current = schedule.find(row => row.month === thisMonth) ?? null;
+      const remaining = schedule
+        .filter(row => row.month > thisMonth)
+        .reduce((sum, row) => sum + row.amount, 0);
+      return {
+        code: entry.code,
+        title: entry.title,
+        accountCode: entry.accountCode,
+        direction: entry.direction,
+        total: entry.amount,
+        months: entry.deferralMonths ?? 0,
+        startMonth: start,
+        endMonth: schedule[schedule.length - 1]?.month ?? start,
+        thisMonth: current?.amount ?? null,
+        remaining,
+        schedule,
+      };
+    });
+
+    return {
+      thisMonth,
+      rows,
+      // 이번 달 손익에 실제로 얹히는 금액
+      thisMonthTotal: rows.reduce((sum, r) => sum + (r.thisMonth ?? 0), 0),
+      // 아직 손익에 안 들어간 몫 — 선급비용·선수수익 잔액이다
+      remainingTotal: rows.reduce((sum, r) => sum + r.remaining, 0),
     };
   }
 
@@ -1197,8 +1268,33 @@ export class LedgerService {
     bu?: string | null;
     project?: string | null;
   }) {
-    const entries = await this.store.listEntries();
+    const [entries, settings] = await Promise.all([
+      this.store.listEntries(),
+      this.store.listSettings(),
+    ]);
+
+    /*
+     * 이 숫자를 얼마나 믿을 수 있는지 (docs/erp-qa.md E12) 와 공통비를 무슨
+     * 기준으로 나눴는지 (E8) 를 숫자와 같은 응답에 담는다. 다른 화면에 있으면
+     * 사람이 숫자만 보고 판단한다.
+     */
+    const inPeriod = (e: Entry) => {
+      const date = e.accrualDate ?? e.cashDate;
+      if (options.from && (!date || date < options.from)) return false;
+      if (options.to && (!date || date > options.to)) return false;
+      return true;
+    };
+    const scoped = entries.filter(inPeriod);
+
     return {
+      confidence: {
+        confirmed: scoped.filter(e => e.status === "confirmed").length,
+        estimated: scoped.filter(e => e.status === "pending").length,
+        undecided: scoped.filter(e => e.status === "undecided").length,
+      },
+      // 배부 기준은 사람이 정한다 — 시스템이 고르면 근거가 없다
+      allocationBasis:
+        settingValue<string>(settings, "allocation_basis") ?? null,
       total: buildPnl(entries, {
         from: options.from,
         to: options.to,
@@ -1278,7 +1374,9 @@ export class LedgerService {
     const opening = this.openingCashFor(ym, settings);
     const nextYm = this.nextMonth(ym);
     const movement = entries
-      .filter(e => e.status === "confirmed" && (e.cashDate ?? "").startsWith(ym))
+      .filter(
+        e => e.status === "confirmed" && (e.cashDate ?? "").startsWith(ym)
+      )
       .reduce(
         (sum, e) =>
           sum + (e.direction === "in" ? (e.amount ?? 0) : -(e.amount ?? 0)),
@@ -1313,9 +1411,7 @@ export class LedgerService {
   /** 다음 달 (YYYY-MM) */
   private nextMonth(ym: string): string {
     const [y, m] = ym.split("-").map(Number);
-    return m === 12
-      ? `${y + 1}-01`
-      : `${y}-${String(m + 1).padStart(2, "0")}`;
+    return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
   }
 
   /**
@@ -1790,6 +1886,8 @@ export class LedgerService {
       currency?: string | null;
       amountForeign?: number | null;
       fxRate?: number | null;
+      /** 이연 개월 수 (A7) — 손익만 월할로 나눈다 */
+      deferralMonths?: number | null;
       /** 중복 경고를 확인하고 강행할 때의 사유 — 감사로그에 남는다 (§13.2) */
       duplicateOverrideReason?: string;
     },
@@ -1842,6 +1940,7 @@ export class LedgerService {
       currency,
       amountForeign: input.amountForeign ?? null,
       fxRate: input.fxRate ?? null,
+      deferralMonths: input.deferralMonths ?? null,
       cashDate: input.cashDate,
       accrualDate: input.accrualDate ?? input.cashDate,
       startDate: null,

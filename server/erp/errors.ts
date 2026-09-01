@@ -16,6 +16,7 @@ export type ErpErrorCode =
   | "self_approval"
   | "approval_limit"
   | "export_forbidden"
+  | "reauth_required"
   | "not_found"
   | "invalid_transition";
 
@@ -68,6 +69,11 @@ const MAP: Record<
   export_forbidden: {
     trpc: "FORBIDDEN",
     message: "이 역할은 파일로 내보낼 수 없습니다. 화면에서만 확인하십시오",
+  },
+  reauth_required: {
+    trpc: "FORBIDDEN",
+    message:
+      "이 자료는 비밀번호를 다시 확인한 뒤에만 열립니다 — 로그인 후 15분이 지났습니다",
   },
   not_found: {
     trpc: "NOT_FOUND",

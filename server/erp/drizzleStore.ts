@@ -107,9 +107,9 @@ function toEntry(row: ErpEntryRow): Entry {
     employeeInsurance: row.employeeInsurance,
     employerInsurance: row.employerInsurance,
     amountForeign: row.amountForeign,
+    deferralMonths: row.deferralMonths,
     // 정수로 저장된 환율을 되돌린다 (A8)
-    fxRate:
-      row.fxRateScaled == null ? null : row.fxRateScaled / FX_RATE_SCALE,
+    fxRate: row.fxRateScaled == null ? null : row.fxRateScaled / FX_RATE_SCALE,
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     createdBy: row.createdBy,
@@ -122,8 +122,7 @@ function toRow(entry: Entry) {
     ...rest,
     createdAt: new Date(createdAt),
     // 환율은 정수로 저장한다 — 이 스키마는 DECIMAL/FLOAT 를 쓰지 않는다 (A8)
-    fxRateScaled:
-      fxRate == null ? null : Math.round(fxRate * FX_RATE_SCALE),
+    fxRateScaled: fxRate == null ? null : Math.round(fxRate * FX_RATE_SCALE),
   };
 }
 

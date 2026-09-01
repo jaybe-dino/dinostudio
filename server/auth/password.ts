@@ -170,6 +170,8 @@ export async function verifyPasswordLogin(
       name: displayName(email),
       hd: null,
       picture: null,
+      // 로그인 자체가 재인증이다 — 이 시각부터 15분간 민감 조회가 열린다 (D7)
+      stepUpAt: Math.floor(now / 1000),
     },
   };
 }

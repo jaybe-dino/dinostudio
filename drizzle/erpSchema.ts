@@ -163,6 +163,8 @@ export const erpEntries = mysqlTable(
      * 쓰지 않기 위해 정수로 저장한다 — 1,350.25 원/USD 는 13,502,500 이다.
      */
     fxRateScaled: bigint("fxRateScaled", { mode: "number" }),
+    /** 이연 개월 수 — 손익만 월할로 나눈다 (A7) */
+    deferralMonths: int("deferralMonths"),
     /** 낙관적 잠금 (§4) */
     version: int("version").notNull().default(1),
     createdAt: timestamp("createdAt").defaultNow().notNull(),

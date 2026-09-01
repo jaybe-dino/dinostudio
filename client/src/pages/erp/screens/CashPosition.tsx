@@ -13,6 +13,7 @@ import {
   StatusChip,
   Tile,
 } from "../components/Bits";
+import { Confidence } from "../components/Confidence";
 import { EntryForm } from "../components/EntryForm";
 import { ExportModal } from "../components/ExportModal";
 import { DataTable, type Column } from "../components/DataTable";
@@ -246,7 +247,25 @@ export function CashPositionScreen() {
         </Card>
       ) : null}
 
-      <Card title="지급 소요 목록" meta={`${lines.length}건`} body={false}>
+      <Card
+        title="지급 소요 목록"
+        meta={
+          <>
+            {lines.length}건{" "}
+            <Confidence
+              confirmed={
+                lines.filter(l => l.entry.status === "confirmed").length
+              }
+              estimated={lines.filter(l => l.entry.status === "pending").length}
+              undecided={
+                lines.filter(l => l.entry.status === "undecided").length
+              }
+              label="이 목록의 근거"
+            />
+          </>
+        }
+        body={false}
+      >
         <DataTable
           columns={columns}
           rows={lines}

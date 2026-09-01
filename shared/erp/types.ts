@@ -190,6 +190,13 @@ export interface Entry {
   amountForeign?: number | null;
   /** 적용 환율 — 1 외화당 원화. 없으면 환산하지 않는다 */
   fxRate?: number | null;
+  /**
+   * 이연 개월 수 (docs/erp-qa.md A7).
+   * 연간 결제를 결제월에 전액 잡으면 그 달만 손익이 튀고 나머지 11개월은
+   * 실제보다 좋아 보인다. 값이 있으면 손익에서 발생월부터 월할로 나눈다.
+   * 현금흐름은 나누지 않는다 — 돈은 한 번에 나갔다.
+   */
+  deferralMonths?: number | null;
   /** 낙관적 잠금 (§4 동시성) */
   version: number;
   createdAt: string;

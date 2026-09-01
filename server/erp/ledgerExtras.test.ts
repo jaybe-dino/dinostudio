@@ -21,7 +21,12 @@ import { LedgerService } from "./service.js";
 import { InMemoryLedgerStore } from "./store.js";
 import type { Actor } from "./service.js";
 
-const CFO: Actor = { id: "cfo@dinostudio.kr", role: "재무" };
+/** 재인증이 신선한 상태 — 민감 조회는 이것을 요구한다 (D7) */
+const CFO: Actor = {
+  id: "cfo@dinostudio.kr",
+  role: "재무",
+  stepUpFresh: true,
+};
 const CEO: Actor = { id: "ceo@dinostudio.kr", role: "대표" };
 const VIEWER: Actor = { id: "cpa@outside.kr", role: "외부열람" };
 
@@ -104,9 +109,7 @@ describe("B6 급여 3분할 — 사업주 부담분은 우리 비용이다", () 
       entry({ accountCode: "6110", amount: 3_000_000 }),
       ids
     );
-    expect(
-      journals[0].lines.some(l => l.accountCode === "2132")
-    ).toBe(false);
+    expect(journals[0].lines.some(l => l.accountCode === "2132")).toBe(false);
   });
 });
 
@@ -363,6 +366,24 @@ describe("E11 세무 제출 패키지 — 외부열람은 들고 나갈 수 없�
     expect(Array.isArray(pack.accountSummary)).toBe(true);
   });
 
+  it("재인증이 지났으면 재무도 거부된다 (D7)", async () => {
+    const s = svc();
+    await expect(
+      s.taxPackage({ ym: "2026-08" }, { ...CFO, stepUpFresh: false })
+    ).rejects.toThrow(/비밀번호를 다시/);
+  });
+
+  it("급여 계정 원장도 재인증을 요구한다 (D7)", async () => {
+    const s = svc();
+    await expect(
+      s.accountLedger({ accountCode: "6110" }, { ...CFO, stepUpFresh: false })
+    ).rejects.toThrow(/비밀번호를 다시/);
+    // 급여가 아닌 계정은 그대로 열린다
+    await expect(
+      s.accountLedger({ accountCode: "1110" }, { ...CFO, stepUpFresh: false })
+    ).resolves.toBeTruthy();
+  });
+
   it("외부열람 역할은 거부된다 — 보는 것과 들고 나가는 것은 다르다", async () => {
     const s = svc();
     await expect(s.taxPackage({ ym: "2026-08" }, VIEWER)).rejects.toThrow(
@@ -473,5 +494,93 @@ describe("A12 이월 — 마감이 다음 달 기초잔액을 만든다", () => 
     const period = await s.closePeriod("2026-09", CEO);
     expect(period.carryForward.value).toBeNull();
     expect(period.carryForward.blockedBy).toContain("cash_on_hand");
+  });
+});
+
+describe("B6 급여 3분할이 승인 경로를 타고 전표까지 간다", () => {
+  it("승인하면 급여 · 사업주부담 · 예수금 전표가 생성된다", async () => {
+    const s = svc();
+    const created = await s.createEntry(
+      {
+        direction: "out",
+        title: "9월 급여",
+        amount: 3_000_000,
+        cashDate: "2026-09-10",
+        accountCode: "6110",
+        withheldAmount: 100_000,
+        employeeInsurance: 250_000,
+        employerInsurance: 280_000,
+      },
+      CFO
+    );
+    await s.addEvidence(
+      {
+        code: created.entry.code,
+        kind: "기타",
+        storage: "none",
+        reason: "급여대장은 별도 보관",
+      },
+      CFO
+    );
+    const ready = await s.getEntry(created.entry.code, CFO);
+    // 본인 승인 금지 — 만든 사람과 다른 사람이 승인한다 (D1)
+    await s.approve(created.entry.code, ready.entry.version, CEO);
+
+    const { journals } = await s.journals();
+    const mine = journals.filter(j => j.entryCode === created.entry.code);
+    expect(mine).toHaveLength(1);
+    const at = (code: string) =>
+      mine[0].lines.filter(l => l.accountCode === code);
+
+    expect(at("6110")[0].debit).toBe(3_350_000);
+    expect(at("6130")[0].debit).toBe(280_000);
+    expect(at("1110")[0].credit).toBe(3_000_000);
+    expect(at("2131")[0].credit).toBe(100_000);
+    expect(at("2132")[0].credit).toBe(530_000);
+    // 사람이 참조할 수 있는 번호가 붙는다 (A14)
+    expect(mine[0].journalNo).toMatch(/^2026-09-\d{4}$/);
+  });
+});
+
+describe("A7 이연이 손익에만 반영된다", () => {
+  it("12개월 이연 건은 그 달 손익에 1/12 만 얹힌다", async () => {
+    const s = svc();
+    const created = await s.createEntry(
+      {
+        direction: "out",
+        title: "연간 SaaS",
+        amount: 1_200_000,
+        cashDate: "2026-09-01",
+        accountCode: "6310",
+        deferralMonths: 12,
+      },
+      CFO
+    );
+    await s.addEvidence(
+      {
+        code: created.entry.code,
+        kind: "세금계산서",
+        storage: "link",
+        url: "https://drive.google.com/x",
+      },
+      CFO
+    );
+    const ready = await s.getEntry(created.entry.code, CFO);
+    await s.approve(created.entry.code, ready.entry.version, CEO);
+
+    const deferrals = await s.deferrals();
+    const row = deferrals.rows.find(r => r.code === created.entry.code);
+    expect(row?.months).toBe(12);
+    expect(row?.startMonth).toBe("2026-09");
+    expect(row?.endMonth).toBe("2027-08");
+    // 배분 합계가 총액과 어긋나지 않는다
+    expect(row?.schedule.reduce((sum, x) => sum + x.amount, 0)).toBe(1_200_000);
+
+    // 9월 손익에는 100,000 만 들어간다
+    const september = await s.pnl({ from: "2026-09-01", to: "2026-09-30" });
+    const october = await s.pnl({ from: "2026-10-01", to: "2026-10-31" });
+    expect(september.total.accounting.sga).toBe(100_000);
+    // 결제하지 않은 10월에도 같은 금액이 얹힌다 — 그것이 이연이다
+    expect(october.total.accounting.sga).toBe(100_000);
   });
 });
