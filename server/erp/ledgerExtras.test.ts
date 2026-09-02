@@ -584,3 +584,43 @@ describe("A7 이연이 손익에만 반영된다", () => {
     expect(october.total.accounting.sga).toBe(100_000);
   });
 });
+
+describe("화면이 읽는 기준값은 전부 기준값 화면에 있어야 한다", () => {
+  /*
+   * 반복해서 만난 실수 — 서비스가 새 설정 키를 읽는데 그 키가 시드에 없으면
+   * 기준값 화면(있는 키만 보여 준다)에 나타나지 않고, 사람이 넣을 방법이
+   * 아예 없다. 여신·계좌별 잔액·배부 기준이 전부 「등록된 것이 없습니다」로
+   * 남아 있었다. 키가 늘어날 때마다 이 테스트가 먼저 깨지게 둔다.
+   */
+  it("서비스가 읽는 키가 모두 기준값 목록에 있다", async () => {
+    const s = svc();
+    const keys = new Set((await s.settings()).map(item => item.key));
+    const readByScreens = [
+      "cash_on_hand",
+      "cash_requirement_horizon",
+      "payroll_monthly_actual",
+      "debt_long_term_total",
+      "pipeline_probability",
+      "credit_lines",
+      "bank_accounts",
+      "ar_aging_buckets",
+      "allocation_basis",
+      "project_remaining_estimates",
+      "subscriptions",
+      "headcount",
+      "opening_equity",
+    ];
+    const missing = readByScreens.filter(key => !keys.has(key));
+    expect(missing).toEqual([]);
+  });
+
+  it("새로 추가한 키는 값이 비어 있고 「임시」다 — 없는 값을 지어내지 않는다", async () => {
+    const s = svc();
+    const settings = await s.settings();
+    for (const key of ["credit_lines", "bank_accounts", "allocation_basis"]) {
+      const found = settings.find(item => item.key === key);
+      expect(found?.value).toBeNull();
+      expect(found?.isProvisional).toBe(true);
+    }
+  });
+});

@@ -280,4 +280,78 @@ export const SEED_STAGE2_SETTINGS: Setting[] = [
     updatedBy: "migration",
     updatedAt: "2026-08-27T00:00:00+09:00",
   },
+
+  /*
+   * 4차에서 만든 화면들이 읽는 기준값 (docs/erp-qa.md A7·C4·C5·C7·E4·E7·E8).
+   *
+   * 값 없이 **키만** 만들어 둔다. 기준값 화면은 이미 있는 키만 보여 주므로,
+   * 여기에 없으면 사람이 화면에서 넣을 방법이 아예 없다 — 여신·계좌별 잔액·
+   * 배부 기준이 전부 「등록된 것이 없습니다」로 남는다.
+   *
+   * 값은 null 이고 「임시」 배지가 붙는다. 없는 값을 지어내지 않는다 (원칙 8).
+   */
+  {
+    key: "credit_lines",
+    value: null,
+    isProvisional: true,
+    ownerRole: "재무",
+    updatedBy: null,
+    updatedAt: null,
+  },
+  {
+    key: "bank_accounts",
+    value: null,
+    isProvisional: true,
+    ownerRole: "재무",
+    updatedBy: null,
+    updatedAt: null,
+  },
+  {
+    key: "ar_aging_buckets",
+    value: null,
+    isProvisional: true,
+    ownerRole: "재무",
+    updatedBy: null,
+    updatedAt: null,
+  },
+  {
+    key: "allocation_basis",
+    value: null,
+    isProvisional: true,
+    ownerRole: "대표",
+    updatedBy: null,
+    updatedAt: null,
+  },
+  {
+    key: "project_remaining_estimates",
+    value: null,
+    isProvisional: true,
+    ownerRole: "사업부리더",
+    updatedBy: null,
+    updatedAt: null,
+  },
+  {
+    key: "subscriptions",
+    value: null,
+    isProvisional: true,
+    ownerRole: "재무",
+    updatedBy: null,
+    updatedAt: null,
+  },
+  {
+    key: "headcount",
+    value: null,
+    isProvisional: true,
+    ownerRole: "대표",
+    updatedBy: null,
+    updatedAt: null,
+  },
+  {
+    key: "opening_equity",
+    value: null,
+    isProvisional: true,
+    ownerRole: "재무",
+    updatedBy: null,
+    updatedAt: null,
+  },
 ];
