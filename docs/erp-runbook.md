@@ -125,7 +125,19 @@ Vercel Settings → Domains 에 `admin.dinostudio.kr` 추가 → 안내되는 CN
 
 1. 슬랙 앱 → Event Subscriptions → `https://admin.dinostudio.kr/api/integrations/slack/events`
 2. `message.channels` 이벤트 구독 · 대상 채널에 봇 초대
-3. 환경변수 `SLACK_SIGNING_SECRET` · `SLACK_EXPENSE_CHANNELS`(채널 ID 두 개)
+3. 환경변수 `SLACK_SIGNING_SECRET` · `SLACK_EXPENSE_CHANNELS`
+
+`SLACK_EXPENSE_CHANNELS` 는 세 가지로 쓸 수 있습니다.
+
+| 값              | 뜻                                                                          |
+| --------------- | --------------------------------------------------------------------------- |
+| `C01ABC,C02DEF` | 적은 채널만 수집 (가장 좁음)                                                |
+| `*`             | **봇을 초대한 모든 채널.** 채널이 늘 때마다 환경변수를 고치지 않아도 됩니다 |
+| 비어 있음       | 아무 것도 수집하지 않음 — **기본값**                                        |
+
+`*` 로 두고 특정 채널만 빼려면 `SLACK_IGNORE_CHANNELS` 에 채널 ID 를 적습니다
+(그쪽이 항상 우선합니다). 어느 모드든 검수함까지만 오고, 사람이 확인해야 원장으로
+올라갑니다 (원칙 7).
 
 켜면 #지출-네트워크-사업부 봇 메시지가 검수함에 자동으로 쌓입니다.
 **승인은 여전히 이 시스템 안에서만** 합니다.

@@ -126,12 +126,13 @@
 | 5    | 지출 채널 두 곳에 `/invite @봇이름`                                             |
 | 6    | Vercel 에 아래 4개 등록                                                         |
 
-| Key                      | Value                                      |
-| ------------------------ | ------------------------------------------ |
-| `SLACK_SIGNING_SECRET`   | 슬랙 앱 Basic Information → Signing Secret |
-| `SLACK_BOT_TOKEN`        | OAuth & Permissions → `xoxb-` 로 시작      |
-| `SLACK_EXPENSE_CHANNELS` | 채널 ID 두 개, 쉼표 구분 (`C01ABC,C02DEF`) |
-| `SLACK_NOTIFY_CHANNEL`   | 알림 받을 채널 ID                          |
+| Key                      | Value                                                    |
+| ------------------------ | -------------------------------------------------------- |
+| `SLACK_SIGNING_SECRET`   | 슬랙 앱 Basic Information → Signing Secret               |
+| `SLACK_BOT_TOKEN`        | OAuth & Permissions → `xoxb-` 로 시작                    |
+| `SLACK_EXPENSE_CHANNELS` | **`*`** — 봇을 초대한 모든 채널 (또는 채널 ID 를 쉼표로) |
+| `SLACK_IGNORE_CHANNELS`  | (선택) `*` 에서 뺄 채널 ID. 이쪽이 항상 우선합니다       |
+| `SLACK_NOTIFY_CHANNEL`   | 알림 받을 채널 ID                                        |
 
 > **슬랙 워크스페이스가 휴면이면 먼저 살려야 합니다.** 못 살리면 알려주십시오 —
 > 이메일 발송으로 30분이면 바꿉니다 (다만 이메일로는 알림만 되고 지출 수집은

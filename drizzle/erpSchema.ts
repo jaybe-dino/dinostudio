@@ -471,6 +471,11 @@ export const erpIntakes = pgTable(
     id: varchar("id", { length: 36 }).primaryKey(),
     source: sourceEnum("source").notNull(),
     sourceRef: varchar("sourceRef", { length: 190 }),
+    /**
+     * 어느 채널에서 왔나 (슬랙). 봇을 초대한 모든 채널을 수집하는 모드에서는
+     * 이것이 없으면 시끄러운 채널을 찾아낼 방법이 없다.
+     */
+    channel: varchar("channel", { length: 32 }),
     /** §11.1 슬랙 양식에 추가가 필요한 필드 */
     roundNo: integer("roundNo"),
     linkedRevenueCode: varchar("linkedRevenueCode", { length: 32 }),

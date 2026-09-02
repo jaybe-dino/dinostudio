@@ -126,6 +126,9 @@ export function IntakeScreen() {
                   <tr key={intake.id}>
                     <td>
                       {intake.source}
+                      {intake.channel ? (
+                        <div className="s">채널 {intake.channel}</div>
+                      ) : null}
                       <span className="s"> · {intake.sourceRef}</span>
                     </td>
                     <td className="wrap">{intake.raw}</td>
