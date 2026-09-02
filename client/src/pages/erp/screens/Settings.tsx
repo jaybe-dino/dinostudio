@@ -18,6 +18,26 @@ const LABELS: Record<string, string> = {
   today_override: "기준일 (D-day 판정)",
   opening_equity: "기초 자본 (B6)",
   subscriptions: "구독 목록",
+  credit_lines: "여신 한도 — 마이너스통장 · 법인카드 (C4)",
+  bank_accounts: "계좌 목록 · 은행 잔액 (C5)",
+  ar_aging_buckets: "채권 연령 구간 (C7)",
+  allocation_basis: "공통비 배부 기준 (E8)",
+  project_remaining_estimates: "프로젝트별 잔여 원가 추정 (E4)",
+  headcount: "인원 수 (E7 인당 생산성)",
+};
+
+/** 무엇을 어떤 모양으로 넣는지 — 형식이 틀리면 저장돼도 화면이 안 읽는다 */
+const HINTS: Record<string, string> = {
+  credit_lines:
+    '[{"id":"1","name":"기업은행 마이너스","kind":"마이너스통장","limit":50000000,"used":20000000}]',
+  bank_accounts:
+    '[{"code":"1110-01","name":"주거래","bank":"기업은행","balance":30000000}]',
+  ar_aging_buckets: "[30, 60, 90]",
+  allocation_basis: '"매출 비율"',
+  project_remaining_estimates: '{"PRJ-0132": 12000000}',
+  subscriptions: '[{"name":"Adobe","monthly":60000}]',
+  pipeline_probability: '{"상":0.7,"중":0.4,"하":0.1}',
+  headcount: "8",
 };
 
 /** 값의 모양 — 숫자·날짜·목록을 구분해 입력칸을 맞춘다 */
@@ -31,6 +51,12 @@ const KINDS: Record<string, "number" | "date" | "json"> = {
   today_override: "date",
   pipeline_probability: "json",
   subscriptions: "json",
+  credit_lines: "json",
+  bank_accounts: "json",
+  ar_aging_buckets: "json",
+  allocation_basis: "json",
+  project_remaining_estimates: "json",
+  headcount: "number",
   vat_display_basis: "json",
   closed_periods: "json",
 };
@@ -187,8 +213,15 @@ export function SettingsScreen() {
                           }))
                         }
                         disabled={!canWrite}
+                        // 형식이 틀리면 저장돼도 화면이 읽지 못한다 — 모양을 그대로 보여 준다
+                        placeholder={HINTS[setting.key] ?? ""}
+                        title={
+                          HINTS[setting.key]
+                            ? `이 모양으로 넣습니다 — ${HINTS[setting.key]}`
+                            : undefined
+                        }
                         style={{
-                          width: 150,
+                          width: HINTS[setting.key] ? 320 : 150,
                           padding: "3px 6px",
                           border: "1px solid var(--rule)",
                           borderRadius: 4,
