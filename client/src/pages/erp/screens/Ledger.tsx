@@ -7,6 +7,7 @@ import {
   PRIORITIES,
   STATUS_RULES,
   accountLabel,
+  classifyUndecided,
   type Direction,
   type EntryStatus,
 } from "@shared/erp";
@@ -74,6 +75,35 @@ export function LedgerScreen({
         matchesQuery(query, e.code, e.title, e.noteRaw, e.accountCode)
       ),
     [list.data, query]
+  );
+
+  /*
+   * 판정 대기를 「무엇이 없어서 막혔나」로 묶는다.
+   * 8건을 한 줄씩 읽고 사유 문장을 해석하게 하는 대신, 종류와 해야 할 일을
+   * 앞에 세운다 — 금액이 없는 건과 내용이 없는 건은 사람이 할 일이 다르다.
+   */
+  const undecidedGroups = useMemo(() => {
+    const pending = (list.data?.entries ?? []).filter(
+      e => e.status === "undecided"
+    );
+    const byKind = new Map<
+      string,
+      { kind: string; todo: string; entries: typeof pending }
+    >();
+    for (const entry of pending) {
+      const { kind, todo } = classifyUndecided(entry);
+      const found = byKind.get(kind);
+      if (found) found.entries.push(entry);
+      else byKind.set(kind, { kind, todo, entries: [entry] });
+    }
+    // 많은 것부터 — 한 종류를 처리하면 여러 건이 같이 풀린다
+    return Array.from(byKind.values()).sort(
+      (a, b) => b.entries.length - a.entries.length
+    );
+  }, [list.data]);
+  const undecidedCount = undecidedGroups.reduce(
+    (sum, g) => sum + g.entries.length,
+    0
   );
 
   const totals = direction === "in" ? list.data?.in : list.data?.out;
@@ -202,6 +232,49 @@ export function LedgerScreen({
           note={filtersActive ? "필터 적용됨" : "필터 없음"}
         />
       </div>
+
+      {undecidedGroups.length > 0 ? (
+        <Card
+          title="판정 대기 — 무엇이 없어서 막혔나"
+          meta={`${undecidedCount}건 · 종류별로 묶었습니다`}
+          body={false}
+        >
+          <table>
+            <thead>
+              <tr>
+                <th>막힌 이유</th>
+                <th className="n">건수</th>
+                <th>해야 할 일</th>
+                <th>해당 건</th>
+              </tr>
+            </thead>
+            <tbody>
+              {undecidedGroups.map(group => (
+                <tr key={group.kind}>
+                  <td>
+                    <span className="chip a">{group.kind}</span>
+                  </td>
+                  <td className="n">{group.entries.length}건</td>
+                  <td className="wrap">{group.todo}</td>
+                  <td className="wrap">
+                    {group.entries.map(entry => (
+                      <button
+                        key={entry.code}
+                        className="m"
+                        style={{ marginRight: 6 }}
+                        onClick={() => openEntry(entry.code)}
+                      >
+                        {entry.code}
+                        {entry.amount != null ? ` (${won(entry.amount)})` : ""}
+                      </button>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      ) : null}
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button
