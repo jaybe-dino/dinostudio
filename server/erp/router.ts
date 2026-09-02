@@ -13,7 +13,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc.js";
-import { getLedgerService, resolveErpRole } from "./index.js";
+import { getLedgerService, resolveErpRole, storeIsDatabase } from "./index.js";
 import { ErpError } from "./errors.js";
 import type { Actor } from "./service.js";
 
@@ -767,6 +767,22 @@ export const erpRouter = router({
     }),
 
   /** §5.5 이관 검증 리포트 (G2) */
+  /** POST /seed — §5.4 시드 적재 (대표만). 이미 있는 코드는 건드리지 않는다 */
+  seedDatabase: protectedProcedure.mutation(({ ctx }) =>
+    run(() => getLedgerService().seedDatabase(actorFrom(ctx)))
+  ),
+
+  /** GET /store — 원장이 DB 에 있는가, 메모리에 있는가 */
+  storeStatus: protectedProcedure.query(({ ctx }) => {
+    actorFrom(ctx);
+    return {
+      database: storeIsDatabase(),
+      note: storeIsDatabase()
+        ? "PostgreSQL(Neon) 에 저장됩니다"
+        : "메모리에 있습니다 — 서버가 재시작되면 입력한 내용이 사라집니다",
+    };
+  }),
+
   migration: protectedProcedure.query(({ ctx }) => {
     actorFrom(ctx);
     return run(() => getLedgerService().migrationReport());

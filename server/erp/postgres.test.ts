@@ -169,3 +169,50 @@ describe("upsert 가 Postgres 에서 실제로 갱신한다 (ON CONFLICT)", () =
     expect(after.find(a => a.code === first.code)?.name).toContain("(수정)");
   });
 });
+
+describe("화면에서 누르는 시드 적재 (대표만 · 여러 번 눌러도 안전)", () => {
+  /** 빈 DB 를 새로 만들어 적재 경로만 본다 */
+  async function freshStore() {
+    const client = new PGlite();
+    await client.exec(
+      migrationSql().replaceAll("--> statement-breakpoint", "")
+    );
+    const fresh = drizzle(client);
+    return new DrizzleLedgerStore(fresh as never);
+  }
+
+  const CEO = { id: "ceo@dinostudio.kr", role: "대표" as const };
+  const CFO = { id: "cfo@dinostudio.kr", role: "재무" as const };
+
+  it("대표가 누르면 시드가 들어가고 이관 검증이 함께 돌아온다", async () => {
+    const { LedgerService } = await import("./service.js");
+    const service = new LedgerService(await freshStore());
+
+    const result = await service.seedDatabase(CEO);
+    expect(result.inserted.entries).toBe(SEED_ENTRIES.length);
+    expect(result.inserted.snapshots).toBe(SEED_DAY_SNAPSHOTS.length);
+    expect(result.inserted.accounts).toBe(ACCOUNTS.length);
+    expect(result.skipped).toBe(0);
+    // 적재 직후의 V1~V8 — 메모리 저장소와 같은 판정이어야 한다
+    expect(result.checks.length).toBeGreaterThan(0);
+    expect(result.entryCount).toBe(SEED_ENTRIES.length);
+  }, 60_000);
+
+  it("두 번 눌러도 덮어쓰지 않는다 (§5.6 재이관 금지)", async () => {
+    const { LedgerService } = await import("./service.js");
+    const service = new LedgerService(await freshStore());
+
+    await service.seedDatabase(CEO);
+    const again = await service.seedDatabase(CEO);
+    expect(again.inserted.entries).toBe(0);
+    expect(again.skipped).toBe(SEED_ENTRIES.length);
+    // 건수가 두 배가 되지 않았다
+    expect(again.entryCount).toBe(SEED_ENTRIES.length);
+  }, 60_000);
+
+  it("재무는 실행할 수 없다 — 원장 전체를 만드는 작업이다", async () => {
+    const { LedgerService } = await import("./service.js");
+    const service = new LedgerService(await freshStore());
+    await expect(service.seedDatabase(CFO)).rejects.toThrow(/대표만/);
+  }, 60_000);
+});

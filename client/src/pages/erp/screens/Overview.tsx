@@ -2,6 +2,7 @@
  * 종합 현황 — 확정도 배지와 「계산 불가」 표시가 이 화면의 핵심이다.
  * 값이 없으면 0으로 그리지 않고 무엇이 필요한지를 쓴다 (§10.2 · 원칙 8).
  */
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile, chipClass } from "../components/Bits";
 import { useErpUi } from "../context";
@@ -32,6 +33,22 @@ export function OverviewScreen() {
   const cashflow = trpc.erp.views.cashflow.useQuery({ unit: "month" });
   const migration = trpc.erp.migration.useQuery();
   const me = trpc.erp.me.useQuery();
+  const store = trpc.erp.storeStatus.useQuery();
+  const utils = trpc.useUtils();
+  const [seedMessage, setSeedMessage] = useState<string | null>(null);
+  const seed = trpc.erp.seedDatabase.useMutation({
+    onSuccess: async result => {
+      const { accounts, snapshots, entries, settings } = result.inserted;
+      setSeedMessage(
+        `적재 완료 — 계정과목 ${accounts}개 확인 · 이관 일계 ${snapshots}행 · 원장 ${entries}건 · 기준값 ${settings}개` +
+          (result.skipped > 0
+            ? ` (이미 있던 ${result.skipped}건은 건드리지 않았습니다)`
+            : "")
+      );
+      await utils.erp.invalidate();
+    },
+    onError: error => setSeedMessage(error.message),
+  });
 
   const undecided = ledger.data?.out.excluded.undecided.n ?? 0;
   const pending = ledger.data?.out.excluded.pending ?? { n: 0, amount: null };
@@ -113,6 +130,47 @@ export function OverviewScreen() {
           최근 월 종료 잔액이 확정되지 않았습니다 — 판정 대기 승계. 판정 대기
           건의 금액·단위가 확정되면 그 날부터 다시 이어집니다.
         </Note>
+      ) : null}
+
+      {store.data ? (
+        <Card
+          title="원장이 어디에 저장되고 있나"
+          meta={store.data.database ? "PostgreSQL (Neon)" : "메모리"}
+        >
+          <Note tone={store.data.database ? undefined : "alert"}>
+            {store.data.note}
+          </Note>
+
+          {store.data.database && (migration.data?.entryCount ?? 0) === 0 ? (
+            <div style={{ marginTop: 10 }}>
+              <Note tone="warn">
+                <b>DB 는 붙었지만 아직 비어 있습니다.</b> §5.4 시드(원장 27건 ·
+                이관 일계 7행 · 계정과목 · 기준값)를 넣으면 이관 검증 리포트가
+                아래에 나옵니다.
+              </Note>
+              <button
+                type="button"
+                className="btn pri"
+                style={{ marginTop: 8 }}
+                disabled={seed.isPending || me.data?.role !== "대표"}
+                onClick={() => seed.mutate()}
+              >
+                {seed.isPending ? "적재 중…" : "시드 적재 + 이관 검증 실행"}
+              </button>
+              {me.data?.role !== "대표" ? (
+                <p className="s" style={{ marginTop: 6 }}>
+                  원장 전체를 만드는 작업이라 대표만 실행할 수 있습니다.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {seedMessage ? (
+            <div style={{ marginTop: 10 }}>
+              <Note>{seedMessage}</Note>
+            </div>
+          ) : null}
+        </Card>
       ) : null}
 
       <Card

@@ -63,6 +63,8 @@ export interface LedgerStore {
     expectedVersion: number
   ): Promise<Entry | undefined>;
   listSnapshots(): Promise<SeedDaySnapshot[]>;
+  /** 이관 일계 적재 — §5.4 시드에서만 쓴다. 이관 구간은 원장이 아니다 (§5.3) */
+  insertSnapshot(snapshot: SeedDaySnapshot): Promise<SeedDaySnapshot>;
   listAccounts(): Promise<Account[]>;
   upsertAccount(account: Account): Promise<Account>;
   listSettings(): Promise<Setting[]>;
@@ -223,6 +225,13 @@ export class InMemoryLedgerStore implements LedgerStore {
 
   async listSnapshots(): Promise<SeedDaySnapshot[]> {
     return this.snapshots.map(s => ({ ...s }));
+  }
+
+  async insertSnapshot(snapshot: SeedDaySnapshot): Promise<SeedDaySnapshot> {
+    const index = this.snapshots.findIndex(s => s.date === snapshot.date);
+    if (index >= 0) this.snapshots[index] = { ...snapshot };
+    else this.snapshots.push({ ...snapshot });
+    return { ...snapshot };
   }
 
   async listAccounts(): Promise<Account[]> {
