@@ -1,6 +1,6 @@
 /**
- * 서비스 팩토리 — DATABASE_URL이 있으면 MySQL, 없으면 §5.4 시드 메모리 저장소.
- * server/db.ts의 graceful degradation과 같은 방식이다.
+ * 서비스 팩토리 — DATABASE_URL 이 있으면 PostgreSQL(Neon), 없으면 §5.4 시드
+ * 메모리 저장소. server/db.ts 의 graceful degradation 과 같은 방식이다.
  */
 import { ROLES, type Role } from "../../shared/erp/index.js";
 import { createDb } from "../dbPool.js";
@@ -9,6 +9,16 @@ import { LedgerService } from "./service.js";
 import { InMemoryLedgerStore, type LedgerStore } from "./store.js";
 
 let cached: LedgerService | null = null;
+let backedByDb = false;
+
+/**
+ * 지금 원장이 DB 에 있는가, 메모리에 있는가.
+ * 화면에 그대로 보여 준다 — 메모리면 재시작에 사라지므로 사람이 알아야 한다.
+ */
+export function storeIsDatabase(): boolean {
+  getLedgerService();
+  return backedByDb;
+}
 
 export function getLedgerService(): LedgerService {
   if (cached) return cached;
@@ -16,9 +26,10 @@ export function getLedgerService(): LedgerService {
   if (process.env.DATABASE_URL) {
     try {
       store = new DrizzleLedgerStore(createDb(process.env.DATABASE_URL));
+      backedByDb = true;
     } catch (error) {
       console.warn(
-        "[ERP] MySQL 연결 실패 — 시드 메모리 저장소로 대체합니다:",
+        "[ERP] PostgreSQL 연결 실패 — 시드 메모리 저장소로 대체합니다:",
         error
       );
       store = new InMemoryLedgerStore();

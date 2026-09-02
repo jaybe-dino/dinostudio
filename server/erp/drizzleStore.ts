@@ -229,6 +229,17 @@ export class DrizzleLedgerStore implements LedgerStore {
     }));
   }
 
+  async insertSnapshot(snapshot: SeedDaySnapshot): Promise<SeedDaySnapshot> {
+    await this.db
+      .insert(erpDaySnapshots)
+      .values(snapshot)
+      .onConflictDoUpdate({
+        target: erpDaySnapshots.date,
+        set: { note: snapshot.note },
+      });
+    return snapshot;
+  }
+
   async listAccounts(): Promise<Account[]> {
     const rows = await this.db
       .select()

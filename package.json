@@ -15,7 +15,8 @@
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "erp:seed": "tsx server/erp/seedDb.ts",
-    "erp:check": "tsx server/erp/seedDb.ts --check"
+    "erp:check": "tsx server/erp/seedDb.ts --check",
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

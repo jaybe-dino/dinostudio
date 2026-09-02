@@ -7,6 +7,10 @@
  *   · 승인 없이는 지표가 아니다 (원칙 7) · 모르면 계산불가 (원칙 8)
  */
 import {
+  ACCOUNTS,
+  SEED_DAY_SNAPSHOTS,
+  SEED_ENTRIES,
+  SEED_SETTINGS,
   NOTIFICATION_RULES,
   applyCeoCap,
   buildArReport,
@@ -289,6 +293,94 @@ export class LedgerService {
       checks: runMigrationChecks(entries, snapshots),
       entryCount: entries.length,
       snapshotCount: snapshots.length,
+    };
+  }
+
+  /**
+   * POST /seed — §5.4 시드를 DB 에 적재한다 (대표만).
+   *
+   * 왜 화면에서 하나 — 원래는 터미널에서 `erp:seed` 를 돌리는 스크립트였다.
+   * 그러려면 대표님이 연결 문자열을 로컬에 들고 와야 하는데, 비밀값을 사람
+   * 손으로 옮기는 것이 이 시스템에서 가장 위험한 단계다. 배포된 서버가 자기
+   * 환경변수로 적재하면 그 단계가 사라진다.
+   *
+   * **이미 있는 코드는 건드리지 않는다** (§5.6 재이관 금지). 그래서 여러 번
+   * 눌러도 덮어쓰지 않고, 무엇을 건너뛰었는지 세어 돌려준다.
+   */
+  async seedDatabase(actor: Actor) {
+    // 원장 전체를 만드는 작업이다 — 대표만
+    if (actor.role !== "대표")
+      throw erpError(
+        "forbidden_field",
+        {},
+        "시드 적재는 대표만 할 수 있습니다"
+      );
+
+    const existingEntries = new Set(
+      (await this.store.listEntries()).map(e => e.code)
+    );
+    const existingSnapshots = new Set(
+      (await this.store.listSnapshots()).map(s => s.date)
+    );
+    const existingSettings = new Set(
+      (await this.store.listSettings()).map(s => s.key)
+    );
+    /*
+     * 계정과목은 존재 검사를 하지 않고 **항상** 넣는다. 두 가지 이유다.
+     *
+     * ① `listAccounts()` 는 테이블이 비어 있으면 코드의 §8.1 목록을 그대로
+     *    돌려준다 (읽기에는 맞는 동작이다). 그것으로 존재 검사를 하면 「이미
+     *    38개 다 있다」로 읽혀 **테이블이 영원히 비어 있게** 된다.
+     * ② 계정과목의 주인은 코드다 (§8.1). 계정을 새로 만들거나 이름을 고치면
+     *    적재를 다시 눌러 DB 를 따라오게 하는 것이 맞다.
+     */
+    let accounts = 0;
+    for (const account of ACCOUNTS) {
+      await this.store.upsertAccount(account);
+      accounts += 1;
+    }
+
+    let snapshots = 0;
+    for (const snapshot of SEED_DAY_SNAPSHOTS) {
+      if (existingSnapshots.has(snapshot.date)) continue;
+      await this.store.insertSnapshot(snapshot);
+      snapshots += 1;
+    }
+
+    let entries = 0;
+    let skipped = 0;
+    for (const entry of SEED_ENTRIES) {
+      if (existingEntries.has(entry.code)) {
+        skipped += 1;
+        continue;
+      }
+      await this.store.insertEntry(entry);
+      entries += 1;
+    }
+
+    let settings = 0;
+    for (const setting of SEED_SETTINGS) {
+      if (existingSettings.has(setting.key)) continue;
+      await this.store.putSetting(setting);
+      settings += 1;
+    }
+
+    await this.audit(
+      "entry",
+      "seed",
+      "upsert",
+      null,
+      { accounts, snapshots, entries, settings, skipped },
+      actor,
+      "§5.4 시드 적재"
+    );
+
+    // 적재 직후의 이관 검증 — 무엇이 안 맞는지 그 자리에서 보여 준다
+    const report = await this.migrationReport();
+    return {
+      inserted: { accounts, snapshots, entries, settings },
+      skipped,
+      ...report,
     };
   }
 
