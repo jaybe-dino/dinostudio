@@ -3,7 +3,7 @@
  * 데이터 표가 최상단, 설명 카드는 하단. 기본 단위는 월별.
  * 승인 대기는 블록마다 분리된 패널에서 그 자리에서 승인한다 (원칙 13).
  */
-import { accountLabel, type CashflowUnit } from "@shared/erp";
+import { accountLabel, cashflowGap, type CashflowUnit } from "@shared/erp";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Money, Note, PriorityChip, Tile } from "../components/Bits";
@@ -166,13 +166,52 @@ export function CashflowScreen() {
         {cashflow.isLoading ? (
           <div className="card-b s">불러오는 중…</div>
         ) : null}
-        {shown.map(block => {
+        {shown.map((block, index) => {
           const expanded = open[block.key] ?? false;
           const rows = block.outEntries
             .concat(block.inEntries)
             .filter(e => matchesQuery(query, e.code, e.title, e.noteRaw));
+          /*
+           * 움직임이 없는 날은 줄을 만들지 않는다 — 0원 줄 30개가 늘어나면
+           * 정작 움직인 날이 안 보인다. 대신 「여기서 며칠 비었고 잔액은
+           * 그대로였다」를 한 줄로 끼운다. 목록은 최신순이므로 앞 블록이
+           * 시간상으로는 뒤다 (docs/erp-qa.md 대표 피드백).
+           */
+          const gap = index > 0 ? cashflowGap(block, shown[index - 1]) : null;
           return (
             <div className="dayblk" key={block.key}>
+              {gap ? (
+                <div
+                  className="s"
+                  style={{
+                    padding: "6px 12px",
+                    borderBottom: "1px solid var(--rule)",
+                    background: "var(--bg-soft, transparent)",
+                    display: "flex",
+                    gap: 8,
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
+                >
+                  <span className="chip n">
+                    {shortDate(gap.from)} ~ {shortDate(gap.to)}
+                  </span>
+                  <span>
+                    <b>{gap.days}일간 입출금이 없었습니다</b> — 그래서 목록이
+                    건너뜁니다.{" "}
+                    {gap.balance == null ? (
+                      <>
+                        잔액은 <b>이 구간 내내 변하지 않았지만</b> 아직 확정
+                        표시하지 않습니다 — {nullReasonText(block.nullReason)}
+                      </>
+                    ) : (
+                      <>
+                        잔액은 <b>{won(gap.balance)}</b> 그대로였습니다.
+                      </>
+                    )}
+                  </span>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="dayblk-h"

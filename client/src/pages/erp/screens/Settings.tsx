@@ -26,6 +26,73 @@ const LABELS: Record<string, string> = {
   headcount: "인원 수 (E7 인당 생산성)",
 };
 
+/**
+ * 어느 묶음에 속하는가. 기준값이 16개가 되면서 한 줄로 늘어놓으면 무엇부터
+ * 넣어야 할지가 안 보였다 — 급한 것과 나중 것이 섞여 있었다.
+ */
+const GROUPS: { id: string; label: string; desc: string; keys: string[] }[] = [
+  {
+    id: "cash",
+    label: "① 현금 — 먼저 넣어야 할 것",
+    desc: "이 셋이 없으면 런웨이·부족액이 계산되지 않습니다",
+    keys: [
+      "cash_on_hand",
+      "payroll_monthly_actual",
+      "cash_requirement_horizon",
+    ],
+  },
+  {
+    id: "account",
+    label: "② 계좌 · 여신",
+    desc: "대사의 단위이고, 부족액의 의미를 판단하는 근거입니다",
+    keys: ["bank_accounts", "credit_lines", "debt_long_term_total"],
+  },
+  {
+    id: "judgement",
+    label: "③ 판단 기준 — 대표 결정",
+    desc: "시스템이 고르면 근거가 없는 숫자가 됩니다",
+    keys: [
+      "allocation_basis",
+      "ar_aging_buckets",
+      "pipeline_probability",
+      "headcount",
+      "approval_single_limit",
+    ],
+  },
+  {
+    id: "accounting",
+    label: "④ 회계 · 세무",
+    desc: "결산과 신고에 쓰이는 값입니다",
+    keys: ["opening_equity", "vat_display_basis"],
+  },
+  {
+    id: "ops",
+    label: "⑤ 운영",
+    desc: "구독·추정·기준일",
+    keys: ["subscriptions", "project_remaining_estimates", "today_override"],
+  },
+];
+
+/** 이 값이 없으면 무엇이 막히는가 — 넣을 이유를 그 자리에서 보여 준다 */
+const BLOCKS: Record<string, string> = {
+  cash_on_hand: "현금 현황 부족액 · 13주 자금계획 · 이월 기초잔액",
+  payroll_monthly_actual: "번레이트 · 런웨이 3종 전부",
+  cash_requirement_horizon: "부족액이 며칠치인지",
+  bank_accounts: "계좌별 잔액 · 은행 대사",
+  credit_lines: "여신 화면 · 즉시 동원 가능액",
+  debt_long_term_total: "부채 원장의 장기 차입",
+  allocation_basis: "사업부·프로젝트 손익의 공통비 배부",
+  ar_aging_buckets: "채권 연령분석 구간",
+  pipeline_probability: "13주 자금계획의 파이프라인",
+  headcount: "인당 매출 · 인당 이익",
+  approval_single_limit: "1인 승인 한도",
+  opening_equity: "재무제표 5종 (지금은 가결산)",
+  vat_display_basis: "부가세 표기 · 슬랙 파서",
+  subscriptions: "번레이트 산출 조건 6번",
+  project_remaining_estimates: "프로젝트 예상 마진",
+  today_override: "D-day 판정 기준일",
+};
+
 /** 무엇을 어떤 모양으로 넣는지 — 형식이 틀리면 저장돼도 화면이 안 읽는다 */
 const HINTS: Record<string, string> = {
   credit_lines:
@@ -106,6 +173,36 @@ export function SettingsScreen() {
   const provisional = rows.filter(s => s.isProvisional);
   const empty = rows.filter(s => s.value == null);
 
+  /*
+   * 묶음별로 나눈다. 어느 묶음에도 안 적힌 키는 마지막 「기타」로 몰아 둔다 —
+   * 새 키를 추가하고 GROUPS 에 넣는 것을 잊어도 화면에서 사라지지 않아야 한다.
+   */
+  const grouped = GROUPS.map(group => ({
+    ...group,
+    rows: group.keys
+      .map(key => rows.find(item => item.key === key))
+      .filter((item): item is (typeof rows)[number] => item != null),
+  })).filter(group => group.rows.length > 0);
+  const listed = new Set(GROUPS.flatMap(g => g.keys));
+  const others = rows.filter(item => !listed.has(item.key));
+  const sections = others.length
+    ? [
+        ...grouped,
+        {
+          id: "etc",
+          label: "기타",
+          desc: "묶음에 아직 넣지 않은 값",
+          keys: [],
+          rows: others,
+        },
+      ]
+    : grouped;
+
+  /** 가장 급한 빈 값 — 무엇부터 넣어야 하는지 하나만 가리킨다 */
+  const firstEmpty = GROUPS.flatMap(g => g.keys).find(
+    key => rows.find(item => item.key === key)?.value == null
+  );
+
   return (
     <>
       <div className="ph">
@@ -139,6 +236,22 @@ export function SettingsScreen() {
         />
       </div>
 
+      {firstEmpty ? (
+        <Note tone="warn">
+          <b>다음에 넣을 것 — {LABELS[firstEmpty] ?? firstEmpty}</b>
+          <div style={{ marginTop: 4 }}>
+            이 값이 없어서 <b>{BLOCKS[firstEmpty] ?? "일부 화면"}</b> 이 막혀
+            있습니다. 아래 ① 묶음부터 순서대로 채우시면 됩니다 — 회색으로 떠
+            있는 모양 그대로 넣으십시오.
+          </div>
+        </Note>
+      ) : (
+        <Note>
+          기준값이 모두 채워져 있습니다. 값을 바꾸면 감사로그에 남고, 파생
+          지표는 다음 조회에서 즉시 반영됩니다.
+        </Note>
+      )}
+
       {message ? <Note>{message}</Note> : null}
       {canWrite ? null : (
         <Note tone="warn">
@@ -153,111 +266,137 @@ export function SettingsScreen() {
         폐기했습니다.
       </Note>
 
-      <Card title="설정" meta={`${rows.length}개`} body={false}>
-        <div className="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>키</th>
-                <th>의미</th>
-                <th>값</th>
-                <th>확정도</th>
-                <th>담당</th>
-                <th>갱신</th>
-                <th>변경</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(setting => (
-                <tr key={setting.key}>
-                  <td style={{ fontFamily: "var(--mono)" }}>{setting.key}</td>
-                  <td className="wrap">{LABELS[setting.key] ?? "—"}</td>
-                  <td className="n">
-                    {setting.value == null ? (
-                      <span className="s">미확정</span>
-                    ) : typeof setting.value === "number" ? (
-                      setting.value.toLocaleString("ko-KR")
-                    ) : (
-                      String(setting.value)
-                    )}
-                  </td>
-                  <td>
-                    <span
-                      className={chipClass(
-                        setting.isProvisional ? "warn" : "ok"
-                      )}
-                    >
-                      {setting.isProvisional ? "임시" : "확정"}
-                    </span>
-                  </td>
-                  <td>{setting.ownerRole ?? "—"}</td>
-                  <td className="s">
-                    {setting.updatedAt ? setting.updatedAt.slice(0, 10) : "—"}
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <input
-                        type={KINDS[setting.key] === "date" ? "date" : "text"}
-                        value={
-                          draft[setting.key] ??
-                          (setting.value == null
-                            ? ""
-                            : typeof setting.value === "object"
-                              ? JSON.stringify(setting.value)
-                              : String(setting.value))
-                        }
-                        onChange={e =>
-                          setDraft(prev => ({
-                            ...prev,
-                            [setting.key]: e.target.value,
-                          }))
-                        }
-                        disabled={!canWrite}
-                        // 형식이 틀리면 저장돼도 화면이 읽지 못한다 — 모양을 그대로 보여 준다
-                        placeholder={HINTS[setting.key] ?? ""}
-                        title={
-                          HINTS[setting.key]
-                            ? `이 모양으로 넣습니다 — ${HINTS[setting.key]}`
-                            : undefined
-                        }
-                        style={{
-                          width: HINTS[setting.key] ? 320 : 150,
-                          padding: "3px 6px",
-                          border: "1px solid var(--rule)",
-                          borderRadius: 4,
-                          font: "inherit",
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="btn"
-                        disabled={
-                          !canWrite ||
-                          draft[setting.key] === undefined ||
-                          put.isPending
-                        }
-                        onClick={() =>
-                          put.mutate({
-                            key: setting.key,
-                            value: parseValue(
-                              setting.key,
-                              draft[setting.key] ?? ""
-                            ),
-                            // 사람이 확정한 값이므로 임시 배지를 뗀다
-                            isProvisional: false,
-                          })
-                        }
-                      >
-                        저장
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* 묶음별로 나눠 보여 준다 — 무엇부터 넣어야 할지가 순서로 보이게 */}
+      {sections.map(section => (
+        <div key={section.id}>
+          <Card
+            title={section.label}
+            meta={`${section.rows.length}개 · ${section.desc}`}
+            body={false}
+          >
+            <div className="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>의미</th>
+                    <th>값</th>
+                    <th>없으면 막히는 것</th>
+                    <th>확정도</th>
+                    <th>담당</th>
+                    <th>변경</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.rows.map(setting => (
+                    <tr key={setting.key}>
+                      <td className="wrap">
+                        {LABELS[setting.key] ?? setting.key}
+                        <div
+                          className="s"
+                          style={{ fontFamily: "var(--mono)" }}
+                        >
+                          {setting.key}
+                        </div>
+                      </td>
+                      <td className="n">
+                        {setting.value == null ? (
+                          <span className="s">미확정</span>
+                        ) : typeof setting.value === "number" ? (
+                          setting.value.toLocaleString("ko-KR")
+                        ) : (
+                          String(setting.value)
+                        )}
+                      </td>
+                      <td className="wrap s">
+                        {setting.value == null
+                          ? (BLOCKS[setting.key] ?? "—")
+                          : "—"}
+                      </td>
+                      <td>
+                        <span
+                          className={chipClass(
+                            setting.isProvisional ? "warn" : "ok"
+                          )}
+                        >
+                          {setting.isProvisional ? "임시" : "확정"}
+                        </span>
+                      </td>
+                      <td className="nw">
+                        {setting.ownerRole ?? "—"}
+                        <div className="s">
+                          {setting.updatedAt
+                            ? setting.updatedAt.slice(0, 10)
+                            : "미입력"}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <input
+                            type={
+                              KINDS[setting.key] === "date" ? "date" : "text"
+                            }
+                            value={
+                              draft[setting.key] ??
+                              (setting.value == null
+                                ? ""
+                                : typeof setting.value === "object"
+                                  ? JSON.stringify(setting.value)
+                                  : String(setting.value))
+                            }
+                            onChange={e =>
+                              setDraft(prev => ({
+                                ...prev,
+                                [setting.key]: e.target.value,
+                              }))
+                            }
+                            disabled={!canWrite}
+                            // 형식이 틀리면 저장돼도 화면이 읽지 못한다 — 모양을 그대로 보여 준다
+                            placeholder={HINTS[setting.key] ?? ""}
+                            title={
+                              HINTS[setting.key]
+                                ? `이 모양으로 넣습니다 — ${HINTS[setting.key]}`
+                                : undefined
+                            }
+                            style={{
+                              width: HINTS[setting.key] ? 320 : 150,
+                              padding: "3px 6px",
+                              border: "1px solid var(--rule)",
+                              borderRadius: 4,
+                              font: "inherit",
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="btn"
+                            disabled={
+                              !canWrite ||
+                              draft[setting.key] === undefined ||
+                              put.isPending
+                            }
+                            onClick={() =>
+                              put.mutate({
+                                key: setting.key,
+                                value: parseValue(
+                                  setting.key,
+                                  draft[setting.key] ?? ""
+                                ),
+                                // 사람이 확정한 값이므로 임시 배지를 뗀다
+                                isProvisional: false,
+                              })
+                            }
+                          >
+                            저장
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
-      </Card>
+      ))}
     </>
   );
 }

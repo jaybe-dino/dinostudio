@@ -221,3 +221,55 @@ export function confirmedTotals(entries: Entry[], direction: "out" | "in") {
     },
   };
 }
+
+/**
+ * 블록 사이의 빈 구간 (일별 보기).
+ *
+ * 왜 필요한가 — 일별 보기는 **움직임이 있는 날만** 줄로 만든다. 그래서
+ * 9월 1일 다음이 9월 30일이면 「왜 갑자기 뛰나」로 읽힌다. 실제로는 그 사이
+ * 28일간 입출금이 없었던 것이고, 잔액은 그대로였다.
+ *
+ * 빈 날을 0원 줄로 채우지 않는다 — 30줄이 늘어나면 정작 움직인 날이 안 보인다.
+ * 대신 「여기서 며칠 비었고 잔액은 그대로였다」를 한 줄로 끼운다.
+ */
+export interface CashflowGap {
+  /** 앞 블록의 다음 날 */
+  from: string;
+  /** 뒤 블록의 전날 */
+  to: string;
+  /** 비어 있는 일수 */
+  days: number;
+  /** 그 구간 내내 유지된 잔액. 앞 블록의 종료 잔액이 null 이면 null */
+  balance: number | null;
+}
+
+function shiftDay(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysApart(from: string, to: string): number {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  return Math.round((b - a) / 86_400_000);
+}
+
+/**
+ * 이어지지 않는 두 일별 블록 사이의 빈 구간을 찾는다.
+ * 일별 보기에서만 의미가 있다 — 월별·연별은 단위 자체가 구간이다.
+ */
+export function cashflowGap(
+  previous: CashflowBlock,
+  next: CashflowBlock
+): CashflowGap | null {
+  if (previous.unit !== "day" || next.unit !== "day") return null;
+  const days = daysApart(previous.key, next.key) - 1;
+  if (days <= 0) return null;
+  return {
+    from: shiftDay(previous.key, 1),
+    to: shiftDay(next.key, -1),
+    days,
+    balance: previous.close,
+  };
+}
