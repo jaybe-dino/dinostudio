@@ -73,7 +73,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    await db.insert(users).values(values).onConflictDoUpdate({
+      // 같은 사람이 다시 로그인한 경우다 — openId 가 유일 키다
+      target: users.openId,
       set: updateSet,
     });
   } catch (error) {

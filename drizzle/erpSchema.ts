@@ -1,25 +1,29 @@
 /**
- * 경영관리 시스템 1차 오픈 테이블 (개발 사양서 §6)
+ * 경영관리 시스템 테이블 (개발 사양서 §6)
  *
- * 사양서 §15는 PostgreSQL을 권고하지만 이 레포는 MySQL(mysql2 + drizzle)로 운영된다.
- * 사양서가 실제로 요구하는 것은 "정확한 정수 원 · 부동소수 금지"이므로 금액은 전부
- * BIGINT(정수 원)로 잡는다 — DECIMAL/FLOAT를 쓰지 않는다.
- * 물리 삭제는 제공하지 않는다 (원칙 9) — 어떤 코드도 DELETE를 실행하지 않는다.
+ * 사양서 §15의 권고대로 **PostgreSQL** 이다 (Neon). 금액은 전부 BIGINT(정수 원)로
+ * 잡고 DECIMAL/FLOAT 를 쓰지 않는다 — 사양서가 요구하는 것은 「정확한 정수 원 ·
+ * 부동소수 금지」이고, 회계에서 반올림 오차는 나중에 되돌릴 수 없다.
+ *
+ * 시각은 전부 timestamptz 다. 서버가 어느 리전에서 돌든 같은 순간을 가리켜야
+ * 하고(§14 KST 기준), 시간대 없는 timestamp 는 드라이버마다 다르게 해석된다.
+ *
+ * 물리 삭제는 제공하지 않는다 (원칙 9) — 어떤 코드도 DELETE 를 실행하지 않는다.
  */
 import {
   bigint,
   boolean,
   date,
   index,
-  int,
-  json,
-  mysqlEnum,
-  mysqlTable,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
   text,
   timestamp,
   uniqueIndex,
   varchar,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/pg-core";
 
 /**
  * 환율 저장 배율 (A8). 이 파일은 DECIMAL/FLOAT 를 쓰지 않으므로 환율도 정수로
@@ -79,28 +83,56 @@ export const ROLE_VALUES = [
   "외부열람",
 ] as const;
 
+/*
+ * PostgreSQL 은 컬럼에 인라인 enum 을 두지 못하고 타입을 먼저 만든다.
+ * 같은 값 목록을 쓰는 컬럼은 타입 하나를 공유한다 — 등급이 세 컬럼(자동·수동·
+ * 계정 기본값)에 나오지만 값이 갈라지면 안 되기 때문이다.
+ */
+export const entryStatusEnum = pgEnum("erp_entry_status", ENTRY_STATUS_VALUES);
+export const natureEnum = pgEnum("erp_nature", NATURE_VALUES);
+export const priorityEnum = pgEnum("erp_priority", PRIORITY_VALUES);
+export const cfSectionEnum = pgEnum("erp_cf_section", CF_SECTION_VALUES);
+export const sourceEnum = pgEnum("erp_source", SOURCE_VALUES);
+export const payMethodEnum = pgEnum("erp_pay_method", PAY_METHOD_VALUES);
+export const buEnum = pgEnum("erp_bu", BU_VALUES);
+export const roleEnum = pgEnum("erp_role", ROLE_VALUES);
+export const directionEnum = pgEnum("erp_direction", ["out", "in"]);
+export const decisionEnum = pgEnum("erp_decision", [
+  "approve",
+  "reject",
+  "hold",
+]);
+/** file = 올린 파일 · link = 외부 링크 · none = 증빙이 실제로 없는 건 */
+export const storageEnum = pgEnum("erp_storage", ["file", "link", "none"]);
+export const periodStatusEnum = pgEnum("erp_period_status", [
+  "open",
+  "closing",
+  "closed",
+]);
+export const debtTermEnum = pgEnum("erp_debt_term", ["단기", "장기"]);
+
 /** §8.1 계정과목 마스터 — 자동 판정 3종이 전부 이 테이블 컬럼에서 나온다 */
-export const erpAccounts = mysqlTable("erp_account", {
+export const erpAccounts = pgTable("erp_account", {
   code: varchar("code", { length: 8 }).primaryKey(),
   name: varchar("name", { length: 120 }).notNull(),
   type: varchar("type", { length: 40 }).notNull(),
   parentCode: varchar("parentCode", { length: 8 }),
-  cfSection: mysqlEnum("cfSection", CF_SECTION_VALUES).notNull(),
+  cfSection: cfSectionEnum("cfSection").notNull(),
   isOpex: boolean("isOpex").notNull().default(false),
-  defaultPriority: mysqlEnum("defaultPriority", PRIORITY_VALUES),
+  defaultPriority: priorityEnum("defaultPriority"),
   active: boolean("active").notNull().default(true),
 });
 
 /** §6.2 entry — 핵심 원장 (원칙 12 · 단일 원본) */
-export const erpEntries = mysqlTable(
+export const erpEntries = pgTable(
   "erp_entry",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     /** 불변 (§7.1) */
     code: varchar("code", { length: 32 }).notNull(),
     parentCode: varchar("parentCode", { length: 32 }),
-    direction: mysqlEnum("direction", ["out", "in"]).notNull(),
-    status: mysqlEnum("status", ENTRY_STATUS_VALUES).notNull(),
+    direction: directionEnum("direction").notNull(),
+    status: entryStatusEnum("status").notNull(),
     title: varchar("title", { length: 300 }).notNull().default(""),
     /** 원문 적요 — 덮어쓰기 금지 */
     noteRaw: text("noteRaw"),
@@ -120,25 +152,25 @@ export const erpEntries = mysqlTable(
     dueDate: date("dueDate", { mode: "string" }),
     paidAt: date("paidAt", { mode: "string" }),
     accountCode: varchar("accountCode", { length: 8 }),
-    nature: mysqlEnum("nature", NATURE_VALUES),
-    buCode: mysqlEnum("buCode", BU_VALUES),
+    nature: natureEnum("nature"),
+    buCode: buEnum("buCode"),
     projectId: varchar("projectId", { length: 36 }),
     partyId: varchar("partyId", { length: 36 }),
     contractId: varchar("contractId", { length: 36 }),
-    priority: mysqlEnum("priority", PRIORITY_VALUES),
-    priorityOverride: mysqlEnum("priorityOverride", PRIORITY_VALUES),
+    priority: priorityEnum("priority"),
+    priorityOverride: priorityEnum("priorityOverride"),
     /** priorityOverride가 있으면 필수 — 애플리케이션과 함께 CHECK로도 막는다 */
     priorityReason: text("priorityReason"),
-    payMethod: mysqlEnum("payMethod", PAY_METHOD_VALUES),
+    payMethod: payMethodEnum("payMethod"),
     bankAccount: varchar("bankAccount", { length: 64 }),
     invoiceIssued: boolean("invoiceIssued"),
     invoiceNo: varchar("invoiceNo", { length: 64 }),
     /** §9.3 입금예정일 산출의 기준일 */
     invoiceDate: date("invoiceDate", { mode: "string" }),
-    source: mysqlEnum("source", SOURCE_VALUES).notNull(),
+    source: sourceEnum("source").notNull(),
     sourceRef: varchar("sourceRef", { length: 190 }),
     /** §11.1 슬랙 양식에 추가가 필요한 필드 */
-    roundNo: int("roundNo"),
+    roundNo: integer("roundNo"),
     linkedRevenueCode: varchar("linkedRevenueCode", { length: 32 }),
     undecidedReason: varchar("undecidedReason", { length: 300 }),
     hasEvidence: boolean("hasEvidence").notNull().default(false),
@@ -164,10 +196,10 @@ export const erpEntries = mysqlTable(
      */
     fxRateScaled: bigint("fxRateScaled", { mode: "number" }),
     /** 이연 개월 수 — 손익만 월할로 나눈다 (A7) */
-    deferralMonths: int("deferralMonths"),
+    deferralMonths: integer("deferralMonths"),
     /** 낙관적 잠금 (§4) */
-    version: int("version").notNull().default(1),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
     createdBy: varchar("createdBy", { length: 64 }).notNull(),
   },
   table => [
@@ -180,39 +212,39 @@ export const erpEntries = mysqlTable(
 );
 
 /** §6.3 entry_revision — 화면의 「이력」 탭 */
-export const erpEntryRevisions = mysqlTable(
+export const erpEntryRevisions = pgTable(
   "erp_entry_revision",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     entryId: varchar("entryId", { length: 36 }).notNull(),
-    version: int("version").notNull(),
-    before: json("before"),
-    after: json("after"),
+    version: integer("version").notNull(),
+    before: jsonb("before"),
+    after: jsonb("after"),
     reason: text("reason"),
     actor: varchar("actor", { length: 64 }).notNull(),
-    at: timestamp("at").defaultNow().notNull(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
   },
   table => [index("erp_entry_revision_entry_idx").on(table.entryId)]
 );
 
 /** §6.3 approval — 다단계 승인 이력 */
-export const erpApprovals = mysqlTable(
+export const erpApprovals = pgTable(
   "erp_approval",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     entryId: varchar("entryId", { length: 36 }).notNull(),
-    step: int("step").notNull().default(1),
-    approverRole: mysqlEnum("approverRole", ROLE_VALUES).notNull(),
+    step: integer("step").notNull().default(1),
+    approverRole: roleEnum("approverRole").notNull(),
     actor: varchar("actor", { length: 64 }).notNull(),
-    decision: mysqlEnum("decision", ["approve", "reject", "hold"]).notNull(),
+    decision: decisionEnum("decision").notNull(),
     reason: text("reason"),
-    at: timestamp("at").defaultNow().notNull(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
   },
   table => [index("erp_approval_entry_idx").on(table.entryId)]
 );
 
 /** §6.3 day_snapshot — 이관 구간 일계 + 이관 검증 기준값 (§5.4) */
-export const erpDaySnapshots = mysqlTable("erp_day_snapshot", {
+export const erpDaySnapshots = pgTable("erp_day_snapshot", {
   date: date("date", { mode: "string" }).primaryKey(),
   open: bigint("open", { mode: "number" }),
   inSum: bigint("inSum", { mode: "number" }).notNull().default(0),
@@ -226,7 +258,7 @@ export const erpDaySnapshots = mysqlTable("erp_day_snapshot", {
 });
 
 /** §6.3 attachment — 증빙 */
-export const erpAttachments = mysqlTable(
+export const erpAttachments = pgTable(
   "erp_attachment",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -238,7 +270,7 @@ export const erpAttachments = mysqlTable(
      * file = 이 시스템에 올린 파일 · link = 드라이브 등 외부 링크 (§11.2)
      * none = 증빙이 실제로 없는 건 — 사유(reason)를 반드시 함께 받는다
      */
-    storage: mysqlEnum("storage", ["file", "link", "none"])
+    storage: storageEnum("storage")
       .notNull()
       .default("link"),
     /** 증빙 없이 등록한 사유. storage=none 일 때만 채워진다 */
@@ -246,34 +278,41 @@ export const erpAttachments = mysqlTable(
     sizeBytes: bigint("sizeBytes", { mode: "number" }),
     contentType: varchar("contentType", { length: 120 }),
     uploadedBy: varchar("uploadedBy", { length: 64 }).notNull(),
-    at: timestamp("at").defaultNow().notNull(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
   },
   table => [index("erp_attachment_entry_idx").on(table.entryId)]
 );
 
 /** §6.3 setting — 임시 기본값과 기준값 */
-export const erpSettings = mysqlTable("erp_setting", {
+export const erpSettings = pgTable("erp_setting", {
   key: varchar("key", { length: 80 }).primaryKey(),
-  value: json("value"),
+  value: jsonb("value"),
   isProvisional: boolean("isProvisional").notNull().default(true),
-  ownerRole: mysqlEnum("ownerRole", ROLE_VALUES),
+  ownerRole: roleEnum("ownerRole"),
   updatedBy: varchar("updatedBy", { length: 64 }),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow(),
+  /*
+   * MySQL 의 ON UPDATE CURRENT_TIMESTAMP 에 해당하는 것이 Postgres 에는 없다.
+   * drizzle 의 $onUpdate 로 애플리케이션 쪽에서 채운다 — 기준값 변경은 전부
+   * putSetting 을 지나므로 우회 경로가 없다.
+   */
+  updatedAt: timestamp("updatedAt", { withTimezone: true })
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 });
 
 /** §6.3 audit_log — 전 테이블 변경 이력. 민감 테이블은 조회도 기록. */
-export const erpAuditLogs = mysqlTable(
+export const erpAuditLogs = pgTable(
   "erp_audit_log",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     tableName: varchar("tableName", { length: 64 }).notNull(),
     rowId: varchar("rowId", { length: 64 }).notNull(),
     action: varchar("action", { length: 40 }).notNull(),
-    before: json("before"),
-    after: json("after"),
+    before: jsonb("before"),
+    after: jsonb("after"),
     actor: varchar("actor", { length: 64 }).notNull(),
     ip: varchar("ip", { length: 64 }),
-    at: timestamp("at").defaultNow().notNull(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
   },
   table => [index("erp_audit_log_row_idx").on(table.tableName, table.rowId)]
 );
@@ -282,7 +321,7 @@ export const erpAuditLogs = mysqlTable(
  * §6.3 journal / journal_line — 원장 확정 시 자동 생성. 수기 생성 API를 노출하지 않는다 (원칙 12).
  * 사양서는 3차로 잡았으나 인수 기준 T1 ⑤가 1차에서 전표 1건 자동 생성을 요구한다.
  */
-export const erpJournals = mysqlTable(
+export const erpJournals = pgTable(
   "erp_journal",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -297,7 +336,7 @@ export const erpJournals = mysqlTable(
   table => [index("erp_journal_entry_idx").on(table.entryId)]
 );
 
-export const erpJournalLines = mysqlTable(
+export const erpJournalLines = pgTable(
   "erp_journal_line",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -306,26 +345,26 @@ export const erpJournalLines = mysqlTable(
     /** 차변 합 == 대변 합 — 애플리케이션과 함께 CHECK로도 막는다 */
     debit: bigint("debit", { mode: "number" }).notNull().default(0),
     credit: bigint("credit", { mode: "number" }).notNull().default(0),
-    buCode: mysqlEnum("buCode", BU_VALUES),
+    buCode: buEnum("buCode"),
     projectId: varchar("projectId", { length: 36 }),
   },
   table => [index("erp_journal_line_journal_idx").on(table.journalId)]
 );
 
 /** §13.1 권한 매트릭스 */
-export const erpUsers = mysqlTable("erp_user", {
+export const erpUsers = pgTable("erp_user", {
   id: varchar("id", { length: 36 }).primaryKey(),
   email: varchar("email", { length: 320 }).notNull().unique(),
   name: varchar("name", { length: 120 }).notNull(),
-  role: mysqlEnum("role", ROLE_VALUES).notNull(),
+  role: roleEnum("role").notNull(),
   active: boolean("active").notNull().default(true),
 });
 
-export const erpRolePermissions = mysqlTable(
+export const erpRolePermissions = pgTable(
   "erp_role_permission",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    role: mysqlEnum("role", ROLE_VALUES).notNull(),
+    role: roleEnum("role").notNull(),
     resource: varchar("resource", { length: 80 }).notNull(),
     canRead: boolean("canRead").notNull().default(false),
     canWrite: boolean("canWrite").notNull().default(false),
@@ -339,7 +378,7 @@ export const erpRolePermissions = mysqlTable(
 /* ─── 2차 · 3차 테이블 (§6.3) ────────────────────────────────────────────── */
 
 /** 거래처 — vatMode가 사업부별 VAT 표기 차이를 흡수한다 (B3) */
-export const erpParties = mysqlTable("erp_party", {
+export const erpParties = pgTable("erp_party", {
   id: varchar("id", { length: 36 }).primaryKey(),
   name: varchar("name", { length: 200 }).notNull(),
   bizNo: varchar("bizNo", { length: 20 }),
@@ -352,7 +391,7 @@ export const erpParties = mysqlTable("erp_party", {
 });
 
 /** 계약 — 입금예정일 산출의 근거 (§9.3) */
-export const erpContracts = mysqlTable(
+export const erpContracts = pgTable(
   "erp_contract",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -360,9 +399,9 @@ export const erpContracts = mysqlTable(
     partyId: varchar("partyId", { length: 36 }),
     projectId: varchar("projectId", { length: 36 }),
     amountTotal: bigint("amountTotal", { mode: "number" }),
-    installments: json("installments"),
+    installments: jsonb("installments"),
     /** null이면 입금예정일을 산출할 수 없다 — 화면에 「계약서 확인」 */
-    paymentTermsDays: int("paymentTermsDays"),
+    paymentTermsDays: integer("paymentTermsDays"),
     paymentTermsText: varchar("paymentTermsText", { length: 200 }),
     driveUrl: text("driveUrl"),
     isAgency: boolean("isAgency").notNull().default(false),
@@ -370,13 +409,13 @@ export const erpContracts = mysqlTable(
   table => [uniqueIndex("erp_contract_code_uq").on(table.code)]
 );
 
-export const erpProjects = mysqlTable(
+export const erpProjects = pgTable(
   "erp_project",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     code: varchar("code", { length: 32 }).notNull(),
     name: varchar("name", { length: 200 }).notNull(),
-    buCode: mysqlEnum("buCode", BU_VALUES),
+    buCode: buEnum("buCode"),
     status: varchar("status", { length: 40 }).notNull().default("진행"),
     /**
      * @deprecated 「예산」이라는 이름으로 계약 금액과 원가 예산 두 가지에 쓰이고 있었다.
@@ -394,7 +433,7 @@ export const erpProjects = mysqlTable(
 );
 
 /** 차입 — maturityDate가 null이면 만기 알람이 발동하지 않는다 (B2) */
-export const erpDebts = mysqlTable(
+export const erpDebts = pgTable(
   "erp_debt",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -402,18 +441,18 @@ export const erpDebts = mysqlTable(
     creditor: varchar("creditor", { length: 200 }).notNull(),
     /** null = 건별 잔액 미분해 */
     principal: bigint("principal", { mode: "number" }),
-    rate: int("rate"),
+    rate: integer("rate"),
     maturityDate: date("maturityDate", { mode: "string" }),
     repayType: varchar("repayType", { length: 60 }),
     isRelatedParty: boolean("isRelatedParty").notNull().default(false),
     monthlyInterest: bigint("monthlyInterest", { mode: "number" }),
-    term: mysqlEnum("term", ["단기", "장기"]).notNull(),
+    term: debtTermEnum("term").notNull(),
     docUrl: text("docUrl"),
   },
   table => [uniqueIndex("erp_debt_code_uq").on(table.code)]
 );
 
-export const erpDebtSchedules = mysqlTable(
+export const erpDebtSchedules = pgTable(
   "erp_debt_schedule",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -426,39 +465,39 @@ export const erpDebtSchedules = mysqlTable(
 );
 
 /** 수집 검수함 — 원장 진입 전 대기열. 파싱 실패도 여기 남는다. */
-export const erpIntakes = mysqlTable(
+export const erpIntakes = pgTable(
   "erp_intake",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    source: mysqlEnum("source", SOURCE_VALUES).notNull(),
+    source: sourceEnum("source").notNull(),
     sourceRef: varchar("sourceRef", { length: 190 }),
     /** §11.1 슬랙 양식에 추가가 필요한 필드 */
-    roundNo: int("roundNo"),
+    roundNo: integer("roundNo"),
     linkedRevenueCode: varchar("linkedRevenueCode", { length: 32 }),
     raw: text("raw").notNull(),
-    parsed: json("parsed"),
+    parsed: jsonb("parsed"),
     status: varchar("status", { length: 30 }).notNull().default("waiting"),
     failReason: varchar("failReason", { length: 300 }),
     entryId: varchar("entryId", { length: 36 }),
-    receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+    receivedAt: timestamp("receivedAt", { withTimezone: true }).defaultNow().notNull(),
   },
   table => [
     uniqueIndex("erp_intake_source_uq").on(table.source, table.sourceRef),
   ]
 );
 
-export const erpNotificationRules = mysqlTable("erp_notification_rule", {
+export const erpNotificationRules = pgTable("erp_notification_rule", {
   id: varchar("id", { length: 36 }).primaryKey(),
   trigger: varchar("trigger", { length: 120 }).notNull(),
   tier: varchar("tier", { length: 10 }).notNull(),
-  recipients: json("recipients"),
+  recipients: jsonb("recipients"),
   channel: varchar("channel", { length: 40 }).notNull(),
   active: boolean("active").notNull().default(true),
   /** 만기 미확인처럼 규칙은 있으나 발동할 수 없는 상태 */
   blockedReason: varchar("blockedReason", { length: 300 }),
 });
 
-export const erpNotifications = mysqlTable(
+export const erpNotifications = pgTable(
   "erp_notification",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
@@ -466,22 +505,22 @@ export const erpNotifications = mysqlTable(
     title: varchar("title", { length: 300 }).notNull(),
     body: text("body").notNull(),
     screen: varchar("screen", { length: 60 }),
-    sentAt: timestamp("sentAt"),
-    readAt: timestamp("readAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    sentAt: timestamp("sentAt", { withTimezone: true }),
+    readAt: timestamp("readAt", { withTimezone: true }),
+    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   },
   table => [index("erp_notification_rule_idx").on(table.ruleId)]
 );
 
 /** 월 마감 잠금 — closed면 그 기간 entry 수정을 거부한다 (3차) */
-export const erpPeriods = mysqlTable("erp_period", {
+export const erpPeriods = pgTable("erp_period", {
   ym: varchar("ym", { length: 7 }).primaryKey(),
-  status: mysqlEnum("status", ["open", "closing", "closed"])
+  status: periodStatusEnum("status")
     .notNull()
     .default("open"),
   closedBy: varchar("closedBy", { length: 64 }),
-  closedAt: timestamp("closedAt"),
-  blockers: json("blockers"),
+  closedAt: timestamp("closedAt", { withTimezone: true }),
+  blockers: jsonb("blockers"),
 });
 
 export type ErpEntryRow = typeof erpEntries.$inferSelect;

@@ -25,7 +25,7 @@ import type {
 } from "../../shared/erp/index.js";
 import type { SeedDaySnapshot } from "../../shared/erp/seed.js";
 import { and, asc, eq, gte, inArray, lte, like, or } from "drizzle-orm";
-import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import {
   erpAccounts,
   erpApprovals,
@@ -51,7 +51,7 @@ import {
 } from "../../drizzle/erpSchema.js";
 import type { EntryFilter, LedgerStore } from "./store.js";
 
-type Db = MySql2Database<Record<string, never>>;
+type Db = NeonHttpDatabase<Record<string, never>>;
 
 /** 아는 소득구분만 도메인으로 올린다 — 모르는 값으로 원천징수율을 만들면 신고가 틀린다 */
 const INCOME_TYPES: IncomeType[] = ["근로소득", "사업소득", "기타소득"];
@@ -244,7 +244,10 @@ export class DrizzleLedgerStore implements LedgerStore {
     await this.db
       .insert(erpAccounts)
       .values(account)
-      .onDuplicateKeyUpdate({ set: { ...account } });
+      .onConflictDoUpdate({
+        target: erpAccounts.code,
+        set: { ...account },
+      });
     return account;
   }
 
@@ -270,7 +273,8 @@ export class DrizzleLedgerStore implements LedgerStore {
         ownerRole: setting.ownerRole,
         updatedBy: setting.updatedBy,
       })
-      .onDuplicateKeyUpdate({
+      .onConflictDoUpdate({
+        target: erpSettings.key,
         set: {
           value: setting.value,
           isProvisional: setting.isProvisional,
@@ -412,7 +416,10 @@ export class DrizzleLedgerStore implements LedgerStore {
     await this.db
       .insert(erpParties)
       .values(party)
-      .onDuplicateKeyUpdate({ set: { ...party } });
+      .onConflictDoUpdate({
+        target: erpParties.id,
+        set: { ...party },
+      });
     return party;
   }
 
@@ -426,7 +433,10 @@ export class DrizzleLedgerStore implements LedgerStore {
     await this.db
       .insert(erpProjects)
       .values(project)
-      .onDuplicateKeyUpdate({ set: { ...project } });
+      .onConflictDoUpdate({
+        target: erpProjects.id,
+        set: { ...project },
+      });
     return project;
   }
 
@@ -445,7 +455,8 @@ export class DrizzleLedgerStore implements LedgerStore {
     await this.db
       .insert(erpContracts)
       .values({ ...contract, installments: contract.installments })
-      .onDuplicateKeyUpdate({
+      .onConflictDoUpdate({
+        target: erpContracts.id,
         set: { ...contract, installments: contract.installments },
       });
     return contract;
@@ -461,7 +472,10 @@ export class DrizzleLedgerStore implements LedgerStore {
     await this.db
       .insert(erpDebts)
       .values(debt)
-      .onDuplicateKeyUpdate({ set: { ...debt } });
+      .onConflictDoUpdate({
+        target: erpDebts.id,
+        set: { ...debt },
+      });
     return debt;
   }
 
@@ -480,7 +494,10 @@ export class DrizzleLedgerStore implements LedgerStore {
     await this.db
       .insert(erpDebtSchedules)
       .values(schedule)
-      .onDuplicateKeyUpdate({ set: { ...schedule } });
+      .onConflictDoUpdate({
+        target: erpDebtSchedules.id,
+        set: { ...schedule },
+      });
     return schedule;
   }
 
@@ -498,10 +515,10 @@ export class DrizzleLedgerStore implements LedgerStore {
 
   async upsertIntake(intake: Intake): Promise<Intake> {
     const row = { ...intake, receivedAt: new Date(intake.receivedAt) };
-    await this.db
-      .insert(erpIntakes)
-      .values(row)
-      .onDuplicateKeyUpdate({ set: row });
+    await this.db.insert(erpIntakes).values(row).onConflictDoUpdate({
+      target: erpIntakes.id,
+      set: row,
+    });
     return intake;
   }
 
@@ -527,10 +544,10 @@ export class DrizzleLedgerStore implements LedgerStore {
       closedAt: period.closedAt ? new Date(period.closedAt) : null,
       blockers: period.blockers,
     };
-    await this.db
-      .insert(erpPeriods)
-      .values(row)
-      .onDuplicateKeyUpdate({ set: row });
+    await this.db.insert(erpPeriods).values(row).onConflictDoUpdate({
+      target: erpPeriods.ym,
+      set: row,
+    });
     return period;
   }
 
@@ -571,10 +588,10 @@ export class DrizzleLedgerStore implements LedgerStore {
       readAt: notification.readAt ? new Date(notification.readAt) : null,
       createdAt: new Date(notification.createdAt),
     };
-    await this.db
-      .insert(erpNotifications)
-      .values(row)
-      .onDuplicateKeyUpdate({ set: row });
+    await this.db.insert(erpNotifications).values(row).onConflictDoUpdate({
+      target: erpNotifications.id,
+      set: row,
+    });
     return notification;
   }
 
@@ -588,7 +605,10 @@ export class DrizzleLedgerStore implements LedgerStore {
     await this.db
       .insert(erpUsers)
       .values(user)
-      .onDuplicateKeyUpdate({ set: { ...user } });
+      .onConflictDoUpdate({
+        target: erpUsers.id,
+        set: { ...user },
+      });
     return user;
   }
 }

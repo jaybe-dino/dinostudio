@@ -22,10 +22,10 @@
 
 **Vercel → dinostudio 프로젝트 → Settings → Environment Variables → Production**
 
-| Key            | Value                                                                        |
-| -------------- | ---------------------------------------------------------------------------- |
-| `DATABASE_URL` | `mysql://아이디:비밀번호@호스트:3306/DB이름?ssl={"rejectUnauthorized":true}` |
-| `CRON_SECRET`  | 터미널에서 `openssl rand -base64 32` 를 돌린 **결과값**                      |
+| Key            | Value                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | Vercel Marketplace 에서 Neon 을 연결하면 **자동으로 채워집니다** (직접 넣을 필요 없음) |
+| `CRON_SECRET`  | 터미널에서 `openssl rand -base64 32` 를 돌린 **결과값**                                |
 
 > ⚠️ **두 값 모두 저에게 붙여넣지 마십시오.** Vercel 에 직접 넣으시고 「넣었다」만
 > 알려주시면 됩니다. 채팅에 올라온 비밀값은 그 순간 폐기 대상이 됩니다.
