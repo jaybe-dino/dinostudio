@@ -440,6 +440,11 @@ export interface Intake {
   id: string;
   source: EntrySource;
   sourceRef: string | null;
+  /**
+   * 어느 채널에서 왔나 (슬랙). 봇을 초대한 모든 채널을 수집하는 모드에서는
+   * 이것이 없으면 시끄러운 채널을 찾아낼 방법이 없다.
+   */
+  channel: string | null;
   raw: string;
   parsed: Record<string, unknown> | null;
   /** waiting · parsed · failed · promoted · rejected */

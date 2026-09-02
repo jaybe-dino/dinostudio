@@ -1,0 +1,1 @@
+ALTER TABLE "erp_intake" ADD COLUMN "channel" varchar(32);

@@ -1630,6 +1630,7 @@ export class LedgerService {
       id,
       source: "slack",
       sourceRef: message.ts,
+      channel: message.channel,
       raw: message.text,
       parsed,
       status,

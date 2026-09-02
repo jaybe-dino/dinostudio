@@ -137,7 +137,9 @@ describe("알림 크론 — 인증 없이 트리거되지 않는다 (api/cron/no
     const before = process.env.CRON_SECRET;
     delete process.env.CRON_SECRET;
     const GET = await load();
-    const res = await GET(new Request("https://admin.dinostudio.kr/api/cron/notifications"));
+    const res = await GET(
+      new Request("https://admin.dinostudio.kr/api/cron/notifications")
+    );
     expect(res.status).toBe(503);
     if (before !== undefined) process.env.CRON_SECRET = before;
   });

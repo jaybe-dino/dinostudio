@@ -29,13 +29,34 @@ export function verifySlackSignature(
   return { ok: true };
 }
 
-/** 수집 대상 채널 — 채널 밖 요청(DM·구두)은 접수하지 않는다 */
-export function isWatchedChannel(channelId: string): boolean {
-  const list = (process.env.SLACK_EXPENSE_CHANNELS ?? "")
+function envList(name: string): string[] {
+  return (process.env[name] ?? "")
     .split(",")
     .map(value => value.trim())
     .filter(Boolean);
-  return list.length === 0 ? false : list.includes(channelId);
+}
+
+/**
+ * 수집 대상 채널 — 채널 밖 요청(DM·구두)은 접수하지 않는다.
+ *
+ * 세 가지 모드가 있다.
+ *   ① 채널 ID 목록 — 적은 것만 수집한다. 가장 좁다
+ *   ② `*` — **봇을 초대한 모든 채널**. 슬랙은 봇이 들어가 있는 채널의
+ *      message.channels 만 보내므로, 초대 자체가 허용 목록이 된다.
+ *      채널이 늘 때마다 환경변수를 고치지 않아도 된다
+ *   ③ 비어 있음 — 아무 것도 수집하지 않는다. **기본값은 닫힘이다**
+ *      (설치만으로 조용히 수집이 시작되면 안 된다)
+ *
+ * ② 를 쓰면 실수로 초대된 채널까지 들어오므로 SLACK_IGNORE_CHANNELS 로
+ * 예외를 둔다 — 그쪽이 항상 이긴다. 다만 어느 모드든 검수함까지만 오고,
+ * 사람이 확인해야 원장으로 올라간다 (원칙 7).
+ */
+export function isWatchedChannel(channelId: string): boolean {
+  if (envList("SLACK_IGNORE_CHANNELS").includes(channelId)) return false;
+  const list = envList("SLACK_EXPENSE_CHANNELS");
+  if (list.length === 0) return false;
+  if (list.includes("*")) return true;
+  return list.includes(channelId);
 }
 
 export interface SlackEventEnvelope {

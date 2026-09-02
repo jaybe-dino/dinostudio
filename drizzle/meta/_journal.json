@@ -8,6 +8,13 @@
       "when": 1788356558147,
       "tag": "0000_faithful_vapor",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788360475186,
+      "tag": "0001_flowery_hercules",
+      "breakpoints": true
     }
   ]
 }
