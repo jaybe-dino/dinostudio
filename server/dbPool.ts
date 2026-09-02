@@ -1,31 +1,22 @@
 /**
- * MySQL 연결 — 서버리스 기준으로 잡는다.
+ * PostgreSQL 연결 — Neon 서버리스 드라이버 (사양서 §15).
  *
- * `drizzle(url)`은 connectionLimit 기본값 10짜리 풀을 만든다. Vercel은 요청이 몰리면
- * 람다 인스턴스를 여러 개 띄우므로 인스턴스마다 10개씩 잡으면 DB의 최대 연결 수를 금방 넘긴다
- * (TiDB Serverless · RDS t4g.micro 모두 수십 개 수준). 인스턴스당 소수만 쓰고 놀면 닫는다.
+ * Neon 은 HTTP 로 질의한다. 그래서 Vercel 이 요청량에 따라 람다를 여러 개 띄워도
+ * DB 쪽 연결 슬롯을 잡아 두지 않는다 — MySQL 풀에서 쓰던
+ * connectionLimit · idleTimeout 같은 조정이 아예 필요 없다.
+ *
+ * 대신 HTTP 드라이버는 트랜잭션을 한 요청 안에서만 쓸 수 있다. 이 레포는
+ * 물리 삭제가 없고(원칙 9) 쓰기가 단건 upsert 라 지금은 문제가 없지만,
+ * 여러 문장을 한 트랜잭션으로 묶어야 하는 작업이 생기면 websocket 드라이버
+ * (`drizzle-orm/neon-serverless`)로 바꿔야 한다.
+ *
+ * 금액은 BIGINT(정수 원)다. Postgres 는 bigint 를 문자열로 돌려주므로 drizzle 의
+ * `mode: "number"` 로 숫자로 받는다 — 원화 금액은 2^53 을 넘지 않는다
+ * (9,007조 원). 넘을 일이 생기면 그때는 문자열로 받아야 한다.
  */
-import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
-
-export const SERVERLESS_POOL_LIMIT = 2;
-
-export function createPool(url: string) {
-  return mysql.createPool({
-    uri: url,
-    connectionLimit: SERVERLESS_POOL_LIMIT,
-    // 놀고 있는 연결을 오래 붙잡지 않는다 — 람다가 얼어붙은 동안 DB 쪽 슬롯을 낭비하지 않기 위해
-    idleTimeout: 30_000,
-    maxIdle: 1,
-    enableKeepAlive: true,
-    keepAliveInitialDelay: 10_000,
-    // 회계 금액은 BIGINT다. 자바스크립트 안전 정수를 넘으면 문자열로 받아 반올림 손실을 막는다.
-    supportBigNumbers: true,
-    bigNumberStrings: false,
-    timezone: "+09:00",
-  });
-}
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 
 export function createDb(url: string) {
-  return drizzle(createPool(url));
+  return drizzle(neon(url));
 }

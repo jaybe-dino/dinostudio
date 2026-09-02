@@ -8,7 +8,8 @@ if (!connectionString) {
 export default defineConfig({
   schema: ["./drizzle/schema.ts", "./drizzle/erpSchema.ts"],
   out: "./drizzle",
-  dialect: "mysql",
+  // 사양서 §15 의 권고안. Neon 이 PostgreSQL 이다
+  dialect: "postgresql",
   dbCredentials: {
     url: connectionString,
   },

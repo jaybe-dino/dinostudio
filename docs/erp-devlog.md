@@ -642,6 +642,59 @@ DB 컬럼도, API 입력도, 폼도 없었다 — 시드와 테스트에서만 �
 
 ---
 
+## 18회차 — MySQL → PostgreSQL (Neon)
+
+**요청**
+
+> DB 주소가 뭔데?
+> neon 등 쉬운것있는거아니야?
+
+**판단**
+
+Neon 은 대표님 쪽 작업이 2클릭(Vercel Marketplace 에서 연결하면 `DATABASE_URL`
+이 자동으로 꽂힌다)이고, 사양서 §15 가 권고한 것도 PostgreSQL 이다. 대신 스키마
+5개 파일을 옮겨야 한다. 두 선택지의 비용이 서로 다른 쪽에 있으므로 — 편의는
+대표님, 작업은 나 — 물어보고 결정했다.
+
+**만든 것**
+
+- `drizzle/erpSchema.ts` · `drizzle/schema.ts` — pg-core 로. 테이블 25개 ·
+  금액 컬럼 27개 · enum 14종
+- `server/dbPool.ts` — mysql2 풀 → `@neondatabase/serverless` (HTTP). 서버리스
+  연결 수 조정이 아예 필요 없어졌다
+- `server/erp/drizzleStore.ts` · `seedDb.ts` · `server/db.ts` —
+  `onDuplicateKeyUpdate` 15군데를 `onConflictDoUpdate` 로. Postgres 는 무엇이
+  충돌인지 명시해야 하므로 테이블마다 충돌 대상을 적었다
+- 마이그레이션 재생성. MySQL 시절 8개는 `drizzle/_mysql-archive/` 로
+
+**판단이 갈린 곳**
+
+| 무엇                          | 어떻게 정했나                   | 왜                                                                                     |
+| ----------------------------- | ------------------------------- | -------------------------------------------------------------------------------------- |
+| enum 처리                     | named type 14종 (`pgEnum`)      | varchar 로 낮추면 DB 제약이 사라진다. 값 목록을 공유하는 컬럼은 타입 하나를 쓴다       |
+| 금액 타입                     | `bigint({ mode: "number" })`    | Postgres 는 bigint 를 문자열로 준다. 원화는 2^53 을 안 넘으므로 숫자로 받는다          |
+| 시각 타입                     | 전부 `timestamptz`              | MySQL 때는 드라이버 옵션으로 KST 를 맞추고 있었다 — 코드 밖에서 보장하는 것은 위험하다 |
+| `ON UPDATE CURRENT_TIMESTAMP` | drizzle `$onUpdate`             | Postgres 에 같은 기능이 없다. 기준값 변경은 전부 putSetting 을 지나므로 우회로가 없다  |
+| 드라이버                      | neon-http                       | HTTP 라 람다가 늘어도 DB 연결 슬롯을 안 잡는다. 다중 문장 트랜잭션이 필요해지면 ws 로  |
+| MySQL 마이그레이션            | 지우지 않고 보관                | 적용된 적이 없어 지워도 되지만, 스키마가 자란 순서가 기록이다                          |
+| 검증 방법                     | **PGlite (실제 Postgres 엔진)** | 기존 314건은 메모리 저장소로 돈다 — 매핑이 틀려도 다 통과한다                          |
+
+**이번에 메운 검증 공백**
+
+기존 테스트는 전부 메모리 저장소를 쓴다. 즉 **DB 계층은 테스트가 한 번도 지나간
+적이 없었다.** MySQL 이었을 때도 마찬가지였고, 그래서 「배포하고 나서야 터지는」
+자리로 남아 있었다.
+
+PGlite 로 실제 Postgres 를 WASM 에서 띄워 마이그레이션 SQL 을 그대로 실행하고,
+그 위에 시드를 넣어 되읽는 테스트 9건을 붙였다 — BIGINT 가 정수로 돌아오는지,
+날짜가 `YYYY-MM-DD` 문자열인지, enum·jsonb 가 그대로인지, `ON CONFLICT` 가 실제로
+갱신하는지, 그리고 **V1~V8 이관 검증이 메모리 저장소와 같은 결과를 내는지.**
+
+**검증** — 자동 테스트 323건 (기존 314 + Postgres 계층 9). 타입체크 · 프로덕션
+빌드 통과. 실제 Neon 연결 후 재검증은 `DATABASE_URL` 이 들어온 다음이다.
+
+---
+
 ## 앞으로 이 문서를 쓰는 법
 
 새 작업을 할 때마다 아래 형식으로 회차를 **추가**합니다. 지우지 않습니다.

@@ -14,7 +14,7 @@ import {
   SEED_SETTINGS,
   runMigrationChecks,
 } from "../../shared/erp/index.js";
-import { drizzle } from "drizzle-orm/mysql2";
+import { createDb } from "../dbPool.js";
 import {
   erpAccounts,
   erpDaySnapshots,
@@ -31,7 +31,7 @@ async function main() {
     process.exit(1);
   }
 
-  const db = drizzle(url);
+  const db = createDb(url);
   const store = new DrizzleLedgerStore(db);
 
   if (!checkOnly) {
@@ -40,7 +40,8 @@ async function main() {
       await db
         .insert(erpAccounts)
         .values(account)
-        .onDuplicateKeyUpdate({
+        .onConflictDoUpdate({
+          target: erpAccounts.code,
           set: {
             name: account.name,
             type: account.type,
@@ -68,7 +69,10 @@ async function main() {
           note: snapshot.note,
           isMigrated: snapshot.isMigrated,
         })
-        .onDuplicateKeyUpdate({ set: { note: snapshot.note } });
+        .onConflictDoUpdate({
+          target: erpDaySnapshots.date,
+          set: { note: snapshot.note },
+        });
     }
     console.log(`이관 일계 ${SEED_DAY_SNAPSHOTS.length}행 적재`);
 
@@ -94,7 +98,8 @@ async function main() {
           ownerRole: setting.ownerRole,
           updatedBy: setting.updatedBy,
         })
-        .onDuplicateKeyUpdate({
+        .onConflictDoUpdate({
+          target: erpSettings.key,
           set: { isProvisional: setting.isProvisional },
         });
     }
