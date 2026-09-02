@@ -10,10 +10,10 @@
  * enum·bigint·ON CONFLICT 가 실제와 같게 동작한다. Neon 과 다른 점은 네트워크와
  * 드라이버뿐이다.
  */
-import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
+import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   ACCOUNTS,
@@ -32,15 +32,15 @@ import { DrizzleLedgerStore } from "./drizzleStore.js";
 
 const MIGRATION_DIR = join(import.meta.dirname, "..", "..", "drizzle");
 
-/** 마이그레이션 SQL 을 그대로 실행한다 — 스키마의 단일 출처가 그것이기 때문이다 */
-function migrationSql(): string {
-  const files = readdirSync(MIGRATION_DIR)
-    .filter(name => /^\d{4}_.*\.sql$/.test(name))
-    .sort();
-  expect(files.length).toBeGreaterThan(0);
-  return files
-    .map(name => readFileSync(join(MIGRATION_DIR, name), "utf8"))
-    .join("\n");
+/**
+ * 배포와 **같은 방법으로** 마이그레이션을 적용한다.
+ *
+ * SQL 파일을 직접 읽어 실행하지 않는다 — 그러면 drizzle 의 journal 이 깨져도
+ * 테스트는 통과한다. 프로덕션은 `scripts/migrate.mjs` 가 drizzle 마이그레이터로
+ * 적용하므로, 여기서도 마이그레이터를 쓴다. 어댑터만 다르고 경로는 같다.
+ */
+async function applyMigrations(client: PGlite) {
+  await migrate(drizzle(client), { migrationsFolder: MIGRATION_DIR });
 }
 
 let db: ReturnType<typeof drizzle>;
@@ -48,7 +48,7 @@ let store: DrizzleLedgerStore;
 
 beforeAll(async () => {
   const client = new PGlite();
-  await client.exec(migrationSql().replaceAll("--> statement-breakpoint", ""));
+  await applyMigrations(client);
   db = drizzle(client);
   store = new DrizzleLedgerStore(db as never);
 }, 60_000);
@@ -57,6 +57,13 @@ describe("마이그레이션이 실제 Postgres 에서 실행된다", () => {
   it("원장 테이블이 만들어졌다", async () => {
     expect(await store.listEntries()).toEqual([]);
   });
+
+  it("두 번 적용해도 안전하다 — 배포마다 돌기 때문이다", async () => {
+    const client = new PGlite();
+    await applyMigrations(client);
+    // 같은 폴더를 다시 적용한다. journal 이 적용분을 기억하므로 아무 일도 없어야 한다
+    await expect(applyMigrations(client)).resolves.toBeUndefined();
+  }, 60_000);
 });
 
 describe("시드를 실제로 넣고 되읽는다", () => {
@@ -174,9 +181,7 @@ describe("화면에서 누르는 시드 적재 (대표만 · 여러 번 눌러�
   /** 빈 DB 를 새로 만들어 적재 경로만 본다 */
   async function freshStore() {
     const client = new PGlite();
-    await client.exec(
-      migrationSql().replaceAll("--> statement-breakpoint", "")
-    );
+    await applyMigrations(client);
     const fresh = drizzle(client);
     return new DrizzleLedgerStore(fresh as never);
   }
