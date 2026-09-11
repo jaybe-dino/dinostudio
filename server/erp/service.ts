@@ -1756,7 +1756,13 @@ export class LedgerService {
     // yet (empty cursor). Completed channels must not consume the next budget.
     const pendingChannels = Object.keys(input.cursors ?? {});
     const watched = pendingChannels.length
-      ? allowed.filter(id => pendingChannels.includes(id))
+      ? allowed
+          .filter(id => pendingChannels.includes(id))
+          .sort(
+            (a, b) =>
+              Number(Boolean(input.cursors?.[a])) -
+              Number(Boolean(input.cursors?.[b]))
+          )
       : allowed;
 
     // ts 하나마다 listIntakes() 를 돌면 메시지 수만큼 질의가 나간다.
