@@ -269,6 +269,16 @@ describe("§11.1 슬랙 백필 — 구독 이전의 과거를 가져온다", () 
 });
 
 describe("§11.1 백필 — 멈춰야 할 때 멈춘다", () => {
+  it("많은 페이지가 남은 채널보다 미시작 채널을 먼저 조회한다", async () => {
+    const slack = fakeSlack({ C_EXEC: [page([])], C_PAY: [page([])] });
+    await svc().backfillSlackHistory(
+      { days: 30, cursors: { C_EXEC: "NEXT", C_PAY: "" } },
+      CEO,
+      slack
+    );
+    expect(slack.calls.map(call => call.channel)).toEqual(["C_PAY", "C_EXEC"]);
+  });
+
   it("완료한 채널은 재조회하지 않고 아직 시작하지 않은 채널부터 재개한다", async () => {
     const s = svc();
     let clock = 0;
