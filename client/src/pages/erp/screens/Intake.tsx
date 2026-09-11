@@ -32,6 +32,18 @@ const SLACK_FIELDS: [string, string, string][] = [
   ["스레드 ts", "source_ref", "중복 수집 방지 키 — UNIQUE"],
 ];
 
+interface BackfillLine {
+  channel: string;
+  name: string | null;
+  scanned: number;
+  collected: number;
+  duplicate: number;
+  ignored: number;
+  failed: number;
+  done: boolean;
+  error: string | null;
+}
+
 export function IntakeScreen() {
   const { goto, openEntry } = useErpUi();
   const utils = trpc.useUtils();
@@ -39,6 +51,13 @@ export function IntakeScreen() {
   const intakes = masters.data?.intakes ?? [];
   const [message, setMessage] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const me = trpc.erp.me.useQuery();
+  const [days, setDays] = useState(30);
+  const [cursors, setCursors] = useState<Record<string, string> | null>(null);
+  const [backfillNote, setBackfillNote] = useState<string | null>(null);
+  const [backfillLines, setBackfillLines] = useState<BackfillLine[] | null>(
+    null
+  );
 
   const refresh = async () => {
     await Promise.all([
@@ -65,6 +84,36 @@ export function IntakeScreen() {
       await refresh();
     },
     onError: e => setMessage(e.message),
+  });
+
+  /*
+   * 슬랙 백필 — 한 번에 다 못 가져오는 것이 정상이다.
+   * 슬랙이 새 앱의 history 를 분당 1회로 조이기 때문에, 남으면 커서를 들고
+   * 있다가 「이어서 가져오기」로 멈춘 자리에서 계속한다.
+   */
+  const backfill = trpc.erp.intake.backfillSlack.useMutation({
+    onSuccess: async result => {
+      setBackfillLines(result.channels);
+      setCursors(result.remaining ? result.cursors : null);
+      setBackfillNote(
+        `${result.from} 이후를 훑었습니다 — 검수함에 ${result.totals.collected}건 추가` +
+          (result.totals.duplicate > 0
+            ? ` · 이미 있던 ${result.totals.duplicate}건은 건너뜀`
+            : "") +
+          (result.totals.ignored > 0
+            ? ` · 지출 요청이 아닌 ${result.totals.ignored}건 제외`
+            : "") +
+          (result.totals.failed > 0
+            ? ` · 읽지 못한 ${result.totals.failed}건은 검수함에 원문으로 남김`
+            : "") +
+          `. ${result.note}`
+      );
+      await refresh();
+    },
+    onError: error => {
+      setBackfillLines(null);
+      setBackfillNote(error.message);
+    },
   });
 
   return (
@@ -100,13 +149,121 @@ export function IntakeScreen() {
         />
       </div>
 
+      <Card title="슬랙 과거 메시지 가져오기" meta="대표만">
+        <Note>
+          슬랙 연동은 <b>구독을 켠 다음</b>에 올라온 메시지만 보냅니다. 그
+          이전에 오간 집행요청은 여기서 따로 가져와야 합니다. 가져온 것도
+          검수함까지만 오고, 원장 적재는 아래에서 직접 누르셔야 합니다.
+        </Note>
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+            marginTop: 10,
+          }}
+        >
+          <label className="s" htmlFor="backfill-days">
+            최근
+          </label>
+          <select
+            id="backfill-days"
+            value={days}
+            onChange={event => {
+              setDays(Number(event.target.value));
+              setCursors(null);
+            }}
+            disabled={backfill.isPending}
+          >
+            <option value={7}>7일</option>
+            <option value={30}>30일 (한 달)</option>
+            <option value={60}>60일</option>
+            <option value={90}>90일 (분기)</option>
+            <option value={180}>180일</option>
+            <option value={365}>365일 (1년)</option>
+          </select>
+          <button
+            type="button"
+            className="btn pri"
+            disabled={backfill.isPending || me.data?.role !== "대표"}
+            onClick={() =>
+              backfill.mutate({ days, cursors: cursors ?? undefined })
+            }
+          >
+            {backfill.isPending
+              ? "가져오는 중…"
+              : cursors
+                ? "이어서 가져오기"
+                : "가져오기"}
+          </button>
+          {cursors ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={backfill.isPending}
+              onClick={() => {
+                setCursors(null);
+                setBackfillNote(null);
+                setBackfillLines(null);
+              }}
+            >
+              처음부터
+            </button>
+          ) : null}
+        </div>
+        {me.data?.role !== "대표" ? (
+          <p className="s" style={{ marginTop: 6 }}>
+            원장 앞단을 통째로 채우는 작업이라 대표만 실행할 수 있습니다.
+          </p>
+        ) : null}
+        {backfillNote ? (
+          <div style={{ marginTop: 10 }}>
+            <Note tone={cursors ? "warn" : undefined}>{backfillNote}</Note>
+          </div>
+        ) : null}
+        {backfillLines && backfillLines.length > 0 ? (
+          <div className="scroll" style={{ marginTop: 10 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>채널</th>
+                  <th>훑음</th>
+                  <th>추가</th>
+                  <th>중복</th>
+                  <th>제외</th>
+                  <th>상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backfillLines.map(line => (
+                  <tr key={line.channel}>
+                    <td>
+                      {line.name ? `#${line.name}` : line.channel}
+                      {line.name ? (
+                        <div className="s">{line.channel}</div>
+                      ) : null}
+                    </td>
+                    <td>{line.scanned}</td>
+                    <td>{line.collected}</td>
+                    <td>{line.duplicate}</td>
+                    <td>{line.ignored}</td>
+                    <td className="wrap">
+                      {line.error ?? (line.done ? "완료" : "남음")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </Card>
+
       {intakes.length === 0 ? (
         <Note tone="warn">
-          연동이 아직 켜져 있지 않아 수집된 항목이 없습니다.
-          #지출-네트워크-사업부는 봇이 이미 정형 메시지를 생성하고 있으므로
-          파서만 붙이면 되고, #지출-ip-사업부는 수기라 파싱 실패를 허용합니다.
-          알림 도착지(B7)와 함께 슬랙 워크스페이스를 살리는 것이 선행
-          조건입니다.
+          아직 수집된 항목이 없습니다. 슬랙 연동을 막 켜셨다면 위에서 과거
+          메시지를 먼저 가져오십시오 — 구독 이후에 올라온 것만 자동으로
+          들어옵니다.
         </Note>
       ) : (
         <Card title="검수 대기" meta={`${intakes.length}건`} body={false}>
