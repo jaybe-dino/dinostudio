@@ -123,7 +123,17 @@ import type {
 } from "../../shared/erp/index.js";
 import { randomUUID } from "node:crypto";
 import { aiParseExpense } from "../integrations/aiParser.js";
-import { postSlackMessage, slackConfigured } from "../integrations/slack.js";
+import {
+  isWatchedChannel,
+  postSlackMessage,
+  slackConfigured,
+} from "../integrations/slack.js";
+import {
+  fetchHistoryPage,
+  isCollectableMessage,
+  listBotChannels,
+  slackErrorMessage,
+} from "../integrations/slackHistory.js";
 import {
   createUploadTicket,
   storageConfigured,
@@ -1647,6 +1657,250 @@ export class LedgerService {
       actor
     );
     return { status: status as "waiting" | "failed", id };
+  }
+
+  /**
+   * POST /intake/slack/backfill — 슬랙 과거 메시지 백필 (§11.1).
+   *
+   * Events API 는 구독 이후만 보낸다. 켜기 전에 오간 요청은 여기서 긁어온다.
+   *
+   * 지키는 것
+   *   · **수집 규칙은 한 벌이다.** 채널 허용(isWatchedChannel)도 파싱도
+   *     실시간 경로와 같은 함수를 쓴다. 두 벌이 되면 반드시 갈라진다
+   *   · 검수함까지만 온다. 원장 적재는 사람이 검수함에서 누른다 (원칙 7)
+   *   · 같은 ts 는 두 번 들어오지 않는다 — **여러 번 눌러도 안전하다**
+   *   · 기다리지 않는다. 시간 예산을 넘거나 429 를 받으면 커서를 돌려주고
+   *     멈춘다. 호출한 쪽이 「이어서」를 누르면 그 자리에서 다시 시작한다
+   *     (슬랙은 새 앱의 history 를 분당 1회로 조인다)
+   */
+  async backfillSlackHistory(
+    input: {
+      days?: number;
+      channels?: string[];
+      cursors?: Record<string, string>;
+      budgetMs?: number;
+    },
+    actor: Actor,
+    deps: {
+      listChannels?: typeof listBotChannels;
+      fetchPage?: typeof fetchHistoryPage;
+      now?: () => number;
+    } = {}
+  ) {
+    // 원장 앞단을 통째로 채우는 작업이다 — 대표만
+    if (actor.role !== "대표")
+      throw erpError(
+        "forbidden_field",
+        {},
+        "슬랙 백필은 대표만 실행할 수 있습니다"
+      );
+
+    const token = process.env.SLACK_BOT_TOKEN;
+    if (!token)
+      throw erpError(
+        "not_found",
+        {},
+        "SLACK_BOT_TOKEN 이 없습니다 — 슬랙 연동을 먼저 마치십시오"
+      );
+
+    const listChannels = deps.listChannels ?? listBotChannels;
+    const fetchPage = deps.fetchPage ?? fetchHistoryPage;
+    const now = deps.now ?? (() => Date.now());
+    // 1일 미만은 의미가 없고, 1년을 넘기면 한 번에 끝날 수 없다
+    const days = Math.min(Math.max(Math.round(input.days ?? 30), 1), 365);
+    const startedAt = now();
+    const budgetMs = Math.min(Math.max(input.budgetMs ?? 8_000, 1_000), 60_000);
+    const oldestSec = Math.floor(startedAt / 1000) - days * 86_400;
+
+    /*
+     * 대상 채널을 정하는 순서.
+     *
+     *   ① 호출자가 직접 준 목록
+     *   ② SLACK_EXPENSE_CHANNELS 가 **명시 목록**인 경우 — 그것이 곧 대상이다
+     *   ③ `*` 인 경우 — 봇이 들어가 있는 채널을 슬랙에 물어본다
+     *
+     * ② 를 따로 둔 이유가 있다. ③ 의 users.conversations 는 `channels:read`
+     * 권한을 더 요구한다. 그 권한을 붙이기 전이라도 환경변수에 채널 ID 를
+     * 적어 두면 백필이 돌아가야 한다 — 권한 하나 때문에 과거 데이터가
+     * 통째로 막히는 것이 더 나쁘다.
+     */
+    const names = new Map<string, string | null>();
+    const configured = (process.env.SLACK_EXPENSE_CHANNELS ?? "")
+      .split(",")
+      .map(value => value.trim())
+      .filter(Boolean);
+    let targets: string[];
+    if (input.channels && input.channels.length > 0) {
+      targets = input.channels;
+    } else if (configured.length > 0 && !configured.includes("*")) {
+      targets = configured;
+    } else if (configured.length === 0) {
+      // 기본값은 닫힘 — 설치만으로 조용히 과거를 긁어오면 안 된다
+      targets = [];
+    } else {
+      const found = await listChannels(token);
+      if ("error" in found)
+        throw erpError(
+          "not_found",
+          { slack: found.error },
+          slackErrorMessage(found)
+        );
+      for (const channel of found.channels) names.set(channel.id, channel.name);
+      targets = found.channels.map(channel => channel.id);
+    }
+
+    // 허용 판정은 실시간 경로와 **같은 함수**를 쓴다
+    const watched = targets.filter(id => isWatchedChannel(id));
+    const skippedChannels = targets.length - watched.length;
+
+    // ts 하나마다 listIntakes() 를 돌면 메시지 수만큼 질의가 나간다.
+    // 이미 들어온 것은 여기서 먼저 걸러 낸다 (collectSlackMessage 안의
+    // 중복 검사는 그대로 둔다 — 실시간 경로가 그것에 기대고 있다)
+    const seen = new Set(
+      (await this.store.listIntakes())
+        .filter(item => item.source === "slack")
+        .map(item => item.sourceRef)
+        .filter((ref): ref is string => Boolean(ref))
+    );
+
+    const report: {
+      channel: string;
+      name: string | null;
+      scanned: number;
+      collected: number;
+      duplicate: number;
+      ignored: number;
+      failed: number;
+      cursor: string | null;
+      done: boolean;
+      error: string | null;
+    }[] = [];
+    let stopped: string | null = null;
+    let retryAfterSec: number | null = null;
+
+    for (const channel of watched) {
+      const line = {
+        channel,
+        name: names.get(channel) ?? null,
+        scanned: 0,
+        collected: 0,
+        duplicate: 0,
+        ignored: 0,
+        failed: 0,
+        cursor: input.cursors?.[channel] ?? null,
+        done: false,
+        error: null as string | null,
+      };
+      report.push(line);
+
+      if (stopped) continue; // 앞 채널에서 멈췄으면 이 채널은 손대지 않는다
+
+      for (;;) {
+        if (now() - startedAt > budgetMs) {
+          stopped = "budget";
+          break;
+        }
+        const page = await fetchPage({
+          token,
+          channel,
+          oldest: String(oldestSec),
+          cursor: line.cursor,
+          limit: 200,
+        });
+        if ("error" in page) {
+          line.error = slackErrorMessage(page);
+          if (page.error === "ratelimited") {
+            stopped = "ratelimited";
+            retryAfterSec = page.retryAfterSec ?? 60;
+          }
+          // 권한·채널 문제는 그 채널만의 문제다 — 나머지 채널은 계속 간다
+          break;
+        }
+
+        for (const message of page.messages) {
+          if (!isCollectableMessage(message)) continue;
+          line.scanned += 1;
+          const ts = message.ts as string;
+          if (seen.has(ts)) {
+            line.duplicate += 1;
+            continue;
+          }
+          // 잡담은 검수함에 넣지 않는다 — 실시간 경로와 같은 판정이다
+          if (!looksLikeExpenseRequest(message.text as string)) {
+            line.ignored += 1;
+            continue;
+          }
+          const result = await this.collectSlackMessage(
+            {
+              channel,
+              ts,
+              text: message.text as string,
+              user: message.user ?? message.bot_id ?? null,
+            },
+            actor
+          );
+          seen.add(ts);
+          if (result.status === "duplicate") line.duplicate += 1;
+          else if (result.status === "ignored") line.ignored += 1;
+          else if (result.status === "failed") line.failed += 1;
+          else line.collected += 1;
+        }
+
+        line.cursor = page.nextCursor;
+        if (!page.nextCursor) {
+          line.done = true;
+          break;
+        }
+      }
+    }
+
+    const totals = report.reduce(
+      (sum, line) => ({
+        scanned: sum.scanned + line.scanned,
+        collected: sum.collected + line.collected,
+        duplicate: sum.duplicate + line.duplicate,
+        ignored: sum.ignored + line.ignored,
+        failed: sum.failed + line.failed,
+      }),
+      { scanned: 0, collected: 0, duplicate: 0, ignored: 0, failed: 0 }
+    );
+    /*
+     * 「남았는가」는 `done` 이 아니라 **이어서 부를 수 있는가**로 판단한다.
+     * 속도 제한으로 멈춘 채널은 error 가 붙지만 끝난 것이 아니다 — 그것을
+     * 끝난 것으로 세면 화면이 「모두 훑었습니다」라고 거짓말을 한다.
+     */
+    const remaining =
+      stopped !== null || report.some(line => !line.done && !line.error);
+    const cursors: Record<string, string> = {};
+    for (const line of report) {
+      if (!line.done && line.cursor) cursors[line.channel] = line.cursor;
+    }
+
+    await this.audit(
+      "intake",
+      "slack-backfill",
+      "backfill",
+      null,
+      { days, channels: watched.length, ...totals },
+      actor
+    );
+
+    return {
+      from: new Date(oldestSec * 1000).toISOString().slice(0, 10),
+      days,
+      channels: report,
+      totals,
+      skippedChannels,
+      remaining,
+      cursors,
+      stopped,
+      retryAfterSec,
+      note: remaining
+        ? stopped === "ratelimited"
+          ? `슬랙이 속도 제한을 걸었습니다 — ${retryAfterSec ?? 60}초 뒤에 「이어서 가져오기」를 누르십시오`
+          : "아직 남았습니다 — 「이어서 가져오기」를 누르면 멈춘 자리에서 계속합니다"
+        : "지정한 기간을 모두 훑었습니다",
+    };
   }
 
   /** POST /intake/:id/promote — 검수 통과 → entry 생성 (§10.1) */

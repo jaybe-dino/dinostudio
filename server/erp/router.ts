@@ -665,6 +665,24 @@ export const erpRouter = router({
           )
         )
       ),
+    /**
+     * §11.1 슬랙 과거 메시지 백필 (대표만).
+     * Events API 는 구독 이후만 보내므로, 켜기 전 요청은 이쪽으로 긁어온다.
+     * 끝까지 못 간 경우 커서를 돌려주고, 그것을 다시 넣으면 이어서 간다.
+     */
+    backfillSlack: protectedProcedure
+      .input(
+        z.object({
+          days: z.number().int().min(1).max(365).default(30),
+          channels: z.array(z.string()).optional(),
+          cursors: z.record(z.string(), z.string()).optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        run(() =>
+          getLedgerService().backfillSlackHistory(input, actorFrom(ctx))
+        )
+      ),
   }),
 
   /** 시트 이관 — 미리보기 후 확인해야 적재된다 */
