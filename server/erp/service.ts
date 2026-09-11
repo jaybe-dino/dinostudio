@@ -1750,8 +1750,14 @@ export class LedgerService {
     }
 
     // 허용 판정은 실시간 경로와 **같은 함수**를 쓴다
-    const watched = targets.filter(id => isWatchedChannel(id));
-    const skippedChannels = targets.length - watched.length;
+    const allowed = targets.filter(id => isWatchedChannel(id));
+    const skippedChannels = targets.length - allowed.length;
+    // A resume map includes every unfinished channel, even those not started
+    // yet (empty cursor). Completed channels must not consume the next budget.
+    const pendingChannels = Object.keys(input.cursors ?? {});
+    const watched = pendingChannels.length
+      ? allowed.filter(id => pendingChannels.includes(id))
+      : allowed;
 
     // ts 하나마다 listIntakes() 를 돌면 메시지 수만큼 질의가 나간다.
     // 이미 들어온 것은 여기서 먼저 걸러 낸다 (collectSlackMessage 안의
@@ -1787,7 +1793,7 @@ export class LedgerService {
         duplicate: 0,
         ignored: 0,
         failed: 0,
-        cursor: input.cursors?.[channel] ?? null,
+        cursor: input.cursors?.[channel] || null,
         done: false,
         error: null as string | null,
       };
@@ -1873,7 +1879,7 @@ export class LedgerService {
       stopped !== null || report.some(line => !line.done && !line.error);
     const cursors: Record<string, string> = {};
     for (const line of report) {
-      if (!line.done && line.cursor) cursors[line.channel] = line.cursor;
+      if (!line.done) cursors[line.channel] = line.cursor ?? "";
     }
 
     await this.audit(
