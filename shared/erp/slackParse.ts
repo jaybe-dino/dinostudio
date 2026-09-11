@@ -66,27 +66,76 @@ export const REQUIRED_FIELDS: (keyof SlackExpenseFields)[] = [
   "invoiceIssued",
 ];
 
+/*
+ * 라벨 사전 — **실제 채널에 올라오는 말**을 기준으로 한다.
+ *
+ * 처음에는 사양서의 예시 양식(지출내용 · 입금계좌 · 요청일)만 넣어 두었는데,
+ * 실제 #재무-집행요청 · #결제요청방 글을 보니 쓰는 말이 달랐다. 그대로 두면
+ * 메시지는 검수함에 들어오지만 칸이 거의 비어서 사람이 전부 다시 친다 —
+ * 연동이 붙어 있는데 일을 하지 않는 상태가 된다.
+ *
+ * 양식을 새로 만들어 사람들에게 지키라고 하지 않는다 (§11.1). 쓰던 말을
+ * 사전에 넣는 쪽이 맞다.
+ */
 const LABELS: Record<string, keyof SlackExpenseFields> = {
+  // 거래처 — 실제 글은 「예금주」로 적는 경우가 많다
   기업명: "partyName",
   업체명: "partyName",
   거래처: "partyName",
+  예금주: "partyName",
+
+  // 무엇에 쓰는 돈인가 — 실제 글은 「목적」이다
   지출내용: "title",
+  목적: "title",
   내용: "title",
   항목: "title",
+
   착수일: "startDate",
   최종업로드일: "deliverDate",
+  최종업로드: "deliverDate",
   업로드일: "deliverDate",
+
+  // 지급 요청일 — 「(입금) 요청 날짜」 「날짜」로도 적는다
   지출요청일: "requestDate",
   요청일: "requestDate",
+  요청날짜: "requestDate",
+  "(입금)요청날짜": "requestDate",
+  입금요청날짜: "requestDate",
+  날짜: "requestDate",
+  정산신청날짜: "requestDate",
+
+  // 금액 — 「정산금액」이 실제로 가장 많이 쓰인다
   금액: "amount",
+  정산금액: "amount",
+  결제금액: "amount",
+  지급액: "amount",
+
   입금계좌: "bankAccount",
   계좌: "bankAccount",
+  계좌번호: "bankAccount",
+  입금은행: "bankAccount",
+
   계산서발행: "invoiceIssued",
   세금계산서: "invoiceIssued",
   회차: "roundNo",
   사업부: "buCode",
   대응매출: "linkedRevenueCode",
 };
+
+/**
+ * 라벨 없이 한 줄로 적는 계산서 표기를 읽는다.
+ *
+ * 실제 글은 「계산서 발행완료」 「* 입금 후 계산서 자동발행」처럼 콜론 없이
+ * 적는다. 라벨 파서는 콜론이 있어야 읽으므로 이 줄들을 통째로 놓치고 있었다.
+ * 계산서 발행 여부는 미수 판정의 근거이므로(원칙 4) 놓치면 안 된다.
+ */
+function scanInvoiceMention(text: string): boolean | null {
+  const flat = text.replace(/\s/g, "");
+  if (!flat.includes("계산서")) return null;
+  if (/계산서(자동)?발행(완료|함|했|예정)?/.test(flat)) return true;
+  if (/계산서(미발행|발행안|발행불가|없음)/.test(flat)) return false;
+  return null;
+}
 
 const BU_ALIASES: Record<string, string> = {
   ip: "IP",
@@ -219,6 +268,15 @@ export function parseSlackExpense(
     }
   }
 
+  // 라벨로 못 읽었으면 콜론 없는 한 줄 표기를 본다 (「계산서 발행완료」 등)
+  if (fields.invoiceIssued == null) {
+    const scanned = scanInvoiceMention(text);
+    if (scanned != null) {
+      fields.invoiceIssued = scanned;
+      matched += 1;
+    }
+  }
+
   const missingRequired = REQUIRED_FIELDS.filter(
     key => fields[key] == null || fields[key] === ""
   );
@@ -234,14 +292,27 @@ export function parseSlackExpense(
 /** 슬랙 메시지가 지출 요청처럼 보이는가 — 잡담을 검수함에 쌓지 않기 위한 1차 관문 */
 export function looksLikeExpenseRequest(text: string): boolean {
   if (!text || text.length < 10) return false;
+  /*
+   * 실제 채널에서 쓰는 말을 넣었다. 처음 목록(지출·기업명·입금계좌·요청일)은
+   * 사양서 예시 기준이라 실제 글과 거의 겹치지 않았고, 「계산서」가 우연히
+   * 들어간 글만 통과하고 있었다 — 계산서 얘기를 안 쓴 요청은 조용히 버려졌다.
+   *
+   * 두 개 이상을 요구하는 것은 그대로다. 하나로 낮추면 잡담이 들어온다.
+   */
   const hints = [
     "지출",
+    "집행요청",
+    "결제요청",
+    "정산",
     "기업명",
+    "예금주",
     "금액",
     "입금계좌",
+    "계좌번호",
+    "입금",
     "계산서",
     "요청일",
-    "정산",
+    "사업부",
   ];
   return hints.filter(hint => text.includes(hint)).length >= 2;
 }
