@@ -53,7 +53,11 @@ export function IntakeScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const me = trpc.erp.me.useQuery();
-  const [days, setDays] = useState(30);
+  /*
+   * 기본값이 365일인 이유 — 지출 채널의 마지막 글이 2025-10 이다.
+   * 30일로 두면 0건이 나오고, 그것은 「고장」처럼 보인다.
+   */
+  const [days, setDays] = useState(365);
   const [cursors, setCursors] = useState<Record<string, string> | null>(null);
   const [backfillNote, setBackfillNote] = useState<string | null>(null);
   const [backfillLines, setBackfillLines] = useState<BackfillLine[] | null>(
@@ -178,6 +182,9 @@ export function IntakeScreen() {
           슬랙 연동은 <b>구독을 켠 다음</b>에 올라온 메시지만 보냅니다. 그
           이전에 오간 집행요청은 여기서 따로 가져와야 합니다. 가져온 것도
           검수함까지만 오고, 원장 적재는 아래에서 직접 누르셔야 합니다.
+          <br />
+          <b>기간을 짧게 잡으면 0건이 나올 수 있습니다</b> — 지출 채널의 마지막
+          글이 오래됐습니다. 기본값 365일로 두시는 것을 권합니다.
         </Note>
         <div
           style={{
@@ -205,7 +212,7 @@ export function IntakeScreen() {
             <option value={60}>60일</option>
             <option value={90}>90일 (분기)</option>
             <option value={180}>180일</option>
-            <option value={365}>365일 (1년)</option>
+            <option value={365}>365일 (1년) — 권장</option>
           </select>
           <button
             type="button"
