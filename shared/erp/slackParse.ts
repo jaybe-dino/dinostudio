@@ -9,6 +9,14 @@
 import { kstToday } from "./time.js";
 
 export interface SlackExpenseFields {
+  /**
+   * 돈이 나가는가 들어오는가.
+   *
+   * 같은 워크플로 채널이라도 양식이 두 가지다 — 지출 집행 요청(나감)과
+   * 계산서 발행 요청(들어옴). 둘을 같은 방향으로 적재하면 **매출이 지출로
+   * 잡혀 손익 부호가 통째로 뒤집힌다.**
+   */
+  direction: "in" | "out";
   /** 기업명 → party 매칭 */
   partyName: string | null;
   /** 지출 내용 → title */
@@ -40,6 +48,7 @@ export interface SlackParseResult {
 }
 
 const EMPTY: SlackExpenseFields = {
+  direction: "out",
   partyName: null,
   title: null,
   startDate: null,
@@ -89,6 +98,8 @@ const LABELS: Record<string, keyof SlackExpenseFields> = {
   목적: "title",
   내용: "title",
   항목: "title",
+  // 계산서 발행 요청 양식 — 「품목명」
+  품목명: "title",
 
   착수일: "startDate",
   최종업로드일: "deliverDate",
@@ -103,6 +114,8 @@ const LABELS: Record<string, keyof SlackExpenseFields> = {
   입금요청날짜: "requestDate",
   날짜: "requestDate",
   정산신청날짜: "requestDate",
+  // 계산서 발행 요청 양식 — 돈이 **들어올** 날이다
+  입금예정일: "requestDate",
 
   // 금액 — 「정산금액」이 실제로 가장 많이 쓰인다
   금액: "amount",
@@ -114,6 +127,7 @@ const LABELS: Record<string, keyof SlackExpenseFields> = {
   총지급액: "amount",
   입금액: "amount",
   청구금액: "amount",
+  // 계산서 발행 요청 양식 — 「금액(부가세 포함)」은 괄호를 벗기면 「금액」이다
 
   입금계좌: "bankAccount",
   계좌: "bankAccount",
@@ -192,6 +206,29 @@ function normalizeLabel(label: string): string {
 }
 
 /**
+ * 이 글이 나가는 돈인가 들어오는 돈인가.
+ *
+ * 같은 워크스페이스에 양식이 두 가지다.
+ *
+ *   · **지출 집행 요청** — 우리가 거래처에 보낸다 (나감)
+ *   · **계산서 발행 요청** — 우리가 거래처에 청구한다. 「입금 예정일」이 있고
+ *     「청구발행」·「영수발행」이라고 적는다 (들어옴)
+ *
+ * 둘을 같은 방향으로 적재하면 매출이 지출로 잡혀 손익 부호가 뒤집힌다.
+ * 그래서 **들어오는 쪽의 표시가 있을 때만** 수입으로 본다. 애매하면 지출이다 —
+ * 이 회사에서 워크플로로 접수되는 것의 대부분이 지출이고, 잘못 넣더라도
+ * 검수함에서 사람이 보게 된다.
+ */
+export function inferDirection(text: string): "in" | "out" {
+  const flat = text.replace(/\s/g, "");
+  if (
+    /입금예정일|청구발행|영수발행|계산서발행요청|세금계산서발행요청/.test(flat)
+  )
+    return "in";
+  return "out";
+}
+
+/**
  * 라벨 찾기 — 정확히 일치하는 것을 먼저 보고, 없으면 **정해진 순서로만** 깎는다.
  *
  * 실제 워크플로 양식이 `지출 금액(VAT 포함):` · `계산서 발행 여부:` 처럼
@@ -215,7 +252,10 @@ export function parseSlackExpense(
   text: string,
   fallbackYear = new Date().getFullYear()
 ): SlackParseResult {
-  const fields: SlackExpenseFields = { ...EMPTY };
+  const fields: SlackExpenseFields = {
+    ...EMPTY,
+    direction: inferDirection(text),
+  };
   const warnings: string[] = [];
   let matched = 0;
 
@@ -339,6 +379,10 @@ export function looksLikeExpenseRequest(text: string): boolean {
     "결제요청",
     "정산",
     "기업명",
+    "업체명",
+    "품목명",
+    "입금예정일",
+    "청구발행",
     "예금주",
     "금액",
     "입금계좌",

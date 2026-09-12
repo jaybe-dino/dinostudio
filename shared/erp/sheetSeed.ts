@@ -25,6 +25,8 @@ export interface SheetSeed {
     ready: number;
     /** 금액을 못 읽어 사람이 봐야 하는 건 — 대부분 적요 칸에 금액이 있는 줄이다 */
     undecided: number;
+    /** 승인완료로 선 건 — 금액이 있는 건만 */
+    confirmed: number;
   };
 }
 
@@ -60,9 +62,44 @@ export function buildSheetSeed(): SheetSeed {
     fallbackYear: SHEET_YEAR,
   });
 
+  /*
+   * **시트에 적힌 건은 이미 승인이 끝난 것으로 본다** (대표님 지시).
+   *
+   * 시트는 결재가 끝나고 실제로 돈이 오간 뒤에 적는 장부다. 그래서 여기 있는
+   * 건을 다시 승인 대기로 세우면 「이미 나간 돈」이 현금흐름에서 빠져 잔액이
+   * 맞지 않는다.
+   *
+   * 다만 **금액이 없는 건은 승인완료로 만들 수 없다.** 금액이 정해지지 않은
+   * 건은 승인할 수 없다는 것이 §7 의 규칙이고(`amount_undecided`), 규칙을
+   * 우회해 「승인됐는데 금액은 모른다」를 만들면 합계가 조용히 틀어진다.
+   * 그런 건은 판정 대기로 남고, 사람이 금액을 넣는 순간 승인 대상이 된다.
+   */
+  const entries = parsed.entries.map(item => {
+    const entry = item.entry;
+    if (entry.amount == null) return entry;
+    return {
+      ...entry,
+      status: "confirmed" as const,
+      // 시트에 적혔다는 것은 그 날 실제로 집행됐다는 뜻이다
+      paidAt: entry.cashDate,
+      approvedBy: "sheet",
+      approvedAt: entry.cashDate ? `${entry.cashDate}T00:00:00+09:00` : null,
+    };
+  });
+
+  /*
+   * 일계는 **이관(isMigrated)으로 표시하지 않는다.**
+   *
+   * 이관 표시가 붙으면 현금흐름이 그 날의 합계를 일계에서 가져온다 (§5.3 —
+   * 이관 구간은 원장이 아니다). 그런데 이 시트는 「계」 칸이 0 으로 잡혀 있어
+   * 그대로 쓰면 **움직임이 하나도 없는 것처럼** 보인다. 지금은 건별 원장이
+   * 있으므로 합계는 원장에서 접어야 맞다.
+   */
+  const snapshots = parsed.snapshots.map(s => ({ ...s, isMigrated: false }));
+
   return {
-    entries: parsed.entries.map(item => item.entry),
-    snapshots: parsed.snapshots,
+    entries,
+    snapshots,
     settings: [
       /*
        * 시트 맨 위의 「잔고」다. 일계의 종료 잔액을 쓰지 않는 이유가 있다 —
@@ -77,6 +114,7 @@ export function buildSheetSeed(): SheetSeed {
       rows: flat.rows,
       ready: parsed.summary.ready,
       undecided: parsed.summary.undecided,
+      confirmed: entries.filter(e => e.status === "confirmed").length,
     },
   };
 }

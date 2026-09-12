@@ -39,6 +39,10 @@ export interface CashflowBlock {
   pendingEntries: Entry[];
   /** 이관 구간 배지 — 건별 조회·계정 태깅·전표 생성 불가 (§5.3) */
   isMigrated: boolean;
+  /** 오늘 — 일별 보기에서 맨 위에 고정된다 */
+  isToday?: boolean;
+  /** 아직 오지 않은 날 — 시트에 미리 적어 둔 집행 예정분이다 */
+  isFuture?: boolean;
 }
 
 const UNDECIDED_CARRYOVER = "undecided_carryover";
@@ -272,4 +276,57 @@ export function cashflowGap(
     days,
     balance: previous.close,
   };
+}
+
+/**
+ * 일별 보기를 **오늘 기준**으로 세운다.
+ *
+ * 왜 필요한가 — 블록은 「움직임이 있는 날」에만 생긴다. 그런데 이 회사의
+ * 현금흐름 시트에는 **앞으로 나갈 돈이 미리 적혀 있다.** 그래서 최신순으로
+ * 늘어놓으면 맨 위가 오늘이 아니라 제일 먼 예정일(예: 9/18)이 된다. 화면을
+ * 열었을 때 오늘이 아닌 날짜가 먼저 보이면 그 숫자를 오늘 잔액으로 읽게 된다.
+ *
+ * 그래서 세 가지를 한다.
+ *   ① 오늘 블록이 없으면 **만든다** — 움직임 0, 잔액은 직전 날에서 이어받는다
+ *   ② 오늘을 맨 위에 둔다
+ *   ③ 아직 오지 않은 날에 `isFuture` 를 붙인다. 지나간 실적과 앞으로 나갈
+ *      예정을 화면에서 같은 것으로 보면 안 된다
+ */
+export function anchorToday(
+  blocks: CashflowBlock[],
+  today: string
+): CashflowBlock[] {
+  const marked = blocks.map(block => ({
+    ...block,
+    isToday: block.key === today,
+    isFuture: block.key > today,
+  }));
+
+  if (!marked.some(block => block.isToday)) {
+    // 오늘 직전까지의 마지막 블록에서 잔액을 이어받는다
+    const previous = marked.filter(block => block.key < today).at(-1);
+    marked.push({
+      unit: "day",
+      key: today,
+      open: previous?.close ?? null,
+      inSum: 0,
+      outSum: 0,
+      close: previous?.close ?? null,
+      nullReason:
+        previous?.close == null ? (previous?.nullReason ?? null) : null,
+      undecided: [],
+      outEntries: [],
+      inEntries: [],
+      pendingEntries: [],
+      isMigrated: false,
+      isToday: true,
+      isFuture: false,
+    });
+  }
+
+  const todayBlock = marked.find(block => block.isToday)!;
+  const rest = marked
+    .filter(block => !block.isToday)
+    .sort((a, b) => (a.key < b.key ? 1 : -1));
+  return [todayBlock, ...rest];
 }
