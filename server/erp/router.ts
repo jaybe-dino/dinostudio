@@ -418,8 +418,8 @@ export const erpRouter = router({
   }),
 
   masters: protectedProcedure.query(({ ctx }) => {
-    actorFrom(ctx);
-    return run(() => getLedgerService().masters());
+    const actor = actorFrom(ctx);
+    return run(() => getLedgerService().masters(actor));
   }),
 
   upsertMaster: protectedProcedure
@@ -670,6 +670,15 @@ export const erpRouter = router({
      * Events API 는 구독 이후만 보내므로, 켜기 전 요청은 이쪽으로 긁어온다.
      * 끝까지 못 간 경우 커서를 돌려주고, 그것을 다시 넣으면 이어서 간다.
      */
+    /**
+     * 검수함 원문 원본 — 주민번호가 보이는 유일한 자리.
+     * 대표·재무만, 비밀번호를 다시 확인한 뒤에만 (D7). 열람은 감사로그에 남는다.
+     */
+    revealRaw: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(({ ctx, input }) =>
+        run(() => getLedgerService().revealIntakeRaw(input.id, actorFrom(ctx)))
+      ),
     backfillSlack: protectedProcedure
       .input(
         z.object({
