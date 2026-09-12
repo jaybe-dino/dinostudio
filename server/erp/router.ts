@@ -799,6 +799,24 @@ export const erpRouter = router({
     run(() => getLedgerService().seedDatabase(actorFrom(ctx)))
   ),
 
+  /**
+   * §5.6 개시 전 재이관 — 「데일리 현금흐름」 시트를 최종본으로 다시 깐다.
+   * 대표만 · 재인증 뒤에만 · 확인 문구를 직접 입력해야 · 마감 기간이 없어야.
+   */
+  rebuildFromSheet: protectedProcedure
+    .input(
+      z.object({
+        text: z.string().min(1),
+        year: z.number().int().min(2000).max(2100).optional(),
+        confirm: z.string(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      run(() =>
+        getLedgerService().rebuildFromDailyCashSheet(input, actorFrom(ctx))
+      )
+    ),
+
   /** GET /store — 원장이 DB 에 있는가, 메모리에 있는가 */
   storeStatus: protectedProcedure.query(({ ctx }) => {
     actorFrom(ctx);

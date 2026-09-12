@@ -30,7 +30,8 @@ import {
   parseSlackExpense,
   kstIso,
   kstToday,
-  maskRrn,
+  flattenDailyCashSheet,
+  maskSensitive,
   permissionFor,
   segmentPnl,
   trialBalance,
@@ -553,8 +554,8 @@ export class LedgerService {
   /**
    * 마스터 조회.
    *
-   * 검수함 원문(raw)에는 주민등록번호가 들어 있다 — 실비 정산 요청에 사람이
-   * 적어 온 것이고, 원천징수 지급명세서에 실제로 쓰는 값이라 지우지 않는다.
+   * 검수함 원문(raw)에는 주민등록번호와 계좌번호가 들어 있다 — 각각 원천징수
+   * 지급명세서와 실제 송금에 쓰는 값이라 지우지 않는다.
    * 다만 **여기(API 응답 단계)에서** 가린다. 프론트에서만 가리면 네트워크
    * 탭에 그대로 보이므로 가린 것이 아니다. 원본은 revealIntakeRaw() 로만,
    * 재인증을 거쳐서 열린다.
@@ -571,12 +572,15 @@ export class LedgerService {
         this.store.listPeriods(),
       ]);
     const safeIntakes = intakes.map(intake => {
-      const masked = intake.raw ? maskRrn(intake.raw) : { text: null, found: 0 };
+      const masked = intake.raw
+        ? maskSensitive(intake.raw)
+        : { text: null, found: 0, kinds: [] as string[] };
       return {
         ...intake,
         raw: masked.text,
         // 화면이 「원본 보기」 버튼을 띄울지 정하는 값. 값 자체는 안 나간다
         hasSensitive: masked.found > 0,
+        sensitiveKinds: masked.kinds,
         canReveal: actor ? permissionFor(actor.role, "payroll").read : false,
       };
     });
@@ -592,18 +596,18 @@ export class LedgerService {
   }
 
   /**
-   * 검수함 원문 원본 — 주민번호가 보이는 유일한 자리 (§13 · D7).
+   * 검수함 원문 원본 — 주민번호·계좌번호가 보이는 유일한 자리 (§13 · D7).
    *
-   * 원천징수 신고를 실제로 하는 역할(대표·재무)만, **비밀번호를 다시 확인한
-   * 뒤에만** 열린다. 누가 언제 어느 건을 열었는지 감사로그에 남는다 — 개인
-   * 식별정보는 「볼 수 있다」보다 「본 것이 남는다」가 더 중요하다.
+   * 원천징수 신고와 지급을 실제로 하는 역할(대표·재무)만, **비밀번호를 다시
+   * 확인한 뒤에만** 열린다. 누가 언제 어느 건을 열었는지 감사로그에 남는다 —
+   * 민감정보는 「볼 수 있다」보다 「본 것이 남는다」가 더 중요하다.
    */
   async revealIntakeRaw(intakeId: string, actor: Actor) {
     if (!permissionFor(actor.role, "payroll").read)
       throw erpError(
         "forbidden_field",
         {},
-        "주민등록번호는 원천징수를 처리하는 역할만 열 수 있습니다"
+        "주민등록번호·계좌번호는 원천징수와 지급을 처리하는 역할만 열 수 있습니다"
       );
     if (!actor.stepUpFresh) throw erpError("reauth_required");
 
@@ -1632,6 +1636,99 @@ export class LedgerService {
   }
 
   /**
+   * §5.6 개시 전 재이관 — 「데일리 현금흐름」 시트를 최종본으로 다시 깐다.
+   *
+   * **이것은 원칙 9(물리 삭제 없음)의 유일한 예외다.** 원칙 9 가 지키려는 것은
+   * 운영 중인 원장의 이력이 사라지지 않는 것이고, 개시 전 기준 데이터를 다시
+   * 까는 것은 이력을 지우는 일이 아니라 출발점을 바꾸는 일이다. 그래서 예외를
+   * 열되 문을 네 개 달았다.
+   *
+   *   ① 대표만
+   *   ② 비밀번호를 다시 확인한 뒤에만 (D7) — 자리를 비운 노트북에서 돌면 안 된다
+   *   ③ 확인 문구를 **직접 타이핑**해야 한다. 버튼 오클릭으로는 안 돌아간다
+   *   ④ **마감된 기간이 하나라도 있으면 거부한다** — 마감은 「이 기간은 확정됐다」는
+   *      선언이다. 그 뒤로는 개시 전이 아니므로 이 경로를 쓸 수 없다
+   *
+   * 감사로그는 남긴다. 무엇이 언제 왜 초기화됐는지가 남지 않으면 예외가 아니라
+   * 구멍이 된다.
+   */
+  static readonly REBUILD_CONFIRM = "기존 원장을 모두 지우고 다시 만든다";
+
+  async rebuildFromDailyCashSheet(
+    input: { text: string; year?: number; confirm: string },
+    actor: Actor
+  ) {
+    if (actor.role !== "대표")
+      throw erpError(
+        "forbidden_field",
+        {},
+        "원장 재이관은 대표만 할 수 있습니다"
+      );
+    if (!actor.stepUpFresh) throw erpError("reauth_required");
+    if (input.confirm.trim() !== LedgerService.REBUILD_CONFIRM)
+      throw erpError(
+        "reason_required",
+        { expected: LedgerService.REBUILD_CONFIRM },
+        `확인 문구를 정확히 입력하십시오 — 「${LedgerService.REBUILD_CONFIRM}」`
+      );
+
+    const periods = await this.store.listPeriods();
+    const closed = periods.filter(p => p.status === "closed");
+    if (closed.length > 0)
+      throw erpError(
+        "period_closed",
+        { closed: closed.map(p => p.ym) },
+        `마감된 기간이 있습니다 (${closed.map(p => p.ym).join(" · ")}) — 재이관은 개시 전에만 할 수 있습니다`
+      );
+
+    const year = input.year ?? Number((await this.today()).slice(0, 4));
+    const flat = flattenDailyCashSheet(input.text, { year });
+    if (flat.rows === 0)
+      throw erpError(
+        "not_found",
+        {},
+        "시트에서 읽은 줄이 없습니다 — 구글 시트에서 전체를 복사해 붙여 넣으십시오"
+      );
+
+    // 먼저 읽어 본다. 읽히지 않는 시트로 원장을 비우는 일이 없어야 한다
+    const parsed = importSheet(flat.tsv, {
+      existingCodes: [],
+      actor: actor.id,
+      fallbackYear: year,
+    });
+
+    const removed = await this.store.resetLedger();
+
+    for (const item of parsed.entries) await this.store.insertEntry(item.entry);
+    for (const snapshot of parsed.snapshots)
+      await this.store.insertSnapshot(snapshot);
+
+    await this.audit(
+      "entry",
+      "ledger-rebuild",
+      "rebuild",
+      removed,
+      {
+        days: flat.days.length,
+        rows: flat.rows,
+        inserted: parsed.entries.length,
+        snapshots: parsed.snapshots.length,
+        undecided: parsed.summary.undecided,
+        warnings: flat.warnings.length,
+      },
+      actor
+    );
+
+    return {
+      removed,
+      days: flat.days,
+      warnings: flat.warnings,
+      ...parsed,
+      inserted: parsed.entries.length,
+    };
+  }
+
+  /**
    * §11.1 슬랙 수집 — 규칙 파서를 먼저 돌리고, 못 읽은 것만 AI에 넘긴다.
    * 어느 쪽이든 결과는 원장이 아니라 **검수함**에 선다. 사람이 확인해야 원장으로 올라간다 (원칙 7).
    */
@@ -1845,6 +1942,7 @@ export class LedgerService {
       cursor: string | null;
       done: boolean;
       error: string | null;
+      lastMessageTs: string | null;
     }[] = [];
     let stopped: string | null = null;
     let retryAfterSec: number | null = null;
@@ -1861,6 +1959,8 @@ export class LedgerService {
         cursor: input.cursors?.[channel] || null,
         done: false,
         error: null as string | null,
+        /** 이 채널의 가장 최근 사람 글 (슬랙 ts). 안 쓰는 채널을 가려내는 값 */
+        lastMessageTs: null as string | null,
       };
       report.push(line);
 
@@ -1891,6 +1991,9 @@ export class LedgerService {
         for (const message of page.messages) {
           if (!isCollectableMessage(message)) continue;
           line.scanned += 1;
+          // conversations.history 는 최신부터 준다 — 첫 건이 곧 마지막 글이다
+          if (line.lastMessageTs === null)
+            line.lastMessageTs = message.ts ?? null;
           const ts = message.ts as string;
           if (seen.has(ts)) {
             line.duplicate += 1;
@@ -1924,6 +2027,25 @@ export class LedgerService {
         }
       }
     }
+
+    /*
+     * 「30일 안에 사람 글이 없으면 안 쓰는 채널이다」 — 대표님이 준 규칙이다.
+     *
+     * 백필에서 **거르지는 않는다.** 과거를 긁는 것이 백필의 목적이고, 안 쓰는
+     * 채널일수록 과거만 있기 때문이다. 대신 결과에 표시해서, 앞으로 실시간
+     * 수집 대상에서 뺄지(봇을 내보낼지) 사람이 판단할 수 있게 한다.
+     */
+    const dormantCutoffSec = Math.floor(startedAt / 1000) - 30 * 86_400;
+    const channels = report.map(line => ({
+      ...line,
+      lastMessageAt: line.lastMessageTs
+        ? new Date(Number(line.lastMessageTs) * 1000).toISOString().slice(0, 10)
+        : null,
+      dormant:
+        line.error === null &&
+        (line.lastMessageTs === null ||
+          Number(line.lastMessageTs) < dormantCutoffSec),
+    }));
 
     const totals = report.reduce(
       (sum, line) => ({
@@ -1959,7 +2081,10 @@ export class LedgerService {
     return {
       from: new Date(oldestSec * 1000).toISOString().slice(0, 10),
       days,
-      channels: report,
+      channels,
+      dormantChannels: channels
+        .filter(line => line.dormant)
+        .map(l => l.channel),
       totals,
       skippedChannels,
       remaining,

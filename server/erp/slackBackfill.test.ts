@@ -430,3 +430,74 @@ describe("isCollectableMessage — 사람이 쓴 글만 본다", () => {
     ).toBe(true);
   });
 });
+
+describe("§11.1 백필 — 안 쓰는 채널을 표시한다 (30일 규칙)", () => {
+  const NOW = Date.UTC(2026, 8, 12); // 2026-09-12
+  const tsDaysAgo = (days: number) =>
+    String(Math.floor(NOW / 1000) - days * 86_400);
+
+  function at(days: number, n: number) {
+    return {
+      type: "message",
+      ts: `${tsDaysAgo(days)}.${n}`,
+      text: request(n),
+      user: "U1",
+    };
+  }
+
+  it("30일 안에 글이 있으면 쓰는 채널이다", async () => {
+    const s = svc();
+    const result = await s.backfillSlackHistory({ days: 365 }, CEO, {
+      listChannels: async () => ({ channels: [CHANNELS[0]] }),
+      fetchPage: async () => page([at(5, 1)]),
+      now: () => NOW,
+    });
+    expect(result.channels[0].dormant).toBe(false);
+    expect(result.dormantChannels).toEqual([]);
+  });
+
+  it("마지막 글이 30일보다 오래됐으면 안 쓰는 채널이다", async () => {
+    const s = svc();
+    const result = await s.backfillSlackHistory({ days: 365 }, CEO, {
+      listChannels: async () => ({ channels: [CHANNELS[0]] }),
+      fetchPage: async () => page([at(200, 1)]),
+      now: () => NOW,
+    });
+    expect(result.channels[0].dormant).toBe(true);
+    expect(result.dormantChannels).toEqual(["C_EXEC"]);
+    expect(result.channels[0].lastMessageAt).toBe("2026-02-24");
+  });
+
+  it("글이 하나도 없으면 안 쓰는 채널이다", async () => {
+    const s = svc();
+    const result = await s.backfillSlackHistory({ days: 365 }, CEO, {
+      listChannels: async () => ({ channels: [CHANNELS[0]] }),
+      fetchPage: async () => page([]),
+      now: () => NOW,
+    });
+    expect(result.channels[0].dormant).toBe(true);
+  });
+
+  it("안 쓰는 채널이라고 건너뛰지는 않는다 — 과거를 긁는 것이 백필의 목적이다", async () => {
+    const s = svc();
+    const result = await s.backfillSlackHistory({ days: 365 }, CEO, {
+      listChannels: async () => ({ channels: [CHANNELS[0]] }),
+      fetchPage: async () => page([at(200, 1)]),
+      now: () => NOW,
+    });
+    expect(result.channels[0].dormant).toBe(true);
+    expect(result.totals.collected).toBe(1);
+  });
+
+  it("오류가 난 채널은 안 쓰는 채널로 단정하지 않는다", async () => {
+    const s = svc();
+    const result = await s.backfillSlackHistory({ days: 365 }, CEO, {
+      listChannels: async () => ({ channels: [CHANNELS[0]] }),
+      fetchPage: async () => ({ error: "not_in_channel" }),
+      now: () => NOW,
+    });
+    // 못 읽은 것과 글이 없는 것은 다르다
+    expect(result.channels[0].dormant).toBe(false);
+    expect(result.channels[0].error).toContain("/invite");
+  });
+});
