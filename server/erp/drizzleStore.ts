@@ -606,6 +606,33 @@ export class DrizzleLedgerStore implements LedgerStore {
     return notification;
   }
 
+  /**
+   * 원장 초기화 — 개시 전 재이관에만 (§5.6).
+   *
+   * 자식 행부터 지운다. 전표 라인 → 전표 → 증빙·승인·개정 → 원장 순서다.
+   * 외래키가 없더라도 이 순서를 지킨다 — 중간에 끊기면 고아 행이 남는데,
+   * 고아 전표는 시산표를 조용히 어긋나게 만든다.
+   *
+   * 감사로그 · 계정과목 · 기준값 · 마스터는 남긴다.
+   */
+  async resetLedger() {
+    const before = {
+      entries: (await this.db.select().from(erpEntries)).length,
+      snapshots: (await this.db.select().from(erpDaySnapshots)).length,
+      journals: (await this.db.select().from(erpJournals)).length,
+      intakes: (await this.db.select().from(erpIntakes)).length,
+    };
+    await this.db.delete(erpJournalLines);
+    await this.db.delete(erpJournals);
+    await this.db.delete(erpAttachments);
+    await this.db.delete(erpApprovals);
+    await this.db.delete(erpEntryRevisions);
+    await this.db.delete(erpIntakes);
+    await this.db.delete(erpEntries);
+    await this.db.delete(erpDaySnapshots);
+    return before;
+  }
+
   async listAppUsers(): Promise<AppUser[]> {
     return (
       await this.db.select().from(erpUsers).orderBy(asc(erpUsers.email))

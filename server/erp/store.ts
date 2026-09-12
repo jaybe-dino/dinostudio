@@ -100,6 +100,23 @@ export interface LedgerStore {
   upsertNotification(notification: Notification): Promise<Notification>;
   listAppUsers(): Promise<AppUser[]>;
   upsertAppUser(user: AppUser): Promise<AppUser>;
+  /**
+   * 원장 초기화 — **개시 전 재이관에만** 쓴다 (§5.6).
+   *
+   * 「물리 삭제는 없다」(원칙 9)의 유일한 예외다. 원칙 9 가 지키려는 것은
+   * 「운영 중인 원장의 이력이 사라지지 않는 것」인데, 개시 전 기준 데이터를
+   * 다시 까는 것은 이력을 지우는 일이 아니라 **출발점을 바꾸는 일**이다.
+   *
+   * 그래서 범위를 좁혔다. 원장·전표·일계·검수함만 비우고
+   * **감사로그·계정과목·기준값·마스터는 남긴다** — 무엇이 언제 왜 초기화됐는지는
+   * 남아야 하고, 그 기록까지 지우면 예외가 아니라 구멍이 된다.
+   */
+  resetLedger(): Promise<{
+    entries: number;
+    snapshots: number;
+    journals: number;
+    intakes: number;
+  }>;
 }
 
 function matches(entry: Entry, filter: EntryFilter): boolean {
@@ -352,6 +369,24 @@ export class InMemoryLedgerStore implements LedgerStore {
   async upsertNotification(notification: Notification): Promise<Notification> {
     return upsertBy(this.notifications, notification, "id");
   }
+  async resetLedger() {
+    const removed = {
+      entries: this.entries.length,
+      snapshots: this.snapshots.length,
+      journals: this.journals.length,
+      intakes: this.intakes.length,
+    };
+    this.entries = [];
+    this.snapshots = [];
+    this.journals = [];
+    this.intakes = [];
+    this.revisions = [];
+    this.approvals = [];
+    this.attachments = [];
+    // 감사로그 · 계정과목 · 기준값 · 마스터는 남긴다
+    return removed;
+  }
+
   async listAppUsers(): Promise<AppUser[]> {
     return this.appUsers.map(u => ({ ...u }));
   }

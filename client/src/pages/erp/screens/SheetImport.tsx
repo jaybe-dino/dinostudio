@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Money, Note, Tile, chipClass } from "../components/Bits";
+import { Reauth } from "../components/Reauth";
 import { useErpUi } from "../context";
 import { shortDate, won } from "../format";
 
@@ -16,6 +17,40 @@ export function SheetImportScreen() {
   const [text, setText] = useState("");
   const [from, setFrom] = useState("2026-08-26");
   const [committed, setCommitted] = useState<string | null>(null);
+
+  /*
+   * 개시 전 재이관 (§5.6) — 「데일리 현금흐름」 시트를 최종본으로 다시 깐다.
+   * 원칙 9(물리 삭제 없음)의 유일한 예외라 문을 네 개 달아 두었다.
+   * 여기(화면)는 그 중 마지막 하나 — 확인 문구를 직접 타이핑하게 하는 것 — 만
+   * 담당한다. 나머지 셋(대표만 · 재인증 · 마감 없음)은 서버가 본다.
+   */
+  const REBUILD_CONFIRM = "기존 원장을 모두 지우고 다시 만든다";
+  const [confirm, setConfirm] = useState("");
+  const [rebuildNote, setRebuildNote] = useState<string | null>(null);
+  const [rebuildReauth, setRebuildReauth] = useState(false);
+  const me = trpc.erp.me.useQuery();
+  const rebuild = trpc.erp.rebuildFromSheet.useMutation({
+    onSuccess: async result => {
+      setRebuildReauth(false);
+      setConfirm("");
+      setRebuildNote(
+        `원장을 다시 만들었습니다 — 지운 것 ${result.removed.entries}건 · ` +
+          `들여온 것 ${result.inserted}건 (${result.days.length}일) · ` +
+          `금액 미확정 ${result.summary.undecided}건` +
+          (result.warnings.length > 0
+            ? ` · 못 읽은 줄 ${result.warnings.length}건`
+            : "")
+      );
+      await utils.erp.invalidate();
+    },
+    onError: error => {
+      if (error.message.includes("비밀번호를 다시")) {
+        setRebuildReauth(true);
+        return;
+      }
+      setRebuildNote(error.message);
+    },
+  });
 
   const preview = trpc.erp.sheetImport.preview.useMutation({
     onSuccess: () => setCommitted(null),
@@ -52,6 +87,91 @@ export function SheetImportScreen() {
         확인하십시오. 외부 편집 흔적이 있으면 이관 기준 시점을 그 이전으로
         잡아야 합니다.
       </Note>
+
+      <Card
+        title="시트를 최종본으로 다시 깔기 (§5.6)"
+        meta="대표만 · 되돌릴 수 없음"
+      >
+        <Note tone="alert">
+          <b>기존 원장·전표·일계·검수함을 모두 비우고</b> 위에 붙여 넣은
+          「데일리 현금흐름」 시트로 다시 만듭니다. 하루가 블록으로 놓인 그
+          시트를 그대로 붙여 넣으면 됩니다 — 운영경비·실비/환불·기타는 지출로,
+          매출·기타매출은 수입으로 들어갑니다.
+          <br />
+          <b>
+            금액이 「적요」 칸에 들어가 있는 줄은 금액으로 올리지 않습니다.
+          </b>{" "}
+          후보로만 두고 판정 대기로 세웁니다 — 시트의 「계」가 0 으로 잡혀 있던
+          바로 그 줄들입니다.
+          <br />
+          감사로그·계정과목·기준값·마스터는 지우지 않습니다. 마감된 기간이
+          하나라도 있으면 실행되지 않습니다.
+        </Note>
+        <div className="filters" style={{ marginTop: 10 }}>
+          <label className="field" style={{ flex: "1 1 320px" }}>
+            <span>확인 문구를 그대로 입력</span>
+            <input
+              value={confirm}
+              onChange={e => setConfirm(e.target.value)}
+              placeholder={REBUILD_CONFIRM}
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          className="btn"
+          style={{ marginTop: 8 }}
+          disabled={
+            rebuild.isPending ||
+            me.data?.role !== "대표" ||
+            confirm.trim() !== REBUILD_CONFIRM ||
+            text.trim() === ""
+          }
+          onClick={() => rebuild.mutate({ text, confirm })}
+        >
+          {rebuild.isPending ? "다시 만드는 중…" : "원장을 다시 만든다"}
+        </button>
+        {me.data?.role !== "대표" ? (
+          <p className="s" style={{ marginTop: 6 }}>
+            원장을 통째로 갈아엎는 작업이라 대표만 실행할 수 있습니다.
+          </p>
+        ) : null}
+        {rebuildReauth ? (
+          <div style={{ marginTop: 10 }}>
+            <Reauth
+              what="원장 재이관"
+              onDone={() => rebuild.mutate({ text, confirm })}
+            />
+          </div>
+        ) : null}
+        {rebuildNote ? (
+          <div style={{ marginTop: 10 }}>
+            <Note>{rebuildNote}</Note>
+          </div>
+        ) : null}
+        {rebuild.data && rebuild.data.warnings.length > 0 ? (
+          <div className="scroll" style={{ marginTop: 10 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>일자</th>
+                  <th>못 읽은 이유</th>
+                  <th>원문</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rebuild.data.warnings.map((w, i) => (
+                  <tr key={i}>
+                    <td>{w.day ?? "—"}</td>
+                    <td className="wrap">{w.reason}</td>
+                    <td className="wrap">{w.raw}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </Card>
 
       <Card
         title="붙여 넣기"

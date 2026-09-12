@@ -30,6 +30,7 @@ import {
   parseSlackExpense,
   kstIso,
   kstToday,
+  flattenDailyCashSheet,
   maskSensitive,
   permissionFor,
   segmentPnl,
@@ -1632,6 +1633,99 @@ export class LedgerService {
       actor
     );
     return { ...result, inserted, skipped };
+  }
+
+  /**
+   * §5.6 개시 전 재이관 — 「데일리 현금흐름」 시트를 최종본으로 다시 깐다.
+   *
+   * **이것은 원칙 9(물리 삭제 없음)의 유일한 예외다.** 원칙 9 가 지키려는 것은
+   * 운영 중인 원장의 이력이 사라지지 않는 것이고, 개시 전 기준 데이터를 다시
+   * 까는 것은 이력을 지우는 일이 아니라 출발점을 바꾸는 일이다. 그래서 예외를
+   * 열되 문을 네 개 달았다.
+   *
+   *   ① 대표만
+   *   ② 비밀번호를 다시 확인한 뒤에만 (D7) — 자리를 비운 노트북에서 돌면 안 된다
+   *   ③ 확인 문구를 **직접 타이핑**해야 한다. 버튼 오클릭으로는 안 돌아간다
+   *   ④ **마감된 기간이 하나라도 있으면 거부한다** — 마감은 「이 기간은 확정됐다」는
+   *      선언이다. 그 뒤로는 개시 전이 아니므로 이 경로를 쓸 수 없다
+   *
+   * 감사로그는 남긴다. 무엇이 언제 왜 초기화됐는지가 남지 않으면 예외가 아니라
+   * 구멍이 된다.
+   */
+  static readonly REBUILD_CONFIRM = "기존 원장을 모두 지우고 다시 만든다";
+
+  async rebuildFromDailyCashSheet(
+    input: { text: string; year?: number; confirm: string },
+    actor: Actor
+  ) {
+    if (actor.role !== "대표")
+      throw erpError(
+        "forbidden_field",
+        {},
+        "원장 재이관은 대표만 할 수 있습니다"
+      );
+    if (!actor.stepUpFresh) throw erpError("reauth_required");
+    if (input.confirm.trim() !== LedgerService.REBUILD_CONFIRM)
+      throw erpError(
+        "reason_required",
+        { expected: LedgerService.REBUILD_CONFIRM },
+        `확인 문구를 정확히 입력하십시오 — 「${LedgerService.REBUILD_CONFIRM}」`
+      );
+
+    const periods = await this.store.listPeriods();
+    const closed = periods.filter(p => p.status === "closed");
+    if (closed.length > 0)
+      throw erpError(
+        "period_closed",
+        { closed: closed.map(p => p.ym) },
+        `마감된 기간이 있습니다 (${closed.map(p => p.ym).join(" · ")}) — 재이관은 개시 전에만 할 수 있습니다`
+      );
+
+    const year = input.year ?? Number((await this.today()).slice(0, 4));
+    const flat = flattenDailyCashSheet(input.text, { year });
+    if (flat.rows === 0)
+      throw erpError(
+        "not_found",
+        {},
+        "시트에서 읽은 줄이 없습니다 — 구글 시트에서 전체를 복사해 붙여 넣으십시오"
+      );
+
+    // 먼저 읽어 본다. 읽히지 않는 시트로 원장을 비우는 일이 없어야 한다
+    const parsed = importSheet(flat.tsv, {
+      existingCodes: [],
+      actor: actor.id,
+      fallbackYear: year,
+    });
+
+    const removed = await this.store.resetLedger();
+
+    for (const item of parsed.entries) await this.store.insertEntry(item.entry);
+    for (const snapshot of parsed.snapshots)
+      await this.store.insertSnapshot(snapshot);
+
+    await this.audit(
+      "entry",
+      "ledger-rebuild",
+      "rebuild",
+      removed,
+      {
+        days: flat.days.length,
+        rows: flat.rows,
+        inserted: parsed.entries.length,
+        snapshots: parsed.snapshots.length,
+        undecided: parsed.summary.undecided,
+        warnings: flat.warnings.length,
+      },
+      actor
+    );
+
+    return {
+      removed,
+      days: flat.days,
+      warnings: flat.warnings,
+      ...parsed,
+      inserted: parsed.entries.length,
+    };
   }
 
   /**
