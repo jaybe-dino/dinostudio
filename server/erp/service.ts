@@ -30,6 +30,7 @@ import {
   parseSlackExpense,
   kstIso,
   kstToday,
+  maskRrn,
   permissionFor,
   segmentPnl,
   trialBalance,
@@ -549,7 +550,16 @@ export class LedgerService {
   }
 
   /** 마스터 — 거래처 · 프로젝트 · 계약 · 차입 · 검수함 */
-  async masters() {
+  /**
+   * 마스터 조회.
+   *
+   * 검수함 원문(raw)에는 주민등록번호가 들어 있다 — 실비 정산 요청에 사람이
+   * 적어 온 것이고, 원천징수 지급명세서에 실제로 쓰는 값이라 지우지 않는다.
+   * 다만 **여기(API 응답 단계)에서** 가린다. 프론트에서만 가리면 네트워크
+   * 탭에 그대로 보이므로 가린 것이 아니다. 원본은 revealIntakeRaw() 로만,
+   * 재인증을 거쳐서 열린다.
+   */
+  async masters(actor?: Actor) {
     const [parties, projects, contracts, debts, schedules, intakes, periods] =
       await Promise.all([
         this.store.listParties(),
@@ -560,7 +570,56 @@ export class LedgerService {
         this.store.listIntakes(),
         this.store.listPeriods(),
       ]);
-    return { parties, projects, contracts, debts, schedules, intakes, periods };
+    const safeIntakes = intakes.map(intake => {
+      const masked = intake.raw ? maskRrn(intake.raw) : { text: null, found: 0 };
+      return {
+        ...intake,
+        raw: masked.text,
+        // 화면이 「원본 보기」 버튼을 띄울지 정하는 값. 값 자체는 안 나간다
+        hasSensitive: masked.found > 0,
+        canReveal: actor ? permissionFor(actor.role, "payroll").read : false,
+      };
+    });
+    return {
+      parties,
+      projects,
+      contracts,
+      debts,
+      schedules,
+      intakes: safeIntakes,
+      periods,
+    };
+  }
+
+  /**
+   * 검수함 원문 원본 — 주민번호가 보이는 유일한 자리 (§13 · D7).
+   *
+   * 원천징수 신고를 실제로 하는 역할(대표·재무)만, **비밀번호를 다시 확인한
+   * 뒤에만** 열린다. 누가 언제 어느 건을 열었는지 감사로그에 남는다 — 개인
+   * 식별정보는 「볼 수 있다」보다 「본 것이 남는다」가 더 중요하다.
+   */
+  async revealIntakeRaw(intakeId: string, actor: Actor) {
+    if (!permissionFor(actor.role, "payroll").read)
+      throw erpError(
+        "forbidden_field",
+        {},
+        "주민등록번호는 원천징수를 처리하는 역할만 열 수 있습니다"
+      );
+    if (!actor.stepUpFresh) throw erpError("reauth_required");
+
+    const intakes = await this.store.listIntakes();
+    const intake = intakes.find(item => item.id === intakeId);
+    if (!intake) throw erpError("not_found", { intakeId });
+
+    await this.audit(
+      "intake",
+      intakeId,
+      "reveal_sensitive",
+      null,
+      { channel: intake.channel, sourceRef: intake.sourceRef },
+      actor
+    );
+    return { id: intake.id, raw: intake.raw };
   }
 
   async upsertMaster(

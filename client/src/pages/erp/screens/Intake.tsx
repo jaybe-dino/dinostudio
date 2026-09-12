@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile } from "../components/Bits";
+import { Reauth } from "../components/Reauth";
 import { useErpUi } from "../context";
 
 const SLACK_FIELDS: [string, string, string][] = [
@@ -91,6 +92,29 @@ export function IntakeScreen() {
    * 슬랙이 새 앱의 history 를 분당 1회로 조이기 때문에, 남으면 커서를 들고
    * 있다가 「이어서 가져오기」로 멈춘 자리에서 계속한다.
    */
+  /*
+   * 주민번호 원본 보기.
+   *
+   * 목록에서는 이미 서버가 가려서 보낸다 (마스킹은 API 응답 단계다 — 여기서만
+   * 가리면 네트워크 탭에 그대로 보인다). 이 버튼은 서버에 원본을 따로 달라고
+   * 하는 것이고, 서버는 비밀번호를 다시 확인했는지 보고 거부할 수 있다.
+   */
+  const [revealed, setRevealed] = useState<Record<string, string>>({});
+  const [needsReauthFor, setNeedsReauthFor] = useState<string | null>(null);
+  const reveal = trpc.erp.intake.revealRaw.useMutation({
+    onSuccess: result => {
+      setRevealed(prev => ({ ...prev, [result.id]: result.raw ?? "" }));
+      setNeedsReauthFor(null);
+    },
+    onError: (error, variables) => {
+      if (error.message.includes("비밀번호를 다시")) {
+        setNeedsReauthFor(variables.id);
+        return;
+      }
+      setMessage(error.message);
+    },
+  });
+
   const backfill = trpc.erp.intake.backfillSlack.useMutation({
     onSuccess: async result => {
       setBackfillLines(result.channels);
@@ -288,7 +312,50 @@ export function IntakeScreen() {
                       ) : null}
                       <span className="s"> · {intake.sourceRef}</span>
                     </td>
-                    <td className="wrap">{intake.raw}</td>
+                    <td className="wrap">
+                      {revealed[intake.id] ?? intake.raw}
+                      {intake.hasSensitive ? (
+                        <div style={{ marginTop: 6 }}>
+                          {revealed[intake.id] ? (
+                            <button
+                              type="button"
+                              className="btn"
+                              onClick={() =>
+                                setRevealed(prev => {
+                                  const next = { ...prev };
+                                  delete next[intake.id];
+                                  return next;
+                                })
+                              }
+                            >
+                              다시 가리기
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn"
+                              disabled={reveal.isPending || !intake.canReveal}
+                              onClick={() => reveal.mutate({ id: intake.id })}
+                              title={
+                                intake.canReveal
+                                  ? "비밀번호를 다시 확인한 뒤에 열립니다"
+                                  : "원천징수를 처리하는 역할만 열 수 있습니다"
+                              }
+                            >
+                              주민번호 보기
+                            </button>
+                          )}
+                          {needsReauthFor === intake.id ? (
+                            <div style={{ marginTop: 8 }}>
+                              <Reauth
+                                what="주민등록번호"
+                                onDone={() => reveal.mutate({ id: intake.id })}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </td>
                     <td>{intake.status}</td>
                     <td className="wrap">{intake.failReason ?? "—"}</td>
                     <td>
