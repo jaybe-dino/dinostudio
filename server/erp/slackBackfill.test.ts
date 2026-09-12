@@ -269,6 +269,45 @@ describe("§11.1 슬랙 백필 — 구독 이전의 과거를 가져온다", () 
 });
 
 describe("§11.1 백필 — 멈춰야 할 때 멈춘다", () => {
+  it("많은 페이지가 남은 채널보다 미시작 채널을 먼저 조회한다", async () => {
+    const slack = fakeSlack({ C_EXEC: [page([])], C_PAY: [page([])] });
+    await svc().backfillSlackHistory(
+      { days: 30, cursors: { C_EXEC: "NEXT", C_PAY: "" } },
+      CEO,
+      slack
+    );
+    expect(slack.calls.map(call => call.channel)).toEqual(["C_PAY", "C_EXEC"]);
+  });
+
+  it("완료한 채널은 재조회하지 않고 아직 시작하지 않은 채널부터 재개한다", async () => {
+    const s = svc();
+    let clock = 0;
+    const firstCalls: string[] = [];
+    const first = await s.backfillSlackHistory(
+      { days: 30, budgetMs: 1_000 },
+      CEO,
+      {
+        listChannels: async () => ({ channels: CHANNELS }),
+        fetchPage: async ({ channel }) => {
+          firstCalls.push(channel);
+          clock += 2_000;
+          return page([]);
+        },
+        now: () => clock,
+      }
+    );
+    expect(firstCalls).toEqual(["C_EXEC"]);
+    expect(first.cursors).toEqual({ C_PAY: "" });
+    const next = fakeSlack({ C_PAY: [page([])] });
+    const result = await s.backfillSlackHistory(
+      { days: 30, cursors: first.cursors },
+      CEO,
+      next
+    );
+    expect(next.calls).toEqual([{ channel: "C_PAY", cursor: null }]);
+    expect(result.remaining).toBe(false);
+  });
+
   it("429 를 받으면 기다리지 않고 커서를 돌려주고 멈춘다", async () => {
     const s = svc();
     const slack = {
@@ -280,6 +319,7 @@ describe("§11.1 백필 — 멈춰야 할 때 멈춘다", () => {
     expect(result.stopped).toBe("ratelimited");
     expect(result.retryAfterSec).toBe(42);
     expect(result.note).toContain("42초");
+    expect(result.cursors).toEqual({ C_EXEC: "" });
   });
 
   it("시간 예산을 넘기면 커서를 남기고 멈춘다", async () => {
