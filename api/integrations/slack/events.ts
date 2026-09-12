@@ -10,6 +10,7 @@ import {
   verifySlackSignature,
   type SlackEventEnvelope,
 } from "../../../server/integrations/slack.js";
+import { isCollectableMessage } from "../../../server/integrations/slackHistory.js";
 
 export async function POST(req: Request): Promise<Response> {
   const raw = await req.text();
@@ -40,14 +41,21 @@ export async function POST(req: Request): Promise<Response> {
   if (
     !event ||
     event.type !== "message" ||
-    event.subtype ||
-    !event.text ||
-    !event.ts ||
+    !isCollectableMessage(event) ||
     !event.channel
   ) {
     return new Response("ok", { status: 200 });
   }
   if (!isWatchedChannel(event.channel))
+    return new Response("ok", { status: 200 });
+  /*
+   * 우리가 보낸 알림을 우리가 다시 주워 오면 안 된다.
+   *
+   * 봇 글을 받기 시작했으므로(사내 지출 요청이 워크플로 봇 글이다) 이 고리가
+   * 실제로 생길 수 있다. 알림을 내보내는 채널은 수집하지 않는 것으로 끊는다 —
+   * 봇 ID 를 환경변수로 또 받는 것보다 틀릴 여지가 적다.
+   */
+  if (event.channel === process.env.SLACK_NOTIFY_CHANNEL)
     return new Response("ok", { status: 200 });
 
   // 수집은 시스템 행위다 — 사람 승인과 구분되도록 별도 actor로 감사로그에 남긴다

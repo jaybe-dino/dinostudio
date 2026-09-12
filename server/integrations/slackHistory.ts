@@ -178,10 +178,24 @@ export async function fetchHistoryPage(
   };
 }
 
-/** 사람이 쓴 지출 요청으로 볼 만한 메시지인가 — 봇 글·참여 알림 등을 건너뛴다 */
-export function isCollectableMessage(message: SlackHistoryMessage): boolean {
+/**
+ * 수집 대상 메시지인가.
+ *
+ * **봇 글을 버리면 안 된다.** 사내 지출 요청은 슬랙 **워크플로**로 접수하고,
+ * 워크플로가 채널에 올리는 글은 `subtype: "bot_message"` 로 온다. 즉 진짜
+ * 지출 요청은 거의 전부 봇 글이다. 사람 글만 받으면 수집함이 영원히 빈다.
+ *
+ * 대신 「메시지가 아닌 것」은 계속 버린다 — 참여·퇴장 알림, 수정·삭제 이벤트,
+ * 파일 공유 같은 것들이다. 이들은 지출 요청이 아니고, 특히 `message_changed`
+ * 는 같은 글을 한 번 더 들여와 중복을 만든다.
+ */
+const COLLECTABLE_SUBTYPES = new Set(["bot_message"]);
+
+export function isCollectableMessage<T extends SlackHistoryMessage>(
+  message: T
+): message is T & { text: string; ts: string } {
   if (message.type && message.type !== "message") return false;
-  if (message.subtype) return false; // channel_join · bot_message · 파일 공유 등
-  if (message.bot_id) return false;
+  if (message.subtype && !COLLECTABLE_SUBTYPES.has(message.subtype))
+    return false;
   return Boolean(message.text && message.ts);
 }

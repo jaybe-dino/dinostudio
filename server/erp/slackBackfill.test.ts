@@ -391,20 +391,12 @@ describe("§11.1 백필 — 멈춰야 할 때 멈춘다", () => {
   });
 });
 
-describe("isCollectableMessage — 사람이 쓴 글만 본다", () => {
-  it("참여 알림·봇 글·파일 공유는 건너뛴다", () => {
+describe("isCollectableMessage — 메시지가 아닌 것만 버린다", () => {
+  it("참여 알림·파일 공유는 건너뛴다", () => {
     expect(
       isCollectableMessage({
         type: "message",
         subtype: "channel_join",
-        ts: "1",
-        text: "x",
-      })
-    ).toBe(false);
-    expect(
-      isCollectableMessage({
-        type: "message",
-        bot_id: "B1",
         ts: "1",
         text: "x",
       })
@@ -422,6 +414,18 @@ describe("isCollectableMessage — 사람이 쓴 글만 본다", () => {
   it("본문이나 ts 가 없으면 수집하지 않는다", () => {
     expect(isCollectableMessage({ type: "message", ts: "1" })).toBe(false);
     expect(isCollectableMessage({ type: "message", text: "x" })).toBe(false);
+  });
+
+  it("워크플로 봇 글은 **수집한다** — 사내 지출 요청이 전부 이 형태다", () => {
+    expect(
+      isCollectableMessage({
+        type: "message",
+        subtype: "bot_message",
+        bot_id: "B1",
+        ts: "1",
+        text: "기업명: 예시",
+      })
+    ).toBe(true);
   });
 
   it("사람이 쓴 평범한 메시지는 수집한다", () => {
