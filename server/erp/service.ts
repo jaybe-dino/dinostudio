@@ -30,7 +30,7 @@ import {
   parseSlackExpense,
   kstIso,
   kstToday,
-  maskRrn,
+  maskSensitive,
   permissionFor,
   segmentPnl,
   trialBalance,
@@ -553,8 +553,8 @@ export class LedgerService {
   /**
    * 마스터 조회.
    *
-   * 검수함 원문(raw)에는 주민등록번호가 들어 있다 — 실비 정산 요청에 사람이
-   * 적어 온 것이고, 원천징수 지급명세서에 실제로 쓰는 값이라 지우지 않는다.
+   * 검수함 원문(raw)에는 주민등록번호와 계좌번호가 들어 있다 — 각각 원천징수
+   * 지급명세서와 실제 송금에 쓰는 값이라 지우지 않는다.
    * 다만 **여기(API 응답 단계)에서** 가린다. 프론트에서만 가리면 네트워크
    * 탭에 그대로 보이므로 가린 것이 아니다. 원본은 revealIntakeRaw() 로만,
    * 재인증을 거쳐서 열린다.
@@ -571,12 +571,15 @@ export class LedgerService {
         this.store.listPeriods(),
       ]);
     const safeIntakes = intakes.map(intake => {
-      const masked = intake.raw ? maskRrn(intake.raw) : { text: null, found: 0 };
+      const masked = intake.raw
+        ? maskSensitive(intake.raw)
+        : { text: null, found: 0, kinds: [] as string[] };
       return {
         ...intake,
         raw: masked.text,
         // 화면이 「원본 보기」 버튼을 띄울지 정하는 값. 값 자체는 안 나간다
         hasSensitive: masked.found > 0,
+        sensitiveKinds: masked.kinds,
         canReveal: actor ? permissionFor(actor.role, "payroll").read : false,
       };
     });
@@ -592,18 +595,18 @@ export class LedgerService {
   }
 
   /**
-   * 검수함 원문 원본 — 주민번호가 보이는 유일한 자리 (§13 · D7).
+   * 검수함 원문 원본 — 주민번호·계좌번호가 보이는 유일한 자리 (§13 · D7).
    *
-   * 원천징수 신고를 실제로 하는 역할(대표·재무)만, **비밀번호를 다시 확인한
-   * 뒤에만** 열린다. 누가 언제 어느 건을 열었는지 감사로그에 남는다 — 개인
-   * 식별정보는 「볼 수 있다」보다 「본 것이 남는다」가 더 중요하다.
+   * 원천징수 신고와 지급을 실제로 하는 역할(대표·재무)만, **비밀번호를 다시
+   * 확인한 뒤에만** 열린다. 누가 언제 어느 건을 열었는지 감사로그에 남는다 —
+   * 민감정보는 「볼 수 있다」보다 「본 것이 남는다」가 더 중요하다.
    */
   async revealIntakeRaw(intakeId: string, actor: Actor) {
     if (!permissionFor(actor.role, "payroll").read)
       throw erpError(
         "forbidden_field",
         {},
-        "주민등록번호는 원천징수를 처리하는 역할만 열 수 있습니다"
+        "주민등록번호·계좌번호는 원천징수와 지급을 처리하는 역할만 열 수 있습니다"
       );
     if (!actor.stepUpFresh) throw erpError("reauth_required");
 
@@ -1845,6 +1848,7 @@ export class LedgerService {
       cursor: string | null;
       done: boolean;
       error: string | null;
+      lastMessageTs: string | null;
     }[] = [];
     let stopped: string | null = null;
     let retryAfterSec: number | null = null;
@@ -1861,6 +1865,8 @@ export class LedgerService {
         cursor: input.cursors?.[channel] || null,
         done: false,
         error: null as string | null,
+        /** 이 채널의 가장 최근 사람 글 (슬랙 ts). 안 쓰는 채널을 가려내는 값 */
+        lastMessageTs: null as string | null,
       };
       report.push(line);
 
@@ -1891,6 +1897,9 @@ export class LedgerService {
         for (const message of page.messages) {
           if (!isCollectableMessage(message)) continue;
           line.scanned += 1;
+          // conversations.history 는 최신부터 준다 — 첫 건이 곧 마지막 글이다
+          if (line.lastMessageTs === null)
+            line.lastMessageTs = message.ts ?? null;
           const ts = message.ts as string;
           if (seen.has(ts)) {
             line.duplicate += 1;
@@ -1924,6 +1933,25 @@ export class LedgerService {
         }
       }
     }
+
+    /*
+     * 「30일 안에 사람 글이 없으면 안 쓰는 채널이다」 — 대표님이 준 규칙이다.
+     *
+     * 백필에서 **거르지는 않는다.** 과거를 긁는 것이 백필의 목적이고, 안 쓰는
+     * 채널일수록 과거만 있기 때문이다. 대신 결과에 표시해서, 앞으로 실시간
+     * 수집 대상에서 뺄지(봇을 내보낼지) 사람이 판단할 수 있게 한다.
+     */
+    const dormantCutoffSec = Math.floor(startedAt / 1000) - 30 * 86_400;
+    const channels = report.map(line => ({
+      ...line,
+      lastMessageAt: line.lastMessageTs
+        ? new Date(Number(line.lastMessageTs) * 1000).toISOString().slice(0, 10)
+        : null,
+      dormant:
+        line.error === null &&
+        (line.lastMessageTs === null ||
+          Number(line.lastMessageTs) < dormantCutoffSec),
+    }));
 
     const totals = report.reduce(
       (sum, line) => ({
@@ -1959,7 +1987,10 @@ export class LedgerService {
     return {
       from: new Date(oldestSec * 1000).toISOString().slice(0, 10),
       days,
-      channels: report,
+      channels,
+      dormantChannels: channels
+        .filter(line => line.dormant)
+        .map(l => l.channel),
       totals,
       skippedChannels,
       remaining,

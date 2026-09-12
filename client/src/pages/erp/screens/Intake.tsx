@@ -43,6 +43,8 @@ interface BackfillLine {
   failed: number;
   done: boolean;
   error: string | null;
+  lastMessageAt: string | null;
+  dormant: boolean;
 }
 
 export function IntakeScreen() {
@@ -263,6 +265,7 @@ export function IntakeScreen() {
                   <th>추가</th>
                   <th>중복</th>
                   <th>제외</th>
+                  <th>마지막 글</th>
                   <th>상태</th>
                 </tr>
               </thead>
@@ -279,6 +282,12 @@ export function IntakeScreen() {
                     <td>{line.collected}</td>
                     <td>{line.duplicate}</td>
                     <td>{line.ignored}</td>
+                    <td className="wrap">
+                      {line.lastMessageAt ?? "—"}
+                      {line.dormant ? (
+                        <div className="s">30일 내 글 없음 · 안 쓰는 채널</div>
+                      ) : null}
+                    </td>
                     <td className="wrap">
                       {line.error ?? (line.done ? "완료" : "남음")}
                     </td>
@@ -323,6 +332,10 @@ export function IntakeScreen() {
                       {revealed[intake.id] ?? intake.raw}
                       {intake.hasSensitive ? (
                         <div style={{ marginTop: 6 }}>
+                          <span className="s">
+                            가려진 항목 — {intake.sensitiveKinds.join(" · ")}
+                          </span>
+                          <br />
                           {revealed[intake.id] ? (
                             <button
                               type="button"
@@ -346,16 +359,16 @@ export function IntakeScreen() {
                               title={
                                 intake.canReveal
                                   ? "비밀번호를 다시 확인한 뒤에 열립니다"
-                                  : "원천징수를 처리하는 역할만 열 수 있습니다"
+                                  : "원천징수와 지급을 처리하는 역할만 열 수 있습니다"
                               }
                             >
-                              주민번호 보기
+                              원본 보기
                             </button>
                           )}
                           {needsReauthFor === intake.id ? (
                             <div style={{ marginTop: 8 }}>
                               <Reauth
-                                what="주민등록번호"
+                                what="주민등록번호·계좌번호"
                                 onDone={() => reveal.mutate({ id: intake.id })}
                               />
                             </div>
