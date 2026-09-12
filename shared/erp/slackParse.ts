@@ -109,6 +109,11 @@ const LABELS: Record<string, keyof SlackExpenseFields> = {
   정산금액: "amount",
   결제금액: "amount",
   지급액: "amount",
+  // 워크플로 양식 — 「지출 금액(VAT 포함)」
+  지출금액: "amount",
+  총지급액: "amount",
+  입금액: "amount",
+  청구금액: "amount",
 
   입금계좌: "bankAccount",
   계좌: "bankAccount",
@@ -117,6 +122,9 @@ const LABELS: Record<string, keyof SlackExpenseFields> = {
 
   계산서발행: "invoiceIssued",
   세금계산서: "invoiceIssued",
+  // 워크플로 양식 — 「계산서 발행 여부」
+  계산서발행여부: "invoiceIssued",
+  계산서: "invoiceIssued",
   회차: "roundNo",
   사업부: "buCode",
   대응매출: "linkedRevenueCode",
@@ -184,6 +192,22 @@ function normalizeLabel(label: string): string {
 }
 
 /**
+ * 라벨 찾기 — 정확히 일치하는 것을 먼저 보고, 없으면 **정해진 순서로만** 깎는다.
+ *
+ * 실제 워크플로 양식이 `지출 금액(VAT 포함):` · `계산서 발행 여부:` 처럼
+ * 괄호와 꼬리말을 달고 온다. 그렇다고 「포함하면 통과」로 느슨하게 하면
+ * `계좌번호` 가 `번호` 에 걸리는 식의 오매칭이 생긴다. 그래서 깎는 방법을
+ * 둘로 못 박았다 — ① 괄호 통째로 ② 꼬리 「여부」. 그 이상은 하지 않는다.
+ */
+function lookupLabel(label: string): keyof SlackExpenseFields | undefined {
+  const direct = LABELS[label];
+  if (direct) return direct;
+  const noParen = label.replace(/\([^)]*\)/g, "");
+  if (LABELS[noParen]) return LABELS[noParen];
+  return LABELS[noParen.replace(/여부$/, "")];
+}
+
+/**
  * 정형 메시지 파서 — `기업명: 디노스튜디오` 처럼 라벨이 있는 줄만 읽는다.
  * 라벨을 하나도 못 찾으면 matchedFields = 0이 되고, 그때 AI 파서로 넘어간다.
  */
@@ -200,18 +224,28 @@ export function parseSlackExpense(
     if (!line) continue;
     const separator = /[:：]/.exec(line);
     if (!separator) continue;
-    const label = normalizeLabel(line.slice(0, separator.index));
+    const rawLabel = line.slice(0, separator.index).trim();
+    const label = normalizeLabel(rawLabel);
     const value = line.slice(separator.index + 1).trim();
     if (!value) continue;
 
-    const key = LABELS[label];
+    const key = lookupLabel(label);
     if (!key) continue;
     matched += 1;
 
     switch (key) {
       case "amount": {
-        // "(vat별도)" · "(VAT 포함)" 표기는 원문 그대로 보존한다 — 전사 기준이 아직 없다 (B3)
-        const notation = /\((\s*vat[^)]*|\s*부가세[^)]*)\)/i.exec(value);
+        /*
+         * "(vat별도)" · "(VAT 포함)" 표기는 원문 그대로 보존한다 — 전사 기준이
+         * 아직 없다 (B3).
+         *
+         * 값에 붙는 경우(`1,000,000원 (vat별도)`)와 **라벨에 붙는 경우**
+         * (`지출 금액(VAT 포함): 총 1,000,000원`)가 둘 다 있다. 뒤쪽이 지금
+         * 실제로 쓰는 워크플로 양식이라, 값만 보면 표기를 통째로 잃는다.
+         */
+        const notation =
+          /\((\s*vat[^)]*|\s*부가세[^)]*)\)/i.exec(value) ??
+          /\((\s*vat[^)]*|\s*부가세[^)]*)\)/i.exec(rawLabel);
         if (notation)
           fields.vatNotation = notation[0].replace(/[()]/g, "").trim();
         // 공급가액과 세액이 둘 다 적혀 있을 때만 분리한다. 추정하지 않는다 (원칙 8)
