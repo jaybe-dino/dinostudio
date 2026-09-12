@@ -33,6 +33,14 @@ export interface SheetRow {
   dayOpen: string;
   /** 종료 잔액 */
   dayClose: string;
+  /**
+   * 방향 — 「지출」 또는 「수입」.
+   *
+   * 금액 칸이 비어 있어도(적요 칸에 금액이 적힌 줄) 방향은 알아야 한다.
+   * 금액만 보고 방향을 정하면 **금액 미확정인 매출이 전부 지출로 뒤집힌다** —
+   * 손익 부호가 통째로 틀어지는 종류의 오류다.
+   */
+  direction: string;
 }
 
 export const SHEET_COLUMNS: {
@@ -47,6 +55,7 @@ export const SHEET_COLUMNS: {
   { key: "inAmount", label: "수입", required: false },
   { key: "dayOpen", label: "시작잔액", required: false },
   { key: "dayClose", label: "종료잔액", required: false },
+  { key: "direction", label: "구분", required: false },
 ];
 
 /** "1,240,000" · "1240000원" · "-" → 숫자 또는 null */
@@ -143,6 +152,7 @@ export function detectColumns(
   const out = find("지출", "출금");
   const income = find("수입", "입금");
   const open = find("시작", "기초", "이월");
+  const direction = find("구분", "방향");
   // "시작잔액"에도 「잔액」이 들어 있으므로 종료/기말을 먼저 찾고, 없을 때만 시작 열이 아닌 「잔액」을 쓴다
   let close = find("종료", "기말");
   if (close < 0)
@@ -155,6 +165,7 @@ export function detectColumns(
   if (income >= 0) map.inAmount = income;
   if (open >= 0) map.dayOpen = open;
   if (close >= 0 && close !== open) map.dayClose = close;
+  if (direction >= 0) map.direction = direction;
   return map;
 }
 
@@ -233,8 +244,19 @@ export function importSheet(
     if (outAmount == null && inAmount == null && !title.trim() && !note.trim())
       return;
 
-    const direction: Direction =
-      inAmount != null && outAmount == null ? "in" : "out";
+    /*
+     * 방향은 적혀 있으면 그것을 쓰고, 없을 때만 금액 칸으로 추정한다.
+     * 추정만 하면 금액이 적요 칸에 있는 매출 줄(금액 칸이 빈 줄)이 전부
+     * 지출로 뒤집힌다.
+     */
+    const declared = cell("direction").trim();
+    const direction: Direction = declared
+      ? /수입|입금|매출|in/i.test(declared)
+        ? "in"
+        : "out"
+      : inAmount != null && outAmount == null
+        ? "in"
+        : "out";
     const amount = direction === "in" ? inAmount : outAmount;
     const candidate = amount == null ? candidateFromNote(note) : null;
 

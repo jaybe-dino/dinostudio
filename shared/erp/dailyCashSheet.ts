@@ -117,7 +117,7 @@ export function flattenDailyCashSheet(
 ): FlattenResult {
   const rows = splitRows(text);
   const out: string[][] = [
-    ["일자", "항목", "적요", "지출", "수입", "종료잔액"],
+    ["일자", "항목", "적요", "지출", "수입", "종료잔액", "구분"],
   ];
   const warnings: FlattenResult["warnings"] = [];
   const days: string[] = [];
@@ -143,6 +143,8 @@ export function flattenDailyCashSheet(
         row.dir === "out" ? row.amount : "",
         row.dir === "in" ? row.amount : "",
         close,
+        // 금액 칸이 비어도(적요에 금액이 적힌 줄) 방향은 잃지 않는다
+        row.dir === "in" ? "수입" : "지출",
       ]);
     }
     buffered = [];
