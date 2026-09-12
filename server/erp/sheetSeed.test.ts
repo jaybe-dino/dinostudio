@@ -114,3 +114,42 @@ describe("머리말 요약", () => {
     expect(debt?.value).toBe(790_000_000);
   });
 });
+
+describe("시트에 적힌 건은 승인완료로 본다 (대표님 지시)", () => {
+  it("금액이 있는 건은 승인완료다 — 이미 나간 돈이다", () => {
+    const 저스트 = byTitle("저스트컴퍼니")!;
+    expect(저스트.status).toBe("confirmed");
+    expect(저스트.paidAt).toBe("2026-09-14");
+  });
+
+  it("금액이 있는 매출도 승인완료다", () => {
+    expect(byTitle("셀락바이오")?.status).toBe("confirmed");
+  });
+
+  it("**금액이 없는 건은 승인완료로 만들지 않는다**", () => {
+    // 금액이 정해지지 않은 건은 승인할 수 없다 (§7 · amount_undecided).
+    // 우회해서 「승인됐는데 금액은 모른다」를 만들면 합계가 조용히 틀어진다.
+    const 허이사 = byTitle("허이사")!;
+    expect(허이사.amount).toBeNull();
+    expect(허이사.status).not.toBe("confirmed");
+  });
+
+  it("승인완료 건수 = 금액 확정 건수", () => {
+    expect(SHEET_SEED.summary.confirmed).toBe(SHEET_SEED.summary.ready);
+    expect(
+      SHEET_SEED.entries.filter(e => e.status === "confirmed").length
+    ).toBe(SHEET_SEED.summary.confirmed);
+  });
+
+  it("승인완료 건에는 전부 금액이 있다", () => {
+    const confirmed = SHEET_SEED.entries.filter(e => e.status === "confirmed");
+    expect(confirmed.length).toBeGreaterThan(0);
+    expect(confirmed.every(e => e.amount != null)).toBe(true);
+  });
+});
+
+describe("일계를 이관으로 표시하지 않는다", () => {
+  it("isMigrated 가 붙으면 현금흐름이 시트의 「계」(=0)를 써 버린다", () => {
+    expect(SHEET_SEED.snapshots.every(s => !s.isMigrated)).toBe(true);
+  });
+});

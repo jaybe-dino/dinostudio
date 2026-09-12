@@ -35,6 +35,7 @@ import {
   permissionFor,
   segmentPnl,
   trialBalance,
+  anchorToday,
   buildCashflow,
   canApproveAmount,
   cancelCode,
@@ -235,8 +236,15 @@ export class LedgerService {
       this.store.listSnapshots(),
     ]);
     const blocks = buildCashflow(entries, snapshots, unit);
-    // 최신순으로 내려간다 — 커서보다 오래된 블록만
-    const descending = [...blocks].reverse();
+    /*
+     * 일별 보기는 **오늘을 맨 위에** 둔다. 시트에 앞으로 나갈 돈이 미리 적혀
+     * 있어서, 그냥 최신순으로 두면 맨 위가 제일 먼 예정일이 된다. 그 숫자를
+     * 오늘 잔액으로 읽게 되는 것이 문제다.
+     */
+    const descending =
+      unit === "day"
+        ? anchorToday(blocks, await this.today())
+        : [...blocks].reverse();
     const start = cursor
       ? descending.findIndex(block => block.key === cursor) + 1
       : 0;
@@ -2122,9 +2130,16 @@ export class LedgerService {
       ? parties.find(p => p.name === partyName)
       : undefined;
 
+    /*
+     * 방향은 파서가 읽은 것을 쓴다. 예전에는 무조건 지출이었는데, 계산서 발행
+     * 요청(우리가 청구하는 건)이 같은 경로로 들어오면서 **매출이 지출로**
+     * 적재됐다. 손익 부호가 통째로 뒤집히는 자리다.
+     */
+    const direction =
+      str("direction") === "in" ? ("in" as const) : ("out" as const);
     const created = await this.createEntry(
       {
-        direction: "out",
+        direction,
         title: str("title") ?? "",
         amount: num("amount"),
         cashDate: str("requestDate") ?? (await this.today()),

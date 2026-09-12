@@ -231,6 +231,10 @@ export function CashflowScreen() {
                 <span className="d">
                   {expanded ? "▾" : "▸"} {blockLabel(block.key)}
                 </span>
+                {block.isToday ? <span className="chip a">오늘</span> : null}
+                {block.isFuture ? (
+                  <span className="chip w">예정 · 아직 나가지 않은 돈</span>
+                ) : null}
                 {block.isMigrated ? (
                   <span className="chip n">이관 구간 · 건별 명세 없음</span>
                 ) : null}

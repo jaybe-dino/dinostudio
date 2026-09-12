@@ -10,7 +10,10 @@
  *   · 단위가 불명한 숫자는 금액으로 올리지 않는다 (§5.2)
  */
 import Anthropic from "@anthropic-ai/sdk";
-import type { SlackExpenseFields } from "../../shared/erp/index.js";
+import {
+  inferDirection,
+  type SlackExpenseFields,
+} from "../../shared/erp/index.js";
 
 export const AI_MODEL = "claude-opus-5";
 
@@ -191,6 +194,8 @@ export async function aiParseExpense(
 
   return {
     fields: {
+      // AI 는 방향을 판단하지 않는다 — 본문 표시로 규칙 파서가 정한다
+      direction: inferDirection(text),
       partyName: str("partyName"),
       title: str("title"),
       startDate: str("startDate"),
