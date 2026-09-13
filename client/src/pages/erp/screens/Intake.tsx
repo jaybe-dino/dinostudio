@@ -144,8 +144,43 @@ export function IntakeScreen() {
     },
     onError: error => {
       setBackfillLines(null);
-      setBackfillNote(error.message);
+      /*
+       * `Failed to fetch` 는 서버가 준 말이 아니라 **브라우저가 연결을 잃었을
+       * 때** 나오는 말이다. 그대로 보여 주면 무엇이 잘못됐는지 알 길이 없다.
+       * 이 경우 대부분은 함수가 시간 안에 못 끝난 것이고, 그때까지 들여온
+       * 것은 남아 있으므로 다시 누르면 이어진다.
+       */
+      const lost =
+        error.message.includes("Failed to fetch") ||
+        error.message.includes("NetworkError") ||
+        error.message.includes("Load failed");
+      setBackfillNote(
+        lost
+          ? "서버가 시간 안에 끝내지 못했습니다. 그때까지 가져온 것은 남아 있으니 다시 누르십시오 — 누를 때마다 조금씩 앞으로 갑니다."
+          : error.message
+      );
     },
+  });
+
+  /*
+   * 첨부 읽기 — 백필과 따로 둔 이유.
+   *
+   * 수집하면서 파일까지 읽으면 메시지마다 내려받기와 모델 호출이 붙어 한 번의
+   * 호출이 몇 분씩 걸린다. 그래서 수집은 파일 **정보만** 남기고, 내용은
+   * 여기서 몇 건씩 읽는다.
+   */
+  const [attachNote, setAttachNote] = useState<string | null>(null);
+  const readAttachments = trpc.erp.intake.readAttachments.useMutation({
+    onSuccess: async result => {
+      setAttachNote(result.note);
+      await refresh();
+    },
+    onError: error =>
+      setAttachNote(
+        error.message.includes("Failed to fetch")
+          ? "서버가 시간 안에 끝내지 못했습니다 — 다시 누르면 이어서 읽습니다."
+          : error.message
+      ),
   });
 
   return (
@@ -356,6 +391,54 @@ export function IntakeScreen() {
                     </td>
                     <td className="wrap">
                       {line.error ?? (line.done ? "완료" : "남음")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </Card>
+
+      <Card title="첨부 읽기" meta="계약서 PDF · 견적서 · 캡처">
+        <Note>
+          수집은 파일 <b>이름만</b> 먼저 남깁니다. 내용은 여기서 읽습니다 —
+          수집하면서 같이 읽으면 파일 하나마다 내려받기와 해독이 붙어 서버가
+          시간 안에 못 끝냅니다.
+          <br />한 번에 <b>3건씩</b> 읽습니다. 남았다고 나오면 다시 누르십시오.
+        </Note>
+        <button
+          type="button"
+          className="btn pri"
+          style={{ marginTop: 10 }}
+          disabled={readAttachments.isPending}
+          onClick={() => readAttachments.mutate({ limit: 3 })}
+        >
+          {readAttachments.isPending ? "읽는 중…" : "첨부 읽기"}
+        </button>
+        {attachNote ? (
+          <div style={{ marginTop: 10 }}>
+            <Note>{attachNote}</Note>
+          </div>
+        ) : null}
+        {readAttachments.data && readAttachments.data.rows.length > 0 ? (
+          <div className="scroll" style={{ marginTop: 10 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>파일</th>
+                  <th>결과</th>
+                </tr>
+              </thead>
+              <tbody>
+                {readAttachments.data.rows.map((row, i) => (
+                  <tr key={`${row.id}-${i}`}>
+                    <td className="wrap">{row.name}</td>
+                    <td className="wrap">
+                      <span className={row.ok ? "chip o" : "chip w"}>
+                        {row.ok ? "읽음" : "실패"}
+                      </span>{" "}
+                      <span className="s">{row.note}</span>
                     </td>
                   </tr>
                 ))}
