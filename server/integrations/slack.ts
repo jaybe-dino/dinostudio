@@ -3,6 +3,7 @@
  * §12 발송 어댑터 — 도착지가 죽어 있어도 알림함에는 남는다 (B7).
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { SlackHistoryMessage } from "./slackHistory.js";
 
 /** Slack 서명 검증 (v0) — 이 요청이 정말 슬랙에서 왔는지 */
 export function verifySlackSignature(
@@ -71,6 +72,7 @@ export interface SlackEventEnvelope {
     text?: string;
     ts?: string;
     thread_ts?: string;
+    files?: SlackHistoryMessage["files"];
   };
 }
 
