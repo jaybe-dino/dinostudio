@@ -18,6 +18,8 @@ export function ApprovalsScreen() {
   const [result, setResult] = useState<string | null>(null);
 
   const list = trpc.erp.entries.list.useQuery({ status: ["pending"] });
+  const queues = trpc.erp.approvalQueues.useQuery();
+  const me = trpc.erp.me.useQuery();
   const position = trpc.erp.views.cashPosition.useQuery({
     includeUndecided: true,
   });
@@ -152,6 +154,153 @@ export function ApprovalsScreen() {
           </div>
         </div>
       </div>
+
+      {/*
+        역할별 대기함 — 「내 일」이 먼저 보여야 한다.
+
+        같은 「승인 대기」라도 막힌 관문이 다르다. 금액이 안 적힌 건은 결재가
+        아니라 입력을 기다리는 것이고, 그것을 대표 결재함에 섞어 두면 대표는
+        눌러 봤자 「금액이 확정되지 않았습니다」만 본다. 그래서 판정을 승인
+        규칙과 같은 순서로 하고, 그 결과를 역할별로 갈라 놓는다.
+      */}
+      {queues.data ? (
+        <>
+          {queues.data.mine ? (
+            <Note tone={queues.data.mine.items.length > 0 ? "warn" : undefined}>
+              <b>
+                {me.data?.role ?? "내"} 대기함 — {queues.data.mine.items.length}
+                건
+              </b>
+              {queues.data.mine.amountSum > 0
+                ? ` · ${won(queues.data.mine.amountSum)}`
+                : ""}
+              {queues.data.mine.unknownAmount > 0
+                ? ` · 금액 미확정 ${queues.data.mine.unknownAmount}건은 합계에서 제외`
+                : ""}
+            </Note>
+          ) : null}
+
+          <div className="kpis">
+            {queues.data.queues
+              .filter(q => ["대표", "재무", "사업부리더"].includes(q.role))
+              .map(q => (
+                <Tile
+                  key={q.role}
+                  label={
+                    q.role === "대표"
+                      ? "대표 결재 대기"
+                      : q.role === "재무"
+                        ? "재무 검토 대기"
+                        : "리더 확인 대기"
+                  }
+                  value={`${q.items.length}건`}
+                  note={
+                    q.amountSum > 0
+                      ? (won(q.amountSum) ?? "—")
+                      : q.unknownAmount > 0
+                        ? "금액 미확정"
+                        : "없음"
+                  }
+                  tone={q.items.length > 0 ? "warn" : undefined}
+                />
+              ))}
+          </div>
+
+          <Card
+            title="무엇 때문에 멈춰 있나"
+            meta={`대기 ${queues.data.total}건`}
+            body={false}
+          >
+            <div className="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>관문</th>
+                    <th>건수</th>
+                    <th>누가 풀어야 하나</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {queues.data.summary.map(row => (
+                    <tr key={row.blocker}>
+                      <td>{row.blocker}</td>
+                      <td>{row.n}건</td>
+                      <td className="s">
+                        {row.blocker === "금액 미확정"
+                          ? "재무 · 담당자 — 금액을 확인해 넣어야 승인이 열립니다"
+                          : row.blocker === "계정과목 없음"
+                            ? "재무 — 계정이 없으면 전표가 안 만들어집니다"
+                            : row.blocker === "증빙 없음"
+                              ? "담당자 · 재무 — 증빙 없이는 확정되지 않습니다"
+                              : "금액 구간에 따라 대표 · 부대표 · 재무 · 리더"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {queues.data.mine && queues.data.mine.items.length > 0 ? (
+            <Card
+              title={`${me.data?.role ?? ""} 대기함 — 내가 움직여야 하는 건`}
+              meta={`${queues.data.mine.items.length}건`}
+              body={false}
+            >
+              <div className="scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>코드</th>
+                      <th>항목</th>
+                      <th>금액</th>
+                      <th>막힌 곳</th>
+                      <th>무엇을 하면 되나</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queues.data.mine.items.map(item => (
+                      <tr key={item.code}>
+                        <td>
+                          <button
+                            type="button"
+                            className="linklike"
+                            onClick={() => openEntry(item.code)}
+                          >
+                            {item.code}
+                          </button>
+                        </td>
+                        <td className="wrap">{item.title || "—"}</td>
+                        <td>
+                          {item.amount != null ? (
+                            <Money value={item.amount} />
+                          ) : (
+                            <span className="s">미확정</span>
+                          )}
+                        </td>
+                        <td>
+                          <span
+                            className={
+                              item.blocker === "결재 대기" ? "chip a" : "chip w"
+                            }
+                          >
+                            {item.blocker}
+                          </span>
+                        </td>
+                        <td className="wrap s">
+                          {item.selfBlocked
+                            ? "본인이 관여한 건이라 본인은 승인할 수 없습니다 (D1) — 다른 승인자에게 넘기십시오"
+                            : item.note}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : null}
+        </>
+      ) : null}
 
       <div className="kpis">
         <Tile

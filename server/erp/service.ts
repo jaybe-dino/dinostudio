@@ -35,7 +35,11 @@ import {
   permissionFor,
   segmentPnl,
   trialBalance,
+  ROLES,
   anchorToday,
+  blockerSummary,
+  buildRoleQueues,
+  classifyWaiting,
   buildCashflow,
   canApproveAmount,
   cancelCode,
@@ -104,6 +108,7 @@ import {
   fsLineOf,
 } from "../../shared/erp/index.js";
 import type {
+  WaitingItem,
   Account,
   AppUser,
   Attachment,
@@ -157,6 +162,14 @@ export interface Actor {
    * 테스트·내부 호출에서 값이 없으면 재인증한 적 없는 것으로 본다.
    */
   stepUpFresh?: boolean;
+  /**
+   * 이 사람의 사업부 — 사업부리더의 조회 범위(§13.1 scope: own_bu)에 쓴다.
+   *
+   * **아직 세션이 이 값을 채우지 않는다.** 역할 배정(ERP_ROLE_MAP)에 사업부가
+   * 없기 때문이다. 값이 없으면 범위를 좁히지 않는다 — 좁히는 척하다가 엉뚱한
+   * 것을 감추는 것보다, 안 좁히고 그렇다고 말하는 편이 낫다.
+   */
+  buCode?: string | null;
 }
 
 // §14 — 모든 시각·일자는 KST 기준으로 만든다
@@ -269,6 +282,57 @@ export class LedgerService {
         codes: undecided.map(e => e.code),
         amount: null as number | null,
       },
+    };
+  }
+
+  /**
+   * GET /approvals/queues — **역할별 대기함** (§13.1 · 원칙 13).
+   *
+   * 「지금 이 건은 누가 움직여야 하는가」를 역할별로 나눠 준다. 대표는 결재할
+   * 것만, 재무는 채워 넣을 것만, 리더는 자기 사업부 것만 본다.
+   *
+   * 판정은 `approve()` 와 **같은 순서**로 한다 (금액 → 계정과목 → 증빙 →
+   * 자기승인 → 한도). 순서가 달라지면 화면은 「결재 대기」라고 하는데 눌러
+   * 보면 「증빙이 없습니다」가 뜬다.
+   */
+  async approvalQueues(actor: Actor) {
+    const entries = await this.store.listEntries();
+    const waiting = entries.filter(
+      e => e.status === "pending" || e.status === "undecided"
+    );
+
+    const items: WaitingItem[] = [];
+    for (const entry of waiting) {
+      // 한도 판정은 쪼개기를 감안한 주간 합계로 한다 (D2)
+      const weekTotal =
+        entry.amount == null ? null : await this.partyWeekTotal(entry);
+      const touched = await this.touchedBy(entry);
+      const item = classifyWaiting(entry, {
+        weekTotal,
+        touchedByViewer: touched.has(actor.id),
+      });
+      if (item) items.push(item);
+    }
+
+    /*
+     * 사업부리더는 **자기 사업부 것만** 본다 (§13.1 scope: own_bu).
+     * 대기함은 「내가 할 일」이라 범위가 어긋나면 남의 일이 섞인다.
+     */
+    const scoped = (role: Role) =>
+      role === "사업부리더" && actor.buCode
+        ? items.filter(item => item.buCode === actor.buCode)
+        : items;
+
+    const queues = ROLES.filter(role => permissionFor(role, "entry").read).map(
+      role => buildRoleQueues(scoped(role), [role])[0]
+    );
+
+    return {
+      /** 보는 사람의 대기함 — 화면을 열면 이것이 먼저다 */
+      mine: queues.find(queue => queue.role === actor.role) ?? null,
+      queues,
+      summary: blockerSummary(items),
+      total: items.length,
     };
   }
 

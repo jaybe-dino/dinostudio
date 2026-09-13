@@ -793,6 +793,11 @@ export const erpRouter = router({
       return run(() => getLedgerService().auditTrail(input ?? {}));
     }),
 
+  /** §13.1 역할별 대기함 — 「지금 이 건은 누가 움직여야 하는가」 */
+  approvalQueues: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().approvalQueues(actorFrom(ctx)))
+  ),
+
   /** §5.5 이관 검증 리포트 (G2) */
   /** POST /seed — §5.4 시드 적재 (대표만). 이미 있는 코드는 건드리지 않는다 */
   seedDatabase: protectedProcedure.mutation(({ ctx }) =>
