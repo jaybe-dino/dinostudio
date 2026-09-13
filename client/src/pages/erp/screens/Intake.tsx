@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile } from "../components/Bits";
 import { Reauth } from "../components/Reauth";
 import { useErpUi } from "../context";
+import { shortDate } from "../format";
 
 const SLACK_FIELDS: [string, string, string][] = [
   [
@@ -55,6 +56,7 @@ export function IntakeScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const me = trpc.erp.me.useQuery();
+  const cross = trpc.erp.intake.crossReference.useQuery();
   /*
    * 기본값이 365일인 이유 — 지출 채널의 마지막 글이 2025-10 이다.
    * 30일로 두면 0건이 나오고, 그것은 「고장」처럼 보인다.
@@ -178,6 +180,70 @@ export function IntakeScreen() {
           tone="ok"
         />
       </div>
+
+      {/*
+        지출결의서·계약서 서명요청 — 금액도 양식도 없어 원장 건이 될 수 없다.
+        대신 원장과 대조해 「반영됐다 / 아직 없다」를 보여 준다. **자동으로
+        잇지 않는다** — 잘못 이으면 같은 지출이 두 번 잡히거나, 결재가 끝난
+        것처럼 보이는데 실제로는 다른 건이 결재된 상태가 된다.
+      */}
+      {cross.data && cross.data.rows.length > 0 ? (
+        <Card
+          title="결의서 · 계약서 대조"
+          meta={`${cross.data.summary.total}건 · 원장 반영 ${cross.data.summary.reflected}건`}
+          body={false}
+        >
+          <div className="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>종류</th>
+                  <th>원문</th>
+                  <th>항목</th>
+                  <th>원장 대조</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cross.data.rows.map(row => (
+                  <tr key={row.id}>
+                    <td>
+                      {row.kind}
+                      <div className="s">{shortDate(row.receivedAt)}</div>
+                    </td>
+                    <td className="wrap s">{row.raw}</td>
+                    <td className="wrap">
+                      {row.names.length > 0 ? row.names.join(" · ") : "—"}
+                    </td>
+                    <td className="wrap">
+                      <div style={{ marginBottom: 4 }}>
+                        <span className={row.reflected ? "chip o" : "chip w"}>
+                          {row.reflected ? "원장 반영됨" : "확인 필요"}
+                        </span>{" "}
+                        <span className="s">{row.note}</span>
+                      </div>
+                      {row.matches.map(match => (
+                        <div key={match.name} className="s">
+                          <b>{match.name}</b> — {match.verdict}
+                          {match.candidates.length > 0
+                            ? ` · ${match.candidates
+                                .map(c => `${c.code} (${c.reasons.join(", ")})`)
+                                .join(" / ")}`
+                            : ""}
+                        </div>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Note>
+            짝짓기는 <b>사람이 확인해야 합니다.</b> 자동으로 이으면 같은 지출이
+            두 번 잡히거나, 결재가 끝난 것처럼 보이는데 실제로는 다른 건이
+            결재된 상태가 됩니다.
+          </Note>
+        </Card>
+      ) : null}
 
       <Card title="슬랙 과거 메시지 가져오기" meta="대표만">
         <Note>
