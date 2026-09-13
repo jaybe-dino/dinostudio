@@ -39,6 +39,10 @@ import {
   anchorToday,
   blockerSummary,
   buildRoleQueues,
+  classifyNote,
+  matchEntries,
+  parseContractRequest,
+  parseDecisionThread,
   classifyWaiting,
   buildCashflow,
   canApproveAmount,
@@ -333,6 +337,83 @@ export class LedgerService {
       queues,
       summary: blockerSummary(items),
       total: items.length,
+    };
+  }
+
+  /**
+   * GET /intake/cross-reference — 참조 기록을 원장과 **대조**한다.
+   *
+   * 지출결의서·계약서 서명요청은 금액이 없어 원장 건이 될 수 없다. 대신 원장에
+   * 이미 있는 건과 짝을 지어 「반영됐다 / 아직 없다」를 말해 준다.
+   *
+   * **자동으로 잇지 않는다.** 잘못 이으면 같은 지출이 두 번 잡히거나, 결재가
+   * 끝난 것처럼 보이는데 실제로는 다른 건이 결재된 상태가 된다. 후보를 점수와
+   * 근거와 함께 나란히 보여 주고, 잇는 것은 사람이 한다 (원칙 7).
+   */
+  async crossReference(actor: Actor) {
+    const [intakes, entries] = await Promise.all([
+      this.store.listIntakes(),
+      this.store.listEntries(),
+    ]);
+    const notes = intakes.filter(item => item.status === "note");
+
+    const rows = notes.map(note => {
+      const parsed = (note.parsed ?? {}) as { kind?: string };
+      const raw = note.raw ?? "";
+      const kind = parsed.kind ?? classifyNote(raw) ?? "참조";
+      const date = note.receivedAt?.slice(0, 10) ?? null;
+
+      // 결의서는 스레드 본문이 곧 항목 목록이다. 한 줄이 한 건이다
+      const names =
+        kind === "지출결의서"
+          ? parseDecisionThread([{ text: raw, user: null }]).items
+          : parseContractRequest(raw).names;
+
+      const matches = names.map(name => ({
+        name,
+        ...matchEntries({ name, date }, entries),
+      }));
+
+      return {
+        id: note.id,
+        kind,
+        channel: note.channel,
+        receivedAt: note.receivedAt,
+        // 원문에는 개인정보가 있을 수 있다 — 여기서 가린다 (마스킹은 응답 단계)
+        raw: maskSensitive(raw).text,
+        names,
+        matches,
+        /** 하나라도 확실히 맞는 것이 있으면 반영된 것으로 본다 */
+        reflected:
+          matches.length > 0 && matches.every(m => m.verdict === "확실"),
+        note:
+          names.length === 0
+            ? "대조할 이름을 찾지 못했습니다 — 원문을 보고 사람이 판단해야 합니다"
+            : matches.every(m => m.verdict === "확실")
+              ? "원장에 전부 들어와 있습니다"
+              : matches.some(m => m.verdict === "없음")
+                ? "원장에 없는 항목이 있습니다"
+                : "닮은 건이 있으나 같은 건인지 확인이 필요합니다",
+      };
+    });
+
+    await this.audit(
+      "intake",
+      "cross-reference",
+      "read",
+      null,
+      { notes: rows.length },
+      actor
+    );
+
+    return {
+      rows,
+      summary: {
+        total: rows.length,
+        reflected: rows.filter(r => r.reflected).length,
+        missing: rows.filter(r => r.matches.some(m => m.verdict === "없음"))
+          .length,
+      },
     };
   }
 
@@ -1817,8 +1898,41 @@ export class LedgerService {
       // 같은 스레드 ts는 두 번 들어오지 않는다 (§6.2 UNIQUE · T9)
       return { status: "duplicate" as const, id: null };
     }
+    /*
+     * 지출 요청이 아니면 버리기 전에 한 번 더 본다.
+     *
+     * 지출결의서와 계약서 서명요청은 **금액도 양식도 없어서** 지출 요청 판별을
+     * 통과하지 못한다. 그렇다고 버리면 「대표가 무엇을 결재했는가」와 「어떤
+     * 계약이 곧 생기는가」가 통째로 사라진다. 원장 건으로 만들지는 않고,
+     * 원장과 대조할 **참조 기록**으로 남긴다.
+     */
     if (!looksLikeExpenseRequest(message.text)) {
-      return { status: "ignored" as const, id: null };
+      const noteKind = classifyNote(message.text);
+      if (!noteKind) return { status: "ignored" as const, id: null };
+
+      const id = randomUUID();
+      await this.store.upsertIntake({
+        id,
+        source: "slack",
+        sourceRef: message.ts,
+        channel: message.channel,
+        raw: message.text,
+        parsed: { by: "note", kind: noteKind },
+        // 원장으로 올라갈 건이 아니다 — 대조해서 보여 주는 데까지다
+        status: "note",
+        failReason: null,
+        entryId: null,
+        receivedAt: nowIso(),
+      });
+      await this.audit(
+        "intake",
+        id,
+        "collect",
+        null,
+        { channel: message.channel, status: "note", kind: noteKind },
+        actor
+      );
+      return { status: "note" as const, id };
     }
 
     const today = await this.today();

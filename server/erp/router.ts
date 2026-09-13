@@ -679,6 +679,10 @@ export const erpRouter = router({
       .mutation(({ ctx, input }) =>
         run(() => getLedgerService().revealIntakeRaw(input.id, actorFrom(ctx)))
       ),
+    /** 지출결의서·계약서 서명요청을 원장과 대조 — 잇는 것은 사람이 한다 */
+    crossReference: protectedProcedure.query(({ ctx }) =>
+      run(() => getLedgerService().crossReference(actorFrom(ctx)))
+    ),
     backfillSlack: protectedProcedure
       .input(
         z.object({
