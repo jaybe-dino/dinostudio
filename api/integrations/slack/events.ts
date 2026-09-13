@@ -68,6 +68,7 @@ export async function POST(req: Request): Promise<Response> {
         ts: event.ts,
         text: event.text,
         user: event.user ?? event.bot_id ?? null,
+        files: event.files,
       },
       {
         id: process.env.SLACK_INTAKE_ACTOR_EMAIL ?? "slack-bot",

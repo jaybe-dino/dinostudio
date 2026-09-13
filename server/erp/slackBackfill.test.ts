@@ -505,3 +505,73 @@ describe("§11.1 백필 — 안 쓰는 채널을 표시한다 (30일 규칙)", (
     expect(result.channels[0].error).toContain("/invite");
   });
 });
+
+describe("§11.1 백필 — 스레드를 따라간다", () => {
+  it("부모만 가져오면 지출결의서 본문이 통째로 빠진다", async () => {
+    const s = svc();
+    const result = await s.backfillSlackHistory({ days: 365 }, CEO, {
+      listChannels: async () => ({ channels: [CHANNELS[0]] }),
+      fetchPage: async () =>
+        page([
+          {
+            type: "message",
+            ts: "100.1",
+            text: "<@U1> 지출결의서",
+            user: "joon",
+            reply_count: 2,
+          },
+        ]),
+      fetchThread: async () => ({
+        messages: [
+          {
+            type: "message",
+            ts: "100.2",
+            text: "김성환고문\n박재우 컨설턴트",
+            user: "joon",
+          },
+          { type: "message", ts: "100.3", text: "네승인", user: "jaybe" },
+        ],
+      }),
+    });
+
+    // 결의서는 스레드 하나가 한 건이다 — 합쳐서 1건
+    expect(result.channels[0].scanned).toBe(1);
+    const intakes = await s.masters(CEO).then(m => m.intakes);
+    expect(intakes.some(i => (i.raw ?? "").includes("김성환고문"))).toBe(true);
+  });
+
+  it("답글이 없는 글은 스레드를 부르지 않는다", async () => {
+    const s = svc();
+    let asked = 0;
+    await s.backfillSlackHistory({ days: 365 }, CEO, {
+      listChannels: async () => ({ channels: [CHANNELS[0]] }),
+      fetchPage: async () =>
+        page([{ type: "message", ts: "200.1", text: request(1), user: "U1" }]),
+      fetchThread: async () => {
+        asked += 1;
+        return { messages: [] };
+      },
+    });
+    expect(asked).toBe(0);
+  });
+
+  it("스레드 하나를 못 읽어도 채널 전체를 멈추지 않는다", async () => {
+    const s = svc();
+    const result = await s.backfillSlackHistory({ days: 365 }, CEO, {
+      listChannels: async () => ({ channels: [CHANNELS[0]] }),
+      fetchPage: async () =>
+        page([
+          {
+            type: "message",
+            ts: "300.1",
+            text: request(1),
+            user: "U1",
+            reply_count: 1,
+          },
+        ]),
+      fetchThread: async () => ({ error: "thread_not_found" }),
+    });
+    expect(result.totals.collected).toBe(1);
+    expect(result.channels[0].error).toBeTruthy();
+  });
+});

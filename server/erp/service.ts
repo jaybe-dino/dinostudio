@@ -40,6 +40,7 @@ import {
   blockerSummary,
   buildRoleQueues,
   classifyNote,
+  readFileName,
   matchEntries,
   parseContractRequest,
   parseDecisionThread,
@@ -135,6 +136,8 @@ import type {
 } from "../../shared/erp/index.js";
 import { randomUUID } from "node:crypto";
 import { aiParseExpense } from "../integrations/aiParser.js";
+import { readSlackFiles } from "../integrations/documentReader.js";
+import type { SlackFileMeta } from "../integrations/slackFiles.js";
 import {
   isWatchedChannel,
   postSlackMessage,
@@ -142,6 +145,7 @@ import {
 } from "../integrations/slack.js";
 import {
   fetchHistoryPage,
+  fetchThreadReplies,
   isCollectableMessage,
   listBotChannels,
   slackErrorMessage,
@@ -1886,8 +1890,16 @@ export class LedgerService {
    * 어느 쪽이든 결과는 원장이 아니라 **검수함**에 선다. 사람이 확인해야 원장으로 올라간다 (원칙 7).
    */
   async collectSlackMessage(
-    message: { channel: string; ts: string; text: string; user: string | null },
-    actor: Actor
+    message: {
+      channel: string;
+      ts: string;
+      text: string;
+      user: string | null;
+      /** 붙은 파일 — 본문만 읽으면 계약서·견적서가 통째로 사라진다 */
+      files?: SlackFileMeta[];
+    },
+    actor: Actor,
+    deps: { readFiles?: typeof readSlackFiles } = {}
   ) {
     const existing = await this.store.listIntakes();
     if (
@@ -1899,6 +1911,37 @@ export class LedgerService {
       return { status: "duplicate" as const, id: null };
     }
     /*
+     * 붙은 파일을 먼저 읽는다.
+     *
+     * 계약서 PDF 안에 금액과 기간이 들어 있고, 본문에는 「서명 부탁드립니다」
+     * 한 줄뿐인 경우가 많다. 파일에서 꺼낸 글자를 **본문 뒤에 이어 붙여**
+     * 같은 파서에 넘긴다 — 파서를 두 벌 만들지 않기 위해서다.
+     *
+     * 파일 하나를 못 읽어도 메시지를 버리지 않는다. 못 읽은 이유를 적어 두고
+     * 이름만이라도 남긴다 (이름에 거래처·날짜·문서 종류가 들어 있다).
+     */
+    const readFiles = deps.readFiles ?? readSlackFiles;
+    const attachments =
+      message.files && message.files.length > 0
+        ? await readFiles(message.files, {
+            token: process.env.SLACK_BOT_TOKEN,
+          })
+        : [];
+    const year = Number((await this.today()).slice(0, 4));
+    const fileHints = attachments.map(file => ({
+      ...file,
+      hints: readFileName(file.name, year),
+    }));
+    const attachmentText = fileHints
+      .map(file =>
+        file.text
+          ? `\n\n[첨부 ${file.name}]\n${file.text}`
+          : `\n\n[첨부 ${file.name} — 읽지 못함: ${file.reason ?? "이유 미상"}]`
+      )
+      .join("");
+    const fullText = `${message.text}${attachmentText}`;
+
+    /*
      * 지출 요청이 아니면 버리기 전에 한 번 더 본다.
      *
      * 지출결의서와 계약서 서명요청은 **금액도 양식도 없어서** 지출 요청 판별을
@@ -1906,8 +1949,8 @@ export class LedgerService {
      * 계약이 곧 생기는가」가 통째로 사라진다. 원장 건으로 만들지는 않고,
      * 원장과 대조할 **참조 기록**으로 남긴다.
      */
-    if (!looksLikeExpenseRequest(message.text)) {
-      const noteKind = classifyNote(message.text);
+    if (!looksLikeExpenseRequest(fullText)) {
+      const noteKind = classifyNote(fullText);
       if (!noteKind) return { status: "ignored" as const, id: null };
 
       const id = randomUUID();
@@ -1916,8 +1959,8 @@ export class LedgerService {
         source: "slack",
         sourceRef: message.ts,
         channel: message.channel,
-        raw: message.text,
-        parsed: { by: "note", kind: noteKind },
+        raw: fullText,
+        parsed: { by: "note", kind: noteKind, files: fileHints },
         // 원장으로 올라갈 건이 아니다 — 대조해서 보여 주는 데까지다
         status: "note",
         failReason: null,
@@ -1936,7 +1979,7 @@ export class LedgerService {
     }
 
     const today = await this.today();
-    const rule = parseSlackExpense(message.text, Number(today.slice(0, 4)));
+    const rule = parseSlackExpense(fullText, Number(today.slice(0, 4)));
 
     let parsed: Record<string, unknown> | null = null;
     let status = "waiting";
@@ -1955,7 +1998,7 @@ export class LedgerService {
     } else {
       // 비정형(수기) 메시지 — 파싱 실패를 허용하고 AI에 넘긴다 (§11.1)
       try {
-        const ai = await aiParseExpense(message.text, today);
+        const ai = await aiParseExpense(fullText, today);
         if (ai && ai.isExpenseRequest) {
           parsed = {
             by: "ai",
@@ -1983,8 +2026,8 @@ export class LedgerService {
       source: "slack",
       sourceRef: message.ts,
       channel: message.channel,
-      raw: message.text,
-      parsed,
+      raw: fullText,
+      parsed: parsed ? { ...parsed, files: fileHints } : { files: fileHints },
       status,
       failReason,
       entryId: null,
@@ -2026,6 +2069,7 @@ export class LedgerService {
     deps: {
       listChannels?: typeof listBotChannels;
       fetchPage?: typeof fetchHistoryPage;
+      fetchThread?: typeof fetchThreadReplies;
       now?: () => number;
     } = {}
   ) {
@@ -2047,6 +2091,7 @@ export class LedgerService {
 
     const listChannels = deps.listChannels ?? listBotChannels;
     const fetchPage = deps.fetchPage ?? fetchHistoryPage;
+    const fetchThread = deps.fetchThread ?? fetchThreadReplies;
     const now = deps.now ?? (() => Date.now());
     // 1일 미만은 의미가 없고, 1년을 넘기면 한 번에 끝날 수 없다
     const days = Math.min(Math.max(Math.round(input.days ?? 30), 1), 365);
@@ -2174,7 +2219,66 @@ export class LedgerService {
           break;
         }
 
+        /*
+         * 스레드까지 따라간다.
+         *
+         * 지출결의서는 부모 글이 「@대표 지출결의서」 한 줄뿐이고 **본문이
+         * 답글 안에** 있다. 부모만 가져오면 무엇을 결재했는지가 통째로 빠진다.
+         * 답글을 부모 바로 뒤에 끼워 같은 흐름으로 처리한다.
+         */
+        const expanded: typeof page.messages = [];
         for (const message of page.messages) {
+          const hasThread = Boolean(
+            message.ts && message.reply_count && message.reply_count > 0
+          );
+          if (!hasThread) {
+            expanded.push(message);
+            continue;
+          }
+
+          const thread = await fetchThread({
+            token,
+            channel,
+            ts: message.ts as string,
+          });
+          if ("error" in thread) {
+            // 스레드 하나를 못 읽었다고 채널 전체를 멈추지 않는다
+            line.error = line.error ?? slackErrorMessage(thread);
+            expanded.push(message);
+            continue;
+          }
+
+          /*
+           * 결의서는 **스레드 하나가 곧 한 건**이다. 부모는 「@대표 지출결의서」
+           * 한 줄이고 항목은 답글에, 승인도 답글에 있다. 따로 떼면 답글에는
+           * 아무 표시가 없어 잡담으로 버려지고, 부모에는 내용이 없다.
+           * 그래서 **하나로 합쳐** 부모 ts 로 수집한다.
+           *
+           * 그 밖의 글은 예전대로 따로 둔다 — 지출 요청에 달린 「확인했습니다」
+           * 같은 답글까지 본문에 섞으면 파싱이 흐려진다.
+           */
+          if (classifyNote(message.text ?? "")) {
+            const body = [
+              message.text ?? "",
+              ...thread.messages.map(reply => reply.text ?? ""),
+            ]
+              .filter(Boolean)
+              .join("\n");
+            expanded.push({
+              ...message,
+              text: body,
+              files: [
+                ...(message.files ?? []),
+                ...thread.messages.flatMap(reply => reply.files ?? []),
+              ],
+            });
+            continue;
+          }
+
+          expanded.push(message, ...thread.messages);
+        }
+
+        for (const message of expanded) {
           if (!isCollectableMessage(message)) continue;
           line.scanned += 1;
           // conversations.history 는 최신부터 준다 — 첫 건이 곧 마지막 글이다
@@ -2185,8 +2289,15 @@ export class LedgerService {
             line.duplicate += 1;
             continue;
           }
-          // 잡담은 검수함에 넣지 않는다 — 실시간 경로와 같은 판정이다
-          if (!looksLikeExpenseRequest(message.text as string)) {
+          /*
+           * 잡담은 검수함에 넣지 않는다 — 실시간 경로와 **같은 판정**이어야 한다.
+           *
+           * 여기서 지출 요청만 통과시키면 지출결의서·계약서 서명요청이
+           * `collectSlackMessage()` 에 닿기도 전에 버려진다. 같은 규칙을 두
+           * 군데 적으면 이렇게 어긋난다.
+           */
+          const text = message.text as string;
+          if (!looksLikeExpenseRequest(text) && !classifyNote(text)) {
             line.ignored += 1;
             continue;
           }
@@ -2196,6 +2307,7 @@ export class LedgerService {
               ts,
               text: message.text as string,
               user: message.user ?? message.bot_id ?? null,
+              files: message.files,
             },
             actor
           );

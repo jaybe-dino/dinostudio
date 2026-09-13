@@ -19,6 +19,22 @@ export interface SlackHistoryMessage {
   ts?: string;
   user?: string;
   bot_id?: string;
+  /** 스레드 부모의 ts. 답글이면 채워져 있다 */
+  thread_ts?: string;
+  /** 답글 수 — 0 보다 크면 스레드를 따라가야 한다 */
+  reply_count?: number;
+  /** 붙은 파일 — 본문만 읽으면 이것들이 통째로 사라진다 */
+  files?: {
+    id?: string;
+    name?: string;
+    title?: string;
+    mimetype?: string;
+    filetype?: string;
+    size?: number;
+    url_private?: string;
+    url_private_download?: string;
+    permalink?: string;
+  }[];
 }
 
 export interface SlackApiFailure {
@@ -198,4 +214,27 @@ export function isCollectableMessage<T extends SlackHistoryMessage>(
   if (message.subtype && !COLLECTABLE_SUBTYPES.has(message.subtype))
     return false;
   return Boolean(message.text && message.ts);
+}
+
+/**
+ * 스레드 답글.
+ *
+ * 지출결의서는 부모 글이 「@대표 지출결의서」 한 줄뿐이고 **본문이 답글 안에**
+ * 있다. 부모만 가져오면 무엇을 결재했는지가 통째로 빠진다.
+ *
+ * 첫 번째 항목은 부모 글 자신이므로 **빼고** 돌려준다 — 그대로 두면 부모가
+ * 두 번 수집된다.
+ */
+export async function fetchThreadReplies(
+  args: { token: string; channel: string; ts: string },
+  fetchPage = slackGet
+): Promise<{ messages: SlackHistoryMessage[] } | SlackApiFailure> {
+  const result = await fetchPage(
+    "conversations.replies",
+    { channel: args.channel, ts: args.ts, limit: "200" },
+    args.token
+  );
+  if (!result.ok) return result;
+  const all = result.body.messages ?? [];
+  return { messages: all.filter(m => m.ts !== args.ts) };
 }
