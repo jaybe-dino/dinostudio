@@ -421,6 +421,142 @@ export class LedgerService {
     };
   }
 
+  /**
+   * POST /intake/read-attachments — 아직 안 읽은 첨부를 **조금씩** 읽는다.
+   *
+   * 백필은 첨부 내용을 읽지 않는다. 메시지마다 파일을 내려받고 모델을 부르면
+   * 한 번의 호출이 몇 분씩 걸려 서버리스 함수가 시간 초과로 죽기 때문이다.
+   * 그래서 읽기는 이 경로로 뗐다 — 한 번에 몇 건씩, 예산 안에서.
+   *
+   * 읽은 내용은 원문 뒤에 이어 붙이고 **다시 파싱한다.** 계약서 PDF 안에
+   * 금액이 있으면 그때 금액이 채워진다.
+   */
+  async readPendingAttachments(
+    input: { limit?: number; budgetMs?: number } = {},
+    actor: Actor,
+    deps: { readFiles?: typeof readSlackFiles; now?: () => number } = {}
+  ) {
+    const readFiles = deps.readFiles ?? readSlackFiles;
+    const now = deps.now ?? (() => Date.now());
+    const startedAt = now();
+    const budgetMs = Math.min(
+      Math.max(input.budgetMs ?? 20_000, 1_000),
+      60_000
+    );
+    const limit = Math.min(Math.max(input.limit ?? 3, 1), 20);
+
+    const intakes = await this.store.listIntakes();
+    const pending = intakes.filter(item => {
+      const parsed = (item.parsed ?? {}) as {
+        files?: { text?: string | null; meta?: unknown }[];
+      };
+      return (parsed.files ?? []).some(file => file.text == null && file.meta);
+    });
+
+    let read = 0;
+    let failed = 0;
+    const rows: { id: string; name: string; ok: boolean; note: string }[] = [];
+
+    for (const intake of pending.slice(0, limit)) {
+      if (now() - startedAt > budgetMs) break;
+      const parsed = (intake.parsed ?? {}) as Record<string, unknown> & {
+        files?: {
+          name: string;
+          text?: string | null;
+          reason?: string | null;
+          meta?: SlackFileMeta | null;
+        }[];
+      };
+      const files = parsed.files ?? [];
+      const metas = files
+        .filter(file => file.text == null && file.meta)
+        .map(file => file.meta as SlackFileMeta);
+      if (metas.length === 0) continue;
+
+      const results = await readFiles(metas, {
+        token: process.env.SLACK_BOT_TOKEN,
+      });
+
+      let at = 0;
+      const updated = files.map(file => {
+        if (file.text != null || !file.meta) return file;
+        const result = results[at++];
+        if (!result) return file;
+        if (result.text) read += 1;
+        else failed += 1;
+        rows.push({
+          id: intake.id,
+          name: file.name,
+          ok: Boolean(result.text),
+          note: result.text
+            ? `${result.text.length}자 읽음`
+            : (result.reason ?? "읽지 못함"),
+        });
+        return { ...file, text: result.text, reason: result.reason };
+      });
+
+      /*
+       * 읽은 내용을 원문 뒤에 이어 붙이고 **다시 파싱한다.**
+       * 「[첨부 …]」 블록을 통째로 갈아 끼워, 여러 번 눌러도 쌓이지 않게 한다.
+       */
+      const base = (intake.raw ?? "").split("\n\n[첨부 ")[0];
+      const appended = updated
+        .map(file =>
+          file.text
+            ? `\n\n[첨부 ${file.name}]\n${file.text}`
+            : `\n\n[첨부 ${file.name} — 읽지 못함: ${file.reason ?? "이유 미상"}]`
+        )
+        .join("");
+      const fullText = `${base}${appended}`;
+      const today = await this.today();
+      const rule = parseSlackExpense(fullText, Number(today.slice(0, 4)));
+
+      await this.store.upsertIntake({
+        ...intake,
+        raw: fullText,
+        parsed: {
+          ...parsed,
+          files: updated,
+          // 첨부에서 값이 나왔으면 그것으로 갱신한다
+          ...(rule.matchedFields > 0
+            ? {
+                by: "rule",
+                ...rule.fields,
+                warnings: rule.warnings,
+                missing: rule.missingRequired,
+              }
+            : {}),
+        },
+      });
+    }
+
+    await this.audit(
+      "intake",
+      "read-attachments",
+      "read",
+      null,
+      { read, failed },
+      actor
+    );
+
+    return {
+      read,
+      failed,
+      rows,
+      remaining: Math.max(0, pending.length - limit),
+      note:
+        pending.length === 0
+          ? "읽을 첨부가 없습니다"
+          : read + failed === 0
+            ? "시간 안에 한 건도 읽지 못했습니다 — 다시 누르십시오"
+            : `${read}건 읽었습니다` +
+              (failed > 0 ? ` · ${failed}건 실패` : "") +
+              (pending.length > limit
+                ? ` · ${pending.length - limit}건 남음`
+                : ""),
+    };
+  }
+
   /** GET /cash-position · POST /cash-position/simulate */
   async cashPosition(
     options: {
@@ -1899,16 +2035,31 @@ export class LedgerService {
       files?: SlackFileMeta[];
     },
     actor: Actor,
-    deps: { readFiles?: typeof readSlackFiles } = {}
+    deps: {
+      readFiles?: typeof readSlackFiles;
+      /**
+       * 첨부를 **지금** 읽을 것인가.
+       *
+       * 실시간 경로(메시지 한 건)는 읽는다. 백필은 읽지 않는다 — 메시지마다
+       * 파일을 내려받고 모델을 부르면 한 번의 호출이 몇 분씩 걸려 서버리스
+       * 함수가 시간 초과로 죽는다. 백필은 파일 **정보만** 남기고, 내용은
+       * 「첨부 읽기」에서 조금씩 읽는다.
+       */
+      readAttachments?: boolean;
+      /** 부르는 쪽이 이미 중복을 걸렀으면 건너뛴다 — 메시지마다 질의하지 않기 위해 */
+      skipDuplicateCheck?: boolean;
+    } = {}
   ) {
-    const existing = await this.store.listIntakes();
-    if (
-      existing.some(
-        item => item.source === "slack" && item.sourceRef === message.ts
-      )
-    ) {
-      // 같은 스레드 ts는 두 번 들어오지 않는다 (§6.2 UNIQUE · T9)
-      return { status: "duplicate" as const, id: null };
+    if (!deps.skipDuplicateCheck) {
+      const existing = await this.store.listIntakes();
+      if (
+        existing.some(
+          item => item.source === "slack" && item.sourceRef === message.ts
+        )
+      ) {
+        // 같은 스레드 ts는 두 번 들어오지 않는다 (§6.2 UNIQUE · T9)
+        return { status: "duplicate" as const, id: null };
+      }
     }
     /*
      * 붙은 파일을 먼저 읽는다.
@@ -1921,16 +2072,27 @@ export class LedgerService {
      * 이름만이라도 남긴다 (이름에 거래처·날짜·문서 종류가 들어 있다).
      */
     const readFiles = deps.readFiles ?? readSlackFiles;
+    const readNow = deps.readAttachments ?? true;
+    const files = message.files ?? [];
     const attachments =
-      message.files && message.files.length > 0
-        ? await readFiles(message.files, {
-            token: process.env.SLACK_BOT_TOKEN,
-          })
-        : [];
+      files.length > 0 && readNow
+        ? await readFiles(files, { token: process.env.SLACK_BOT_TOKEN })
+        : files.map(file => ({
+            name: file.name ?? file.title ?? "이름 없는 파일",
+            mimetype: file.mimetype ?? null,
+            size: file.size ?? null,
+            permalink: file.permalink ?? null,
+            text: null as string | null,
+            reason: readNow
+              ? null
+              : "아직 읽지 않았습니다 — 「첨부 읽기」에서 읽습니다",
+          }));
     const year = Number((await this.today()).slice(0, 4));
-    const fileHints = attachments.map(file => ({
+    const fileHints = attachments.map((file, at) => ({
       ...file,
       hints: readFileName(file.name, year),
+      // 나중에 다시 내려받으려면 슬랙 주소가 있어야 한다
+      meta: files[at] ?? null,
     }));
     const attachmentText = fileHints
       .map(file =>
@@ -2096,7 +2258,14 @@ export class LedgerService {
     // 1일 미만은 의미가 없고, 1년을 넘기면 한 번에 끝날 수 없다
     const days = Math.min(Math.max(Math.round(input.days ?? 30), 1), 365);
     const startedAt = now();
-    const budgetMs = Math.min(Math.max(input.budgetMs ?? 8_000, 1_000), 60_000);
+    /*
+     * 시간 예산.
+     *
+     * 서버리스 함수는 짧게 끊긴다. 넘기면 브라우저에는 이유 없이
+     * `Failed to fetch` 만 뜬다 — 무엇이 잘못됐는지 알 길이 없는 최악의
+     * 실패다. 그래서 함수 상한보다 넉넉히 아래에서 **우리가 먼저** 멈춘다.
+     */
+    const budgetMs = Math.min(Math.max(input.budgetMs ?? 6_000, 1_000), 60_000);
     const oldestSec = Math.floor(startedAt / 1000) - days * 86_400;
 
     /*
@@ -2279,6 +2448,17 @@ export class LedgerService {
         }
 
         for (const message of expanded) {
+          /*
+           * **메시지마다** 예산을 본다.
+           *
+           * 예전에는 페이지 사이에서만 봤다. 그런데 한 페이지 안에서 스레드
+           * 조회와 수집이 메시지 수만큼 일어나므로, 한 번의 반복이 몇 분까지
+           * 늘어날 수 있었다. 그것이 `Failed to fetch` 의 정체다.
+           */
+          if (now() - startedAt > budgetMs) {
+            stopped = "budget";
+            break;
+          }
           if (!isCollectableMessage(message)) continue;
           line.scanned += 1;
           // conversations.history 는 최신부터 준다 — 첫 건이 곧 마지막 글이다
@@ -2309,7 +2489,13 @@ export class LedgerService {
               user: message.user ?? message.bot_id ?? null,
               files: message.files,
             },
-            actor
+            actor,
+            {
+              // 중복은 위의 seen 으로 이미 걸렀다 — 메시지마다 질의하지 않는다
+              skipDuplicateCheck: true,
+              // 첨부 내용은 여기서 읽지 않는다. 읽으면 함수가 시간 초과로 죽는다
+              readAttachments: false,
+            }
           );
           seen.add(ts);
           if (result.status === "duplicate") line.duplicate += 1;
@@ -2317,6 +2503,8 @@ export class LedgerService {
           else if (result.status === "failed") line.failed += 1;
           else line.collected += 1;
         }
+
+        if (stopped === "budget") break;
 
         line.cursor = page.nextCursor;
         if (!page.nextCursor) {

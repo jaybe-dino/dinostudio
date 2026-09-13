@@ -679,6 +679,19 @@ export const erpRouter = router({
       .mutation(({ ctx, input }) =>
         run(() => getLedgerService().revealIntakeRaw(input.id, actorFrom(ctx)))
       ),
+    /** 아직 안 읽은 첨부를 조금씩 읽는다 — 백필은 첨부를 읽지 않는다 */
+    readAttachments: protectedProcedure
+      .input(
+        z
+          .object({ limit: z.number().int().min(1).max(20).default(3) })
+          .optional()
+      )
+      .mutation(({ ctx, input }) =>
+        run(() =>
+          getLedgerService().readPendingAttachments(input ?? {}, actorFrom(ctx))
+        )
+      ),
+
     /** 지출결의서·계약서 서명요청을 원장과 대조 — 잇는 것은 사람이 한다 */
     crossReference: protectedProcedure.query(({ ctx }) =>
       run(() => getLedgerService().crossReference(actorFrom(ctx)))
