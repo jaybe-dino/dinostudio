@@ -310,3 +310,20 @@ describe("백필 진행 위치 복구", () => {
     expect((await s.masters(CEO)).intakes[0].raw).toContain("확인할 항목");
   });
 });
+
+
+describe("대량 채널 뒤의 채널도 진행한다", () => {
+  it("재개 지도 순서를 지켜 앞선 대량 채널을 뒤로 보낸다", async () => {
+    const s = new LedgerService(new InMemoryLedgerStore());
+    const visited: string[] = [];
+    const out = await s.backfillSlackHistory({ days: 365, cursors: { C2: "next2", C1: "next1" } }, CEO, {
+      listChannels: async () => ({ channels: [{ id: "C1", name: "대량" }, { id: "C2", name: "지출" }] }),
+      fetchPage: async ({ channel }) => {
+        visited.push(channel);
+        return { messages: [], nextCursor: null };
+      },
+    });
+    expect(visited).toEqual(["C2", "C1"]);
+    expect(out.remaining).toBe(false);
+  });
+});

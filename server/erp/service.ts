@@ -2346,7 +2346,8 @@ export class LedgerService {
           .sort(
             (a, b) =>
               Number(Boolean(input.cursors?.[a])) -
-              Number(Boolean(input.cursors?.[b]))
+                Number(Boolean(input.cursors?.[b])) ||
+              pendingChannels.indexOf(a) - pendingChannels.indexOf(b)
           )
       : allowed;
 
@@ -2592,7 +2593,9 @@ export class LedgerService {
      */
     const remaining = stopped !== null || report.some(line => !line.done);
     const cursors: Record<string, string> = {};
-    for (const line of report) {
+    // Rotate work that made progress behind untouched channels. A very large
+    // notification channel must not block every other channel on each retry.
+    for (const line of [...report].sort((a, b) => Number(a.scanned > 0) - Number(b.scanned > 0))) {
       if (!line.done) cursors[line.channel] = line.cursor ?? "";
     }
 
