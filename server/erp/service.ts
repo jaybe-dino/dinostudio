@@ -31,6 +31,7 @@ import {
   kstIso,
   kstToday,
   flattenDailyCashSheet,
+  buildSheetSeed,
   maskSensitive,
   permissionFor,
   segmentPnl,
@@ -1948,7 +1949,7 @@ export class LedgerService {
   static readonly REBUILD_CONFIRM = "기존 원장을 모두 지우고 다시 만든다";
 
   async rebuildFromDailyCashSheet(
-    input: { text: string; year?: number; confirm: string },
+    input: { text?: string; year?: number; confirm: string },
     actor: Actor
   ) {
     if (actor.role !== "대표")
@@ -1974,27 +1975,43 @@ export class LedgerService {
         `마감된 기간이 있습니다 (${closed.map(p => p.ym).join(" · ")}) — 재이관은 개시 전에만 할 수 있습니다`
       );
 
+    const pasted = input.text?.trim();
     const year = input.year ?? Number((await this.today()).slice(0, 4));
-    const flat = flattenDailyCashSheet(input.text, { year });
-    if (flat.rows === 0)
+
+    /*
+     * **개시 데이터와 같은 길로 보낸다.**
+     *
+     * 여기서 따로 flatten + importSheet 를 부르던 때가 있었다. 그러면 개시
+     * 데이터에만 붙어 있는 두 규칙 — 「시트에 적힌 건은 승인완료로 본다」와
+     * 「일계를 이관으로 표시하지 않는다」 — 이 재이관에는 빠진다. 다시 깔면
+     * 이미 나간 돈이 전부 승인 대기로 되돌아가 잔액이 어긋난다.
+     *
+     * 붙여 넣지 않으면 **코드에 박아 둔 사본**을 쓴다. 시트를 코드에 넣어 둔
+     * 이유가 붙여 넣는 수고를 없애려는 것이었으므로, 여기서 다시 붙여 넣으라고
+     * 하면 앞뒤가 맞지 않는다.
+     */
+    // 먼저 읽어 본다. 읽히지 않는 시트로 원장을 비우는 일이 없어야 한다
+    const seed = buildSheetSeed(pasted ? { text: pasted, year } : undefined);
+    if (seed.summary.rows === 0)
       throw erpError(
         "not_found",
         {},
         "시트에서 읽은 줄이 없습니다 — 구글 시트에서 전체를 복사해 붙여 넣으십시오"
       );
 
-    // 먼저 읽어 본다. 읽히지 않는 시트로 원장을 비우는 일이 없어야 한다
-    const parsed = importSheet(flat.tsv, {
-      existingCodes: [],
-      actor: actor.id,
-      fallbackYear: year,
-    });
-
     const removed = await this.store.resetLedger();
 
-    for (const item of parsed.entries) await this.store.insertEntry(item.entry);
-    for (const snapshot of parsed.snapshots)
+    for (const entry of seed.entries) await this.store.insertEntry(entry);
+    for (const snapshot of seed.snapshots)
       await this.store.insertSnapshot(snapshot);
+
+    /*
+     * 머리말의 「잔고」와 장기부채도 함께 옮긴다 — 시트가 바뀌면 이 두 개도
+     * 바뀌기 때문이다 (9/11 145,000,000 → 9/13 110,000,000). 원장만 다시
+     * 깔고 기준값을 두면 화면 맨 위 숫자가 옛날 값으로 남는다.
+     * 잠정(isProvisional) 표시는 그대로 붙어 간다 (원칙 8).
+     */
+    for (const setting of seed.settings) await this.store.putSetting(setting);
 
     await this.audit(
       "entry",
@@ -2002,22 +2019,26 @@ export class LedgerService {
       "rebuild",
       removed,
       {
-        days: flat.days.length,
-        rows: flat.rows,
-        inserted: parsed.entries.length,
-        snapshots: parsed.snapshots.length,
-        undecided: parsed.summary.undecided,
-        warnings: flat.warnings.length,
+        source: pasted ? "pasted" : "embedded",
+        days: seed.summary.days,
+        rows: seed.summary.rows,
+        inserted: seed.entries.length,
+        snapshots: seed.snapshots.length,
+        undecided: seed.summary.undecided,
+        confirmed: seed.summary.confirmed,
+        warnings: seed.warnings.length,
       },
       actor
     );
 
     return {
       removed,
-      days: flat.days,
-      warnings: flat.warnings,
-      ...parsed,
-      inserted: parsed.entries.length,
+      source: pasted ? ("pasted" as const) : ("embedded" as const),
+      days: seed.days,
+      warnings: seed.warnings,
+      summary: seed.summary,
+      inserted: seed.entries.length,
+      snapshots: seed.snapshots.length,
     };
   }
 

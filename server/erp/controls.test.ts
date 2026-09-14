@@ -98,7 +98,7 @@ describe("D2 한도 쪼개기", () => {
     const s = svc();
     // 사업부리더 한도(500만원) 아래로 세 건을 쪼갠다 — 합치면 한도를 넘는다.
     // 금액을 조금씩 다르게 둔다 — 같은 금액이면 중복 탐지(T13)가 먼저 걸린다
-    for (const [i, amount] of [4_100_000, 4_200_000].entries()) {
+    for (const [i, amount] of Array.from([4_100_000, 4_200_000].entries())) {
       const prev = await ready(
         s,
         {

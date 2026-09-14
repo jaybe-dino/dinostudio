@@ -10,7 +10,7 @@
  * 하는 일은 둘을 잇고, 결과를 한 번 세어 보여 주는 것뿐이다.
  */
 import { DAILY_CASH_SHEET, DAILY_CASH_SUMMARY } from "./data/dailyCash.js";
-import { flattenDailyCashSheet } from "./dailyCashSheet.js";
+import { flattenDailyCashSheet, type FlattenResult } from "./dailyCashSheet.js";
 import { importSheet } from "./sheetImport.js";
 import type { DaySnapshot, Entry, Setting } from "./types.js";
 
@@ -18,6 +18,10 @@ export interface SheetSeed {
   entries: Entry[];
   snapshots: DaySnapshot[];
   settings: Setting[];
+  /** 편 날짜들 — 재이관 화면이 「며칠치를 깔았는지」 보여 준다 */
+  days: string[];
+  /** 못 읽은 줄 — 버리지 않고 사람에게 돌려준다 */
+  warnings: FlattenResult["warnings"];
   summary: {
     days: number;
     rows: number;
@@ -50,16 +54,29 @@ function setting(
 }
 
 /**
- * 시트 사본을 원장 건으로 편다.
+ * 시트를 원장 건으로 편다.
  *
- * 부르는 쪽이 매번 다시 계산하지 않도록 모듈에서 한 번만 만든다 (아래 상수).
+ * 붙여 넣은 시트(`text`)도 **코드에 박아 둔 사본과 같은 길**로 보낸다. 재이관이
+ * 따로 flatten + importSheet 를 부르던 때가 있었는데, 그러면 아래의 「승인완료로
+ * 본다」와 「일계를 이관으로 표시하지 않는다」가 재이관에만 빠진다. 같은 규칙이
+ * 두 군데 있으면 반드시 한쪽만 고치게 된다 — 이번 주에만 네 번 그랬다.
+ *
+ * 부르는 쪽이 매번 다시 계산하지 않도록 기본 사본은 모듈에서 한 번만 만든다
+ * (아래 상수).
  */
-export function buildSheetSeed(): SheetSeed {
-  const flat = flattenDailyCashSheet(DAILY_CASH_SHEET, { year: SHEET_YEAR });
+export function buildSheetSeed(options?: {
+  /** 붙여 넣은 시트. 없으면 코드에 박아 둔 사본을 쓴다 */
+  text?: string;
+  year?: number;
+}): SheetSeed {
+  const year = options?.year ?? SHEET_YEAR;
+  const flat = flattenDailyCashSheet(options?.text ?? DAILY_CASH_SHEET, {
+    year,
+  });
   const parsed = importSheet(flat.tsv, {
     existingCodes: [],
     actor: "sheet",
-    fallbackYear: SHEET_YEAR,
+    fallbackYear: year,
   });
 
   /*
@@ -100,6 +117,8 @@ export function buildSheetSeed(): SheetSeed {
   return {
     entries,
     snapshots,
+    days: flat.days,
+    warnings: flat.warnings,
     settings: [
       /*
        * 시트 맨 위의 「잔고」다. 일계의 종료 잔액을 쓰지 않는 이유가 있다 —

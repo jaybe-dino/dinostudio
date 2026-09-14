@@ -75,7 +75,7 @@ describe("막히는 순서가 승인 판정과 같다", () => {
   });
 
   it("취소된 건도 대기함에 없다", () => {
-    expect(classifyWaiting(entry({ status: "canceled" }))).toBeNull();
+    expect(classifyWaiting(entry({ status: "cancelled" }))).toBeNull();
   });
 });
 

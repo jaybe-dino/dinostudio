@@ -17,18 +17,39 @@ const byTitle = (title: string) =>
 
 describe("시트가 원장 건으로 선다", () => {
   it("2026-09 구간이 전부 들어온다", () => {
-    expect(SHEET_SEED.summary.days).toBe(17);
+    expect(SHEET_SEED.summary.days).toBe(20);
     expect(SHEET_SEED.entries.length).toBe(SHEET_SEED.summary.rows);
     expect(SHEET_SEED.entries.length).toBeGreaterThan(50);
   });
 
-  it("날짜가 9/3 ~ 9/18 안에 든다", () => {
+  it("날짜가 9/3 ~ 9/22 안에 든다", () => {
     const dates = SHEET_SEED.entries
       .map(e => e.cashDate)
       .filter((d): d is string => d != null)
       .sort();
     expect(dates[0]).toBe("2026-09-03");
-    expect(dates.at(-1)).toBe("2026-09-18");
+    expect(dates.at(-1)).toBe("2026-09-22");
+  });
+
+  it("9/13 시트에서 늘어난 9/20~9/22 도 들어온다", () => {
+    // 시트가 앞으로 늘어나면 사본도 따라 늘어나야 한다는 것을 고정한다.
+    // 「기타」 칸이지 「매출」 칸이 아니다 — 나가는 돈이다.
+    // 9/19 종료 116,217,880 에서 2,000,000 + 4,000,000 + 11,000,000 을 빼야
+    // 9/20 종료 99,217,880 이 나온다.
+    const 붓기캔디 = byTitle("붓기캔디 선금")!;
+    expect(붓기캔디.cashDate).toBe("2026-09-20");
+    expect(붓기캔디.amount).toBe(11_000_000);
+    expect(붓기캔디.direction).toBe("out");
+
+    const 한스 = byTitle("한스 정산")!;
+    expect(한스.cashDate).toBe("2026-09-21");
+    expect(한스.amount).toBe(58_000_000);
+    expect(한스.direction).toBe("in");
+
+    const 박재우3차 = byTitle("박재우 컨설턴트 50% 3차")!;
+    expect(박재우3차.cashDate).toBe("2026-09-22");
+    expect(박재우3차.amount).toBe(10_450_000);
+    expect(박재우3차.direction).toBe("out");
   });
 
   it("일계(종료 잔액)도 함께 들어온다", () => {
@@ -85,8 +106,21 @@ describe("시트를 그대로 믿지 않는다", () => {
   });
 
   it("금액이 아예 없는 줄도 남는다 — 사람이 채워야 한다", () => {
-    const 지브이엔 = byTitle("지브이엔")!;
-    expect(지브이엔.amount).toBeNull();
+    const 이자 = byTitle("하나은행 이자")!;
+    expect(이자.amount).toBeNull();
+    expect(이자.amountCandidate).toBeNull();
+  });
+
+  it("**금액 칸이 비워지면 확정에서 판정 대기로 내려온다**", () => {
+    // 9/13 시트에서 이 두 줄의 금액 칸이 비워졌다. 앞 사본의 확정 금액을
+    // 그대로 들고 있으면 이미 정정된 숫자로 합계를 낸다.
+    const 박재우2차 = byTitle("박재우 컨설턴트 50% 2차")!;
+    expect(박재우2차.amount).toBeNull();
+    expect(박재우2차.status).not.toBe("confirmed");
+
+    const 웨어하우스 = byTitle("웨어하우스(해외)")!;
+    expect(웨어하우스.amount).toBeNull();
+    expect(웨어하우스.status).not.toBe("confirmed");
   });
 
   it("대부분이 판정 대기다 — 시트가 그렇게 생겼기 때문이다", () => {
@@ -100,7 +134,7 @@ describe("머리말 요약", () => {
   it("보유현금은 시트 맨 위 「잔고」를 쓴다", () => {
     const cash = SHEET_SEED.settings.find(s => s.key === "cash_on_hand");
     expect(cash?.value).toBe(DAILY_CASH_SUMMARY.cashOnHand);
-    expect(cash?.value).toBe(145_000_000);
+    expect(cash?.value).toBe(110_000_000);
   });
 
   it("시트에서 온 값은 확정으로 보지 않는다 (원칙 8)", () => {
