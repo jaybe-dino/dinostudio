@@ -86,6 +86,7 @@ export async function downloadSlackFile(
   try {
     response = await doFetch(url, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5_000),
     });
   } catch (error) {
     return {

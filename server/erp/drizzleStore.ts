@@ -205,10 +205,9 @@ export class DrizzleLedgerStore implements LedgerStore {
       .set(updatable)
       .where(
         and(eq(erpEntries.code, code), eq(erpEntries.version, expectedVersion))
-      );
-    const affected =
-      (result as unknown as { rowsAffected?: number }).rowsAffected ?? 0;
-    return affected > 0 ? entry : undefined;
+      )
+      .returning({ id: erpEntries.id });
+    return result.length > 0 ? entry : undefined;
   }
 
   async listSnapshots(): Promise<SeedDaySnapshot[]> {

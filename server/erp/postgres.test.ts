@@ -221,3 +221,15 @@ describe("화면에서 누르는 시드 적재 (대표만 · 여러 번 눌러�
     await expect(service.seedDatabase(CFO)).rejects.toThrow(/대표만/);
   }, 60_000);
 });
+
+
+describe("Postgres 원장 수정 결과와 낙관적 잠금", () => {
+  it("실제 저장 성공을 반환하고 오래된 버전은 거절한다", async () => {
+    const original = (await store.listEntries())[0];
+    const updated = { ...original, version: original.version + 1 };
+    expect(await store.replaceEntry(updated, original.version)).toEqual(updated);
+    expect((await store.getEntry(original.code))?.version).toBe(updated.version);
+    expect(await store.replaceEntry({ ...updated, amount: 123 }, original.version)).toBeUndefined();
+    expect((await store.getEntry(original.code))?.amount).toBe(original.amount);
+  });
+});

@@ -451,13 +451,23 @@ export class LedgerService {
     );
     const limit = Math.min(Math.max(input.limit ?? 3, 1), 20);
 
+    type Attachment = {
+      name: string;
+      text?: string | null;
+      reason?: string | null;
+      meta?: SlackFileMeta | null;
+      readAttempts?: number;
+    };
     const intakes = await this.store.listIntakes();
-    const pending = intakes.filter(item => {
-      const parsed = (item.parsed ?? {}) as {
-        files?: { text?: string | null; meta?: unknown }[];
-      };
-      return (parsed.files ?? []).some(file => file.text == null && file.meta);
-    });
+    const unreadFiles = (item: (typeof intakes)[number]) =>
+      ((item.parsed as { files?: Attachment[] } | null)?.files ?? [])
+        .filter(file => file.text == null && file.meta);
+    // Failures must not starve files that have never been tried.
+    const pending = intakes.filter(item => unreadFiles(item).length > 0)
+      .sort((a, b) =>
+        Math.min(...unreadFiles(a).map(f => f.readAttempts ?? 0)) -
+        Math.min(...unreadFiles(b).map(f => f.readAttempts ?? 0)));
+    let remaining = pending.reduce((n, item) => n + unreadFiles(item).length, 0);
 
     let read = 0;
     let failed = 0;
@@ -466,40 +476,33 @@ export class LedgerService {
     for (const intake of pending.slice(0, limit)) {
       if (now() - startedAt > budgetMs) break;
       const parsed = (intake.parsed ?? {}) as Record<string, unknown> & {
-        files?: {
-          name: string;
-          text?: string | null;
-          reason?: string | null;
-          meta?: SlackFileMeta | null;
-        }[];
+        files?: Attachment[];
       };
       const files = parsed.files ?? [];
-      const metas = files
-        .filter(file => file.text == null && file.meta)
-        .map(file => file.meta as SlackFileMeta);
-      if (metas.length === 0) continue;
-
-      const results = await readFiles(metas, {
+      const selected = unreadFiles(intake).sort(
+        (a, b) => (a.readAttempts ?? 0) - (b.readAttempts ?? 0)
+      )[0];
+      if (!selected?.meta) continue;
+      // Persist each file before starting the next expensive model call.
+      const [result] = await readFiles([selected.meta], {
         token: process.env.SLACK_BOT_TOKEN,
       });
-
-      let at = 0;
-      const updated = files.map(file => {
-        if (file.text != null || !file.meta) return file;
-        const result = results[at++];
-        if (!result) return file;
-        if (result.text) read += 1;
-        else failed += 1;
-        rows.push({
-          id: intake.id,
-          name: file.name,
-          ok: Boolean(result.text),
-          note: result.text
-            ? `${result.text.length}자 읽음`
-            : (result.reason ?? "읽지 못함"),
-        });
-        return { ...file, text: result.text, reason: result.reason };
+      if (!result) continue;
+      const ok = Boolean(result.text);
+      if (ok) { read += 1; remaining -= 1; }
+      else failed += 1;
+      rows.push({
+        id: intake.id,
+        name: selected.name,
+        ok,
+        note: ok ? `${result.text!.length}자 읽음` : (result.reason ?? "읽지 못함"),
       });
+      const updated = files.map(file => file === selected ? {
+        ...file,
+        text: ok ? result.text : null,
+        reason: result.reason,
+        readAttempts: (file.readAttempts ?? 0) + 1,
+      } : file);
 
       /*
        * 읽은 내용을 원문 뒤에 이어 붙이고 **다시 파싱한다.**
@@ -549,7 +552,7 @@ export class LedgerService {
       read,
       failed,
       rows,
-      remaining: Math.max(0, pending.length - limit),
+      remaining,
       note:
         pending.length === 0
           ? "읽을 첨부가 없습니다"
@@ -557,8 +560,8 @@ export class LedgerService {
             ? "시간 안에 한 건도 읽지 못했습니다 — 다시 누르십시오"
             : `${read}건 읽었습니다` +
               (failed > 0 ? ` · ${failed}건 실패` : "") +
-              (pending.length > limit
-                ? ` · ${pending.length - limit}건 남음`
+              (remaining > 0
+                ? ` · 미판독 파일 ${remaining}건 남음 (실패 포함)`
                 : ""),
     };
   }

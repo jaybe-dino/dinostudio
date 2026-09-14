@@ -211,6 +211,30 @@ describe("첨부는 따로, 조금씩 읽는다", () => {
     expect(intake.raw).toContain("로그인 페이지");
   });
 
+  it("앞 파일이 실패해도 다음 파일을 읽고 미판독 수를 정확히 유지한다", async () => {
+    const s = await withPending();
+    const intake = (await s.masters(CEO)).intakes[0];
+    const parsed = intake.parsed as { files: { name: string; meta: object }[] };
+    // Add a second unread file to the same intake.
+    const backing = (s as unknown as { store: InMemoryLedgerStore }).store;
+    await backing.upsertIntake({ ...(await backing.listIntakes())[0], parsed: { ...parsed, files: [
+      ...parsed.files,
+      { name: "second.pdf", meta: { name: "second.pdf", mimetype: "application/pdf" } },
+    ] } });
+    const attempted: string[] = [];
+    const deps = { readFiles: async (files: { name?: string }[]) => {
+      attempted.push(files[0].name!);
+      return [{ name: files[0].name!, mimetype: "application/pdf", size: 1,
+        permalink: null, text: files[0].name === "second.pdf" ? "총 100원" : null,
+        reason: "읽기 실패" }];
+    } };
+    expect((await s.readPendingAttachments({}, CEO, deps)).remaining).toBe(2);
+    const next = await s.readPendingAttachments({}, CEO, deps);
+    expect(attempted[1]).toBe("second.pdf");
+    expect(next.read).toBe(1);
+    expect(next.remaining).toBe(1);
+  });
+
   it("읽을 것이 없으면 그렇다고 말한다", async () => {
     const s = new LedgerService(new InMemoryLedgerStore());
     const out = await s.readPendingAttachments({}, CEO);

@@ -161,7 +161,7 @@ export async function readSlackFile(
 }
 
 function defaultClient(): Anthropic | null {
-  return process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
+  return process.env.ANTHROPIC_API_KEY ? new Anthropic({ timeout: 20_000, maxRetries: 0 }) : null;
 }
 
 /**
