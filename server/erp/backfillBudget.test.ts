@@ -218,3 +218,71 @@ describe("첨부는 따로, 조금씩 읽는다", () => {
     expect(out.note).toContain("읽을 첨부가 없습니다");
   });
 });
+
+describe("백필 진행 위치 복구", () => {
+  it("앞쪽 잡담 스레드 때문에 매번 예산을 소진해도 다음 부모로 진행한다", async () => {
+    const s = new LedgerService(new InMemoryLedgerStore());
+    let clock = 0;
+    const visited: string[] = [];
+    const messages = Array.from({ length: 4 }, (_, i) => ({
+      type: "message",
+      ts: `500.${i}`,
+      text: i === 3 ? request(i) : "안녕하세요",
+      reply_count: 1,
+      user: "U1",
+    }));
+    const deps = {
+      now: () => clock,
+      listChannels: async () => ({ channels: [{ id: "C1", name: "지출" }] }),
+      fetchPage: async () => ({ messages, nextCursor: null }),
+      fetchThread: async ({ ts }: { ts: string }) => {
+        visited.push(ts);
+        clock += 1100;
+        return { messages: [] };
+      },
+    };
+    let cursors: Record<string, string> | undefined;
+    let result;
+    for (let i = 0; i < 4; i += 1) {
+      result = await s.backfillSlackHistory(
+        { days: 365, budgetMs: 1000, cursors },
+        CEO,
+        deps
+      );
+      cursors = result.cursors;
+    }
+    expect(visited).toEqual(messages.map(message => message.ts));
+    expect(result?.remaining).toBe(false);
+    expect((await s.masters(CEO)).intakes).toHaveLength(1);
+  });
+
+  it("답글의 429는 부모를 완료 처리하지 않고 정확히 재시도한다", async () => {
+    const s = new LedgerService(new InMemoryLedgerStore());
+    let limited = true;
+    const deps = {
+      listChannels: async () => ({ channels: [{ id: "C1", name: "지출" }] }),
+      fetchPage: async () => ({
+        messages: [
+          { type: "message", ts: "400.1", text: "지출결의서", reply_count: 1 },
+        ],
+        nextCursor: null,
+      }),
+      fetchThread: async () =>
+        limited
+          ? { error: "ratelimited", retryAfterSec: 60 }
+          : { messages: [{ ts: "400.2", text: "확인할 항목" }] },
+    };
+    const first = await s.backfillSlackHistory({}, CEO, deps);
+    expect(first.stopped).toBe("ratelimited");
+    expect(first.retryAfterSec).toBe(60);
+    expect((await s.masters(CEO)).intakes).toHaveLength(0);
+    limited = false;
+    const second = await s.backfillSlackHistory(
+      { cursors: first.cursors },
+      CEO,
+      deps
+    );
+    expect(second.remaining).toBe(false);
+    expect((await s.masters(CEO)).intakes[0].raw).toContain("확인할 항목");
+  });
+});

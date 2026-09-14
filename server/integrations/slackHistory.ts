@@ -91,6 +91,7 @@ async function slackGet(
   try {
     response = await fetch(`https://slack.com/api/${method}?${query}`, {
       headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5_000),
     });
   } catch (error) {
     return {
@@ -169,6 +170,7 @@ export async function fetchHistoryPage(
     token: string;
     channel: string;
     oldest: string;
+    latest?: string;
     cursor?: string | null;
     limit?: number;
   },
@@ -184,6 +186,7 @@ export async function fetchHistoryPage(
     inclusive: "false",
   };
   if (args.cursor) params.cursor = args.cursor;
+  if (args.latest) params.latest = args.latest;
 
   const result = await fetchPage("conversations.history", params, args.token);
   if (!result.ok) return result;

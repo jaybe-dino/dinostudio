@@ -2,7 +2,7 @@
  * 수집 검수함 — 원장 진입 전 대기열. 파싱 실패도 여기 남는다 (§11.1).
  * 승인은 슬랙에서 하지 않는다. 슬랙의 👍는 참고 이력이고 승인은 시스템 안에서만 이뤄진다.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, Note, Tile } from "../components/Bits";
 import { Reauth } from "../components/Reauth";
@@ -48,6 +48,30 @@ interface BackfillLine {
   dormant: boolean;
 }
 
+const BACKFILL_KEY = "dinostudio.slack-backfill.v1";
+function savedBackfill(): {
+  days: number;
+  cursors: Record<string, string> | null;
+} {
+  try {
+    const value = JSON.parse(localStorage.getItem(BACKFILL_KEY) ?? "null");
+    if (
+      value &&
+      Number.isInteger(value.days) &&
+      value.days >= 1 &&
+      value.days <= 365 &&
+      value.cursors &&
+      typeof value.cursors === "object" &&
+      !Array.isArray(value.cursors) &&
+      Object.values(value.cursors).every(cursor => typeof cursor === "string")
+    )
+      return value;
+  } catch {
+    /* Storage may be unavailable in private browsing. */
+  }
+  return { days: 365, cursors: null };
+}
+
 export function IntakeScreen() {
   const { goto, openEntry } = useErpUi();
   const utils = trpc.useUtils();
@@ -61,8 +85,23 @@ export function IntakeScreen() {
    * 기본값이 365일인 이유 — 지출 채널의 마지막 글이 2025-10 이다.
    * 30일로 두면 0건이 나오고, 그것은 「고장」처럼 보인다.
    */
-  const [days, setDays] = useState(365);
-  const [cursors, setCursors] = useState<Record<string, string> | null>(null);
+  const [saved] = useState(savedBackfill);
+  const [days, setDays] = useState(saved.days);
+  const [cursors, setCursors] = useState<Record<string, string> | null>(
+    saved.cursors
+  );
+  const [autoBackfill, setAutoBackfill] = useState(false);
+  const [resumeAt, setResumeAt] = useState(0);
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    try {
+      if (cursors)
+        localStorage.setItem(BACKFILL_KEY, JSON.stringify({ days, cursors }));
+      else localStorage.removeItem(BACKFILL_KEY);
+    } catch {
+      /* The server still de-duplicates collected messages. */
+    }
+  }, [days, cursors]);
   const [backfillNote, setBackfillNote] = useState<string | null>(null);
   const [backfillLines, setBackfillLines] = useState<BackfillLine[] | null>(
     null
@@ -125,7 +164,23 @@ export function IntakeScreen() {
 
   const backfill = trpc.erp.intake.backfillSlack.useMutation({
     onSuccess: async result => {
-      setBackfillLines(result.channels);
+      setBackfillLines(previous => {
+        const merged = new Map(
+          (previous ?? []).map(line => [line.channel, line])
+        );
+        for (const line of result.channels) merged.set(line.channel, line);
+        return Array.from(merged.values());
+      });
+      setResumeAt(
+        Date.now() + Math.max(result.retryAfterSec ?? 2, 2) * 1000 + 1000
+      );
+      if (
+        !result.remaining ||
+        result.stopped === "error" ||
+        (result.stopped !== "ratelimited" &&
+          result.channels.some(line => line.error))
+      )
+        setAutoBackfill(false);
       setCursors(result.remaining ? result.cursors : null);
       setBackfillNote(
         `${result.from} 이후를 훑었습니다 — 검수함에 ${result.totals.collected}건 추가` +
@@ -143,7 +198,7 @@ export function IntakeScreen() {
       await refresh();
     },
     onError: error => {
-      setBackfillLines(null);
+      setAutoBackfill(false);
       /*
        * `Failed to fetch` 는 서버가 준 말이 아니라 **브라우저가 연결을 잃었을
        * 때** 나오는 말이다. 그대로 보여 주면 무엇이 잘못됐는지 알 길이 없다.
@@ -161,6 +216,17 @@ export function IntakeScreen() {
       );
     },
   });
+
+  useEffect(() => {
+    if (!autoBackfill) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [autoBackfill]);
+  useEffect(() => {
+    if (autoBackfill && cursors && !backfill.isPending && clock >= resumeAt) {
+      backfill.mutate({ days, cursors });
+    }
+  }, [autoBackfill, cursors, backfill.isPending, clock, resumeAt, days]);
 
   /*
    * 첨부 읽기 — 백필과 따로 둔 이유.
@@ -290,7 +356,8 @@ export function IntakeScreen() {
           잡으면 0건이 나옵니다. 한 번에 다 못 가져오는 것이 정상입니다 — 버튼이{" "}
           <b>「이어서 가져오기」</b>로 바뀌면 그게 안 뜰 때까지 계속 누르시면
           멈춘 자리에서 이어집니다. 여러 번 눌러도 같은 건이 두 번 들어가지
-          않습니다.
+          않습니다. 자동 수집은 슬랙의 대기 시간을 지켜 이어갑니다. 창을 닫아도
+          진행 위치는 이 브라우저에 남으며, 다시 열어 이어갈 수 있습니다.
         </Note>
         <div
           style={{
@@ -310,8 +377,10 @@ export function IntakeScreen() {
             onChange={event => {
               setDays(Number(event.target.value));
               setCursors(null);
+              setBackfillLines(null);
+              setBackfillNote(null);
             }}
-            disabled={backfill.isPending}
+            disabled={backfill.isPending || autoBackfill}
           >
             <option value={7}>7일</option>
             <option value={30}>30일 (한 달)</option>
@@ -323,7 +392,9 @@ export function IntakeScreen() {
           <button
             type="button"
             className="btn pri"
-            disabled={backfill.isPending || me.data?.role !== "대표"}
+            disabled={
+              backfill.isPending || autoBackfill || me.data?.role !== "대표"
+            }
             onClick={() =>
               backfill.mutate({ days, cursors: cursors ?? undefined })
             }
@@ -334,11 +405,37 @@ export function IntakeScreen() {
                 ? "이어서 가져오기"
                 : "가져오기"}
           </button>
+          <button
+            type="button"
+            className="btn"
+            disabled={
+              me.data?.role !== "대표" || (!autoBackfill && backfill.isPending)
+            }
+            onClick={() => {
+              if (autoBackfill) {
+                setAutoBackfill(false);
+                return;
+              }
+              setAutoBackfill(true);
+              setResumeAt(Date.now() + 3000);
+              backfill.mutate({ days, cursors: cursors ?? undefined });
+            }}
+          >
+            {autoBackfill ? "자동 수집 일시정지" : "끝까지 자동으로 가져오기"}
+          </button>
+          {autoBackfill ? (
+            <span className="s">
+              {backfill.isPending
+                ? "수집 중"
+                : `${Math.max(0, Math.ceil((resumeAt - clock) / 1000))}초 후 계속`}{" "}
+              · 이 화면을 열어 두십시오
+            </span>
+          ) : null}
           {cursors ? (
             <button
               type="button"
               className="btn"
-              disabled={backfill.isPending}
+              disabled={backfill.isPending || autoBackfill}
               onClick={() => {
                 setCursors(null);
                 setBackfillNote(null);

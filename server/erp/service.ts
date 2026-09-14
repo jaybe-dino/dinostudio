@@ -136,6 +136,10 @@ import type {
   Role,
 } from "../../shared/erp/index.js";
 import { randomUUID } from "node:crypto";
+import {
+  decodeBackfillCursor,
+  encodeBackfillCursor,
+} from "../integrations/slackBackfillCursor.js";
 import { aiParseExpense } from "../integrations/aiParser.js";
 import { readSlackFiles } from "../integrations/documentReader.js";
 import type { SlackFileMeta } from "../integrations/slackFiles.js";
@@ -145,6 +149,7 @@ import {
   slackConfigured,
 } from "../integrations/slack.js";
 import {
+  type SlackHistoryMessage,
   fetchHistoryPage,
   fetchThreadReplies,
   isCollectableMessage,
@@ -2392,11 +2397,14 @@ export class LedgerService {
           stopped = "budget";
           break;
         }
+        const position = decodeBackfillCursor(line.cursor);
+        const latest = position.latest ?? String(startedAt / 1000);
         const page = await fetchPage({
           token,
           channel,
           oldest: String(oldestSec),
-          cursor: line.cursor,
+          cursor: position.page,
+          latest,
           limit: 200,
         });
         if ("error" in page) {
@@ -2416,116 +2424,126 @@ export class LedgerService {
          * 답글 안에** 있다. 부모만 가져오면 무엇을 결재했는지가 통째로 빠진다.
          * 답글을 부모 바로 뒤에 끼워 같은 흐름으로 처리한다.
          */
-        const expanded: typeof page.messages = [];
-        for (const message of page.messages) {
+        for (
+          let index = position.index;
+          index < page.messages.length;
+          index += 1
+        ) {
+          // Save the exact parent before doing any work. A retry must not replay
+          // all earlier threads (including ignored chatter) on this page.
+          line.cursor = encodeBackfillCursor({
+            page: position.page,
+            index,
+            latest,
+          });
+          if (now() - startedAt > budgetMs) {
+            stopped = "budget";
+            break;
+          }
+          const message = page.messages[index];
+          const expanded: SlackHistoryMessage[] = [];
           const hasThread = Boolean(
             message.ts && message.reply_count && message.reply_count > 0
           );
           if (!hasThread) {
             expanded.push(message);
-            continue;
-          }
-
-          const thread = await fetchThread({
-            token,
-            channel,
-            ts: message.ts as string,
-          });
-          if ("error" in thread) {
-            // 스레드 하나를 못 읽었다고 채널 전체를 멈추지 않는다
-            line.error = line.error ?? slackErrorMessage(thread);
-            expanded.push(message);
-            continue;
-          }
-
-          /*
-           * 결의서는 **스레드 하나가 곧 한 건**이다. 부모는 「@대표 지출결의서」
-           * 한 줄이고 항목은 답글에, 승인도 답글에 있다. 따로 떼면 답글에는
-           * 아무 표시가 없어 잡담으로 버려지고, 부모에는 내용이 없다.
-           * 그래서 **하나로 합쳐** 부모 ts 로 수집한다.
-           *
-           * 그 밖의 글은 예전대로 따로 둔다 — 지출 요청에 달린 「확인했습니다」
-           * 같은 답글까지 본문에 섞으면 파싱이 흐려진다.
-           */
-          if (classifyNote(message.text ?? "")) {
-            const body = [
-              message.text ?? "",
-              ...thread.messages.map(reply => reply.text ?? ""),
-            ]
-              .filter(Boolean)
-              .join("\n");
-            expanded.push({
-              ...message,
-              text: body,
-              files: [
-                ...(message.files ?? []),
-                ...thread.messages.flatMap(reply => reply.files ?? []),
-              ],
-            });
-            continue;
-          }
-
-          expanded.push(message, ...thread.messages);
-        }
-
-        for (const message of expanded) {
-          /*
-           * **메시지마다** 예산을 본다.
-           *
-           * 예전에는 페이지 사이에서만 봤다. 그런데 한 페이지 안에서 스레드
-           * 조회와 수집이 메시지 수만큼 일어나므로, 한 번의 반복이 몇 분까지
-           * 늘어날 수 있었다. 그것이 `Failed to fetch` 의 정체다.
-           */
-          if (now() - startedAt > budgetMs) {
-            stopped = "budget";
-            break;
-          }
-          if (!isCollectableMessage(message)) continue;
-          line.scanned += 1;
-          // conversations.history 는 최신부터 준다 — 첫 건이 곧 마지막 글이다
-          if (line.lastMessageTs === null)
-            line.lastMessageTs = message.ts ?? null;
-          const ts = message.ts as string;
-          if (seen.has(ts)) {
-            line.duplicate += 1;
-            continue;
-          }
-          /*
-           * 잡담은 검수함에 넣지 않는다 — 실시간 경로와 **같은 판정**이어야 한다.
-           *
-           * 여기서 지출 요청만 통과시키면 지출결의서·계약서 서명요청이
-           * `collectSlackMessage()` 에 닿기도 전에 버려진다. 같은 규칙을 두
-           * 군데 적으면 이렇게 어긋난다.
-           */
-          const text = message.text as string;
-          if (!looksLikeExpenseRequest(text) && !classifyNote(text)) {
-            line.ignored += 1;
-            continue;
-          }
-          const result = await this.collectSlackMessage(
-            {
+          } else {
+            const thread = await fetchThread({
+              token,
               channel,
-              ts,
-              text: message.text as string,
-              user: message.user ?? message.bot_id ?? null,
-              files: message.files,
-            },
-            actor,
-            {
-              // 중복은 위의 seen 으로 이미 걸렀다 — 메시지마다 질의하지 않는다
-              skipDuplicateCheck: true,
-              // 첨부 내용은 여기서 읽지 않는다. 읽으면 함수가 시간 초과로 죽는다
-              readAttachments: false,
+              ts: message.ts as string,
+            });
+            if ("error" in thread) {
+              line.error = slackErrorMessage(thread);
+              if (thread.error !== "thread_not_found") {
+                stopped =
+                  thread.error === "ratelimited" ? "ratelimited" : "error";
+                retryAfterSec =
+                  thread.retryAfterSec ??
+                  (stopped === "ratelimited" ? 60 : null);
+                break;
+              }
+              // A deleted thread cannot be recovered, but its parent can be kept.
+              expanded.push(message);
+            } else {
+              /*
+               * 결의서는 **스레드 하나가 곧 한 건**이다. 부모는 「@대표 지출결의서」
+               * 한 줄이고 항목은 답글에, 승인도 답글에 있다. 따로 떼면 답글에는
+               * 아무 표시가 없어 잡담으로 버려지고, 부모에는 내용이 없다.
+               * 그래서 **하나로 합쳐** 부모 ts 로 수집한다.
+               *
+               * 그 밖의 글은 예전대로 따로 둔다 — 지출 요청에 달린 「확인했습니다」
+               * 같은 답글까지 본문에 섞으면 파싱이 흐려진다.
+               */
+              if (classifyNote(message.text ?? "")) {
+                const body = [
+                  message.text ?? "",
+                  ...thread.messages.map(reply => reply.text ?? ""),
+                ]
+                  .filter(Boolean)
+                  .join("\n");
+                expanded.push({
+                  ...message,
+                  text: body,
+                  files: [
+                    ...(message.files ?? []),
+                    ...thread.messages.flatMap(reply => reply.files ?? []),
+                  ],
+                });
+              } else {
+                expanded.push(message, ...thread.messages);
+              }
             }
-          );
-          seen.add(ts);
-          if (result.status === "duplicate") line.duplicate += 1;
-          else if (result.status === "ignored") line.ignored += 1;
-          else if (result.status === "failed") line.failed += 1;
-          else line.collected += 1;
-        }
+          }
 
-        if (stopped === "budget") break;
+          for (const message of expanded) {
+            // Finish one parent/thread as a unit before advancing its checkpoint.
+            if (!isCollectableMessage(message)) continue;
+            line.scanned += 1;
+            // conversations.history 는 최신부터 준다 — 첫 건이 곧 마지막 글이다
+            if (line.lastMessageTs === null)
+              line.lastMessageTs = message.ts ?? null;
+            const ts = message.ts as string;
+            if (seen.has(ts)) {
+              line.duplicate += 1;
+              continue;
+            }
+            /*
+             * 잡담은 검수함에 넣지 않는다 — 실시간 경로와 **같은 판정**이어야 한다.
+             *
+             * 여기서 지출 요청만 통과시키면 지출결의서·계약서 서명요청이
+             * `collectSlackMessage()` 에 닿기도 전에 버려진다. 같은 규칙을 두
+             * 군데 적으면 이렇게 어긋난다.
+             */
+            const text = message.text as string;
+            if (!looksLikeExpenseRequest(text) && !classifyNote(text)) {
+              line.ignored += 1;
+              continue;
+            }
+            const result = await this.collectSlackMessage(
+              {
+                channel,
+                ts,
+                text: message.text as string,
+                user: message.user ?? message.bot_id ?? null,
+                files: message.files,
+              },
+              actor,
+              {
+                // 중복은 위의 seen 으로 이미 걸렀다 — 메시지마다 질의하지 않는다
+                skipDuplicateCheck: true,
+                // 첨부 내용은 여기서 읽지 않는다. 읽으면 함수가 시간 초과로 죽는다
+                readAttachments: false,
+              }
+            );
+            seen.add(ts);
+            if (result.status === "duplicate") line.duplicate += 1;
+            else if (result.status === "ignored") line.ignored += 1;
+            else if (result.status === "failed") line.failed += 1;
+            else line.collected += 1;
+          }
+        }
+        if (stopped) break;
 
         line.cursor = page.nextCursor;
         if (!page.nextCursor) {
@@ -2569,8 +2587,7 @@ export class LedgerService {
      * 속도 제한으로 멈춘 채널은 error 가 붙지만 끝난 것이 아니다 — 그것을
      * 끝난 것으로 세면 화면이 「모두 훑었습니다」라고 거짓말을 한다.
      */
-    const remaining =
-      stopped !== null || report.some(line => !line.done && !line.error);
+    const remaining = stopped !== null || report.some(line => !line.done);
     const cursors: Record<string, string> = {};
     for (const line of report) {
       if (!line.done) cursors[line.channel] = line.cursor ?? "";
