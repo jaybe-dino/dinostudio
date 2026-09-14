@@ -29,6 +29,28 @@ export interface CashflowBlock {
   inSum: number;
   outSum: number;
   close: number | null;
+  /**
+   * **시트(일계)에 적혀 있는 종료 잔액** — 계산값이 아니라 기록이다.
+   *
+   * 계산 종료 잔액(`close`)은 판정 대기가 하나라도 있으면 null 이 된다
+   * (원칙 8 — 모르면 계산하지 않는다). 그런데 이 회사의 현금흐름 시트에는
+   * **그 날 실제 잔액이 사람 손으로 적혀** 있고, 대표님은 매일 그 숫자를
+   * 보신다. 계산이 안 된다는 이유로 그 기록까지 감추면 화면이 시트보다
+   * 못해진다.
+   *
+   * 그래서 둘을 **따로** 들고 간다. 지어내지도 않고, 적힌 것을 버리지도
+   * 않는다. 어느 쪽인지는 화면이 이름으로 구분해 준다.
+   */
+  recordedClose: number | null;
+  /** 그 기록이 **어느 날짜의 것인지** — 월·연 블록은 기간 안 마지막 기록일 */
+  recordedAsOf: string | null;
+  /**
+   * 계산값 − 기록값. 둘 다 있을 때만 나온다.
+   *
+   * 0 이 아니면 **원장에 아직 안 들어온 돈이 그만큼 있다는 뜻**이다.
+   * 숨기지 않는다 — 이 차이가 곧 남은 일의 크기다.
+   */
+  closeGap: number | null;
   /** §10.2 ① — null이면 왜 null인지가 함께 온다 */
   nullReason: string | null;
   undecided: UndecidedRef[];
@@ -125,6 +147,8 @@ export function buildDailyBlocks(
       close = open + inSum - outSum;
     }
 
+    const recordedClose = snap?.close ?? null;
+
     blocks.push({
       unit: "day",
       key: date,
@@ -132,6 +156,10 @@ export function buildDailyBlocks(
       inSum,
       outSum,
       close,
+      recordedClose,
+      recordedAsOf: recordedClose == null ? null : date,
+      closeGap:
+        close != null && recordedClose != null ? close - recordedClose : null,
       nullReason:
         open == null || close == null
           ? (nullReason ?? UNDECIDED_CARRYOVER)
@@ -174,6 +202,17 @@ export function foldBlocks(
       const firstDay = days[0];
       const lastDay = days[days.length - 1];
       const undecided = days.flatMap(d => d.undecided);
+      /*
+       * 기록 잔액은 **기간 안에서 마지막으로 적힌 날**의 것을 쓴다.
+       *
+       * 마지막 날의 것을 그냥 쓰면 안 된다 — 시트의 마지막 날은 아직 종료
+       * 잔액이 안 적혀 있을 수 있다 (9/22 가 그렇다). 그때 null 을 내보내면
+       * 바로 전날 적혀 있는 잔액까지 함께 사라진다. 대신 며칠 자 기록인지를
+       * `recordedAsOf` 로 함께 보낸다 — 화면이 「9/21 기준」이라고 말할 수
+       * 있어야 한다.
+       */
+      const recorded = [...days].reverse().find(d => d.recordedClose != null);
+      const recordedClose = recorded?.recordedClose ?? null;
       return {
         unit,
         key,
@@ -181,6 +220,12 @@ export function foldBlocks(
         inSum: days.reduce((acc, d) => acc + d.inSum, 0),
         outSum: days.reduce((acc, d) => acc + d.outSum, 0),
         close: lastDay.close,
+        recordedClose,
+        recordedAsOf: recorded?.recordedAsOf ?? null,
+        closeGap:
+          lastDay.close != null && recordedClose != null
+            ? lastDay.close - recordedClose
+            : null,
         nullReason:
           lastDay.close == null
             ? (lastDay.nullReason ?? UNDECIDED_CARRYOVER)
@@ -245,6 +290,8 @@ export interface CashflowGap {
   days: number;
   /** 그 구간 내내 유지된 잔액. 앞 블록의 종료 잔액이 null 이면 null */
   balance: number | null;
+  /** 계산이 안 될 때 대신 보여 줄 **시트에 적힌** 잔액 */
+  recordedBalance: number | null;
 }
 
 function shiftDay(date: string, days: number): string {
@@ -275,6 +322,7 @@ export function cashflowGap(
     to: shiftDay(next.key, -1),
     days,
     balance: previous.close,
+    recordedBalance: previous.recordedClose,
   };
 }
 
@@ -312,6 +360,15 @@ export function anchorToday(
       inSum: 0,
       outSum: 0,
       close: previous?.close ?? null,
+      /*
+       * 움직임이 없는 날이므로 기록 잔액도 직전 날 것을 그대로 이어받는다.
+       * 「오늘 얼마 있나」에 답하려고 만든 줄인데 여기만 비어 있으면 그 줄이
+       * 아무것도 안 알려 준다. 언제 적힌 잔액인지(`recordedAsOf`)도 직전
+       * 날짜 그대로 들고 온다 — 오늘 자로 둔갑시키지 않는다.
+       */
+      recordedClose: previous?.recordedClose ?? null,
+      recordedAsOf: previous?.recordedAsOf ?? null,
+      closeGap: null,
       nullReason:
         previous?.close == null ? (previous?.nullReason ?? null) : null,
       undecided: [],
