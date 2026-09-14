@@ -238,6 +238,22 @@ describe("첨부는 따로, 조금씩 읽는다", () => {
     expect(next.unattempted).toBe(0);
   });
 
+  it("동일 Slack 파일을 다른 메시지에서 다시 읽을 때 기존 판독을 재사용한다", async () => {
+    const s = await withPending();
+    const backing = (s as unknown as { store: InMemoryLedgerStore }).store;
+    const original = (await backing.listIntakes())[0];
+    await s.readPendingAttachments({}, CEO, { readFiles: async () => [{
+      name: "contract.pdf", mimetype: "application/pdf", size: 1, permalink: null,
+      text: "금액: 총 100원", reason: null,
+    }] });
+    await backing.upsertIntake({ ...original, id: "second-intake", sourceRef: "601.1" });
+    const result = await s.readPendingAttachments({}, CEO, { readFiles: async () => {
+      throw new Error("동일 파일을 다시 내려받으면 안 됨");
+    } });
+    expect(result.read).toBe(1);
+    expect(result.remaining).toBe(0);
+  });
+
   it("읽을 것이 없으면 그렇다고 말한다", async () => {
     const s = new LedgerService(new InMemoryLedgerStore());
     const out = await s.readPendingAttachments({}, CEO);

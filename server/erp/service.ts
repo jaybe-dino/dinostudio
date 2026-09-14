@@ -463,6 +463,14 @@ export class LedgerService {
       ((item.parsed as { files?: Attachment[] } | null)?.files ?? [])
         .filter(file => file.text == null && file.meta);
     // Failures must not starve files that have never been tried.
+    const fileKey = (file: Attachment) => file.meta?.id ?? file.meta?.url_private_download ?? file.meta?.url_private;
+    const knownText = new Map<string, string>();
+    for (const item of intakes) {
+      for (const file of (item.parsed as { files?: Attachment[] } | null)?.files ?? []) {
+        const key = fileKey(file);
+        if (key && file.text) knownText.set(key, file.text);
+      }
+    }
     const pending = intakes.filter(item => unreadFiles(item).length > 0)
       .sort((a, b) =>
         Math.min(...unreadFiles(a).map(f => f.readAttempts ?? 0)) -
@@ -485,13 +493,18 @@ export class LedgerService {
       )[0];
       if (!selected?.meta) continue;
       // Persist each file before starting the next expensive model call.
-      const [result] = await readFiles([selected.meta], {
+      const key = fileKey(selected);
+      const cached = key ? knownText.get(key) : undefined;
+      const result = cached ? { text: cached, reason: null } : (await readFiles([selected.meta], {
         token: process.env.SLACK_BOT_TOKEN,
-      });
+      }))[0];
       if (!result) continue;
       const ok = Boolean(result.text);
       if (!selected.readAttempts) unattempted -= 1;
-      if (ok) { read += 1; remaining -= 1; }
+      if (ok) {
+        read += 1; remaining -= 1;
+        if (key) knownText.set(key, result.text!);
+      }
       else failed += 1;
       rows.push({
         id: intake.id,
