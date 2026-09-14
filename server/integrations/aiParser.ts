@@ -71,8 +71,10 @@ const EXTRACT_TOOL: Anthropic.Beta.BetaTool = {
       },
       roundNo: { type: ["integer", "null"], description: "회차" },
       buCode: {
-        type: ["string", "null"],
-        enum: ["IP", "NET", "COM", "GLV", "CMN", null],
+        anyOf: [
+          { type: "string", enum: ["IP", "NET", "COM", "GLV", "CMN"] },
+          { type: "null" },
+        ],
         description: "사업부",
       },
       linkedRevenueCode: {
