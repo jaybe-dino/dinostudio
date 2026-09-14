@@ -228,11 +228,14 @@ describe("첨부는 따로, 조금씩 읽는다", () => {
         permalink: null, text: files[0].name === "second.pdf" ? "총 100원" : null,
         reason: "읽기 실패" }];
     } };
-    expect((await s.readPendingAttachments({}, CEO, deps)).remaining).toBe(2);
+    const first = await s.readPendingAttachments({}, CEO, deps);
+    expect(first.remaining).toBe(2);
+    expect(first.unattempted).toBe(1);
     const next = await s.readPendingAttachments({}, CEO, deps);
     expect(attempted[1]).toBe("second.pdf");
     expect(next.read).toBe(1);
     expect(next.remaining).toBe(1);
+    expect(next.unattempted).toBe(0);
   });
 
   it("읽을 것이 없으면 그렇다고 말한다", async () => {

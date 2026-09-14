@@ -236,18 +236,27 @@ export function IntakeScreen() {
    * 여기서 몇 건씩 읽는다.
    */
   const [attachNote, setAttachNote] = useState<string | null>(null);
+  const [autoAttachments, setAutoAttachments] = useState(false);
   const readAttachments = trpc.erp.intake.readAttachments.useMutation({
     onSuccess: async result => {
       setAttachNote(result.note);
+      if (result.unattempted === 0 || result.read + result.failed === 0) setAutoAttachments(false);
       await refresh();
     },
-    onError: error =>
+    onError: error => {
+      setAutoAttachments(false);
       setAttachNote(
         error.message.includes("Failed to fetch")
           ? "서버가 시간 안에 끝내지 못했습니다 — 다시 누르면 이어서 읽습니다."
           : error.message
-      ),
+      );
+    },
   });
+  useEffect(() => {
+    if (!autoAttachments || readAttachments.isPending) return;
+    const timer = window.setTimeout(() => readAttachments.mutate({ limit: 3 }), 1000);
+    return () => window.clearTimeout(timer);
+  }, [autoAttachments, readAttachments.isPending]);
 
   return (
     <>
@@ -516,6 +525,11 @@ export function IntakeScreen() {
         >
           {readAttachments.isPending ? "읽는 중…" : "첨부 읽기"}
         </button>
+        <button type="button" className="btn" style={{ marginLeft: 8 }}
+          onClick={() => setAutoAttachments(value => !value)}>
+          {autoAttachments ? "첨부 자동 읽기 일시정지" : "남은 첨부 자동으로 읽기"}
+        </button>
+        <p className="s">자동 읽기는 이 화면을 열어 둔 동안 진행됩니다. 모든 미시도 파일을 한 번씩 처리한 뒤 멈추며, 실패 파일은 원인과 함께 남습니다.</p>
         {attachNote ? (
           <div style={{ marginTop: 10 }}>
             <Note>{attachNote}</Note>

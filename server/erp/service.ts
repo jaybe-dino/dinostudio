@@ -468,6 +468,7 @@ export class LedgerService {
         Math.min(...unreadFiles(a).map(f => f.readAttempts ?? 0)) -
         Math.min(...unreadFiles(b).map(f => f.readAttempts ?? 0)));
     let remaining = pending.reduce((n, item) => n + unreadFiles(item).length, 0);
+    let unattempted = pending.reduce((n, item) => n + unreadFiles(item).filter(f => !f.readAttempts).length, 0);
 
     let read = 0;
     let failed = 0;
@@ -489,6 +490,7 @@ export class LedgerService {
       });
       if (!result) continue;
       const ok = Boolean(result.text);
+      if (!selected.readAttempts) unattempted -= 1;
       if (ok) { read += 1; remaining -= 1; }
       else failed += 1;
       rows.push({
@@ -553,6 +555,7 @@ export class LedgerService {
       failed,
       rows,
       remaining,
+      unattempted,
       note:
         pending.length === 0
           ? "읽을 첨부가 없습니다"
