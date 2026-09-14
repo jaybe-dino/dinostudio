@@ -4,7 +4,7 @@
  * 삭제는 없다 — 취소 전표(-C) 상계만 안내한다 (원칙 9).
  */
 import { PRIORITIES, accountLabel, type Priority } from "@shared/erp";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { shortDate } from "../format";
 import { Money, PriorityChip, StatusChip } from "./Bits";
@@ -19,6 +19,15 @@ export function EntryDrawer({
 }) {
   const utils = trpc.useUtils();
   const detail = trpc.erp.entries.get.useQuery({ code });
+  const me = trpc.erp.me.useQuery();
+  const [amountText, setAmountText] = useState("");
+  const [amountReason, setAmountReason] = useState("");
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+  useEffect(() => {
+    setAmountText("");
+    setAmountReason("");
+    setSavedNote(null);
+  }, [code]);
   const [reason, setReason] = useState("");
   const [priority, setPriority] = useState<Priority | "">("");
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +65,20 @@ export function EntryDrawer({
     onError: fail,
   });
 
+  const patch = trpc.erp.entries.patch.useMutation({
+    onSuccess: async () => {
+      await refresh();
+      setAmountText("");
+      setAmountReason("");
+      setSavedNote(
+        "금액을 저장했습니다. 승인 대기 상태에서 증빙과 계정과목을 확인하십시오."
+      );
+    },
+    onError: fail,
+  });
+
   const busy =
+    patch.isPending ||
     approve.isPending ||
     reject.isPending ||
     hold.isPending ||
@@ -160,6 +182,74 @@ export function EntryDrawer({
                 <dt>버전</dt>
                 <dd>v{entry.version}</dd>
               </dl>
+
+              {!entry.masked &&
+              ["대표", "재무"].includes(me.data?.role ?? "") &&
+              (entry.status === "undecided" || entry.status === "pending") ? (
+                <form
+                  onSubmit={event => {
+                    event.preventDefault();
+                    const cleaned = amountText.replace(/,/g, "").trim();
+                    const amount = Number(cleaned);
+                    if (
+                      !/^\d+$/.test(cleaned) ||
+                      !Number.isSafeInteger(amount) ||
+                      amount <= 0
+                    ) {
+                      setError("원 단위의 0보다 큰 정수를 입력하십시오.");
+                      return;
+                    }
+                    if (!amountReason.trim()) {
+                      setError("금액을 확인한 근거를 입력하십시오.");
+                      return;
+                    }
+                    patch.mutate({
+                      code,
+                      version: entry.version,
+                      patch: { amount },
+                      reason: amountReason.trim(),
+                    });
+                  }}
+                >
+                  <h4>금액 보완</h4>
+                  <p className="s">
+                    원문·증빙에서 확인한 원 단위 금액을 입력합니다. 저장 후에도
+                    승인은 별도로 필요합니다.
+                  </p>
+                  <label className="field">
+                    <span>확인한 금액 (원)</span>
+                    <input
+                      inputMode="numeric"
+                      value={amountText}
+                      onChange={e => setAmountText(e.target.value)}
+                      disabled={busy}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>금액 확인 근거</span>
+                    <textarea
+                      rows={2}
+                      value={amountReason}
+                      onChange={e => setAmountReason(e.target.value)}
+                      disabled={busy}
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="btn pri"
+                    disabled={
+                      busy || !amountText.trim() || !amountReason.trim()
+                    }
+                  >
+                    금액 저장
+                  </button>
+                  {savedNote ? (
+                    <p role="status" className="note">
+                      {savedNote}
+                    </p>
+                  ) : null}
+                </form>
+              ) : null}
 
               {detail.data!.duplicates.length > 0 ? (
                 <p className="note">
