@@ -10,6 +10,8 @@ import { Card, Money, Note, Tile, chipClass } from "../components/Bits";
 import { Reauth } from "../components/Reauth";
 import { useErpUi } from "../context";
 import { shortDate, won } from "../format";
+import { SHEET_SEED } from "@shared/erp";
+import { DAILY_CASH_SUMMARY } from "@shared/erp/data/dailyCash";
 
 export function SheetImportScreen() {
   const { goto } = useErpUi();
@@ -25,6 +27,12 @@ export function SheetImportScreen() {
    * 담당한다. 나머지 셋(대표만 · 재인증 · 마감 없음)은 서버가 본다.
    */
   const REBUILD_CONFIRM = "기존 원장을 모두 지우고 다시 만든다";
+  /*
+   * 붙여 넣은 것이 없으면 `text` 를 **보내지 않는다**. 빈 문자열을 보내면
+   * 서버는 「읽은 줄이 없다」로 거절한다 — 사본으로 깔라는 뜻이 전달되지 않는다.
+   */
+  const rebuildInput = () =>
+    text.trim() ? { text: text.trim() } : ({} as { text?: string });
   const [confirm, setConfirm] = useState("");
   const [rebuildNote, setRebuildNote] = useState<string | null>(null);
   const [rebuildReauth, setRebuildReauth] = useState(false);
@@ -93,10 +101,17 @@ export function SheetImportScreen() {
         meta="대표만 · 되돌릴 수 없음"
       >
         <Note tone="alert">
-          <b>기존 원장·전표·일계·검수함을 모두 비우고</b> 위에 붙여 넣은
-          「데일리 현금흐름」 시트로 다시 만듭니다. 하루가 블록으로 놓인 그
-          시트를 그대로 붙여 넣으면 됩니다 — 운영경비·실비/환불·기타는 지출로,
+          <b>기존 원장·전표·일계·검수함을 모두 비우고</b> 「데일리 현금흐름」
+          시트로 다시 만듭니다. <b>아무것도 붙여 넣지 않으면</b> 코드에 들어
+          있는 시트 사본({SHEET_SEED.summary.days}일 · {SHEET_SEED.summary.rows}
+          건, {DAILY_CASH_SUMMARY.asOf} 기준)으로 깝니다. 그보다 새 시트가
+          있으면 위 칸에 붙여 넣으십시오 — 운영경비·실비/환불·기타는 지출로,
           매출·기타매출은 수입으로 들어갑니다.
+          <br />
+          시트에 적힌 건은 <b>
+            이미 돈이 오간 것이므로 승인완료로 섭니다.
+          </b>{" "}
+          머리말의 보유현금·장기부채도 함께 갱신됩니다.
           <br />
           <b>
             금액이 「적요」 칸에 들어가 있는 줄은 금액으로 올리지 않습니다.
@@ -124,12 +139,15 @@ export function SheetImportScreen() {
           disabled={
             rebuild.isPending ||
             me.data?.role !== "대표" ||
-            confirm.trim() !== REBUILD_CONFIRM ||
-            text.trim() === ""
+            confirm.trim() !== REBUILD_CONFIRM
           }
-          onClick={() => rebuild.mutate({ text, confirm })}
+          onClick={() => rebuild.mutate({ ...rebuildInput(), confirm })}
         >
-          {rebuild.isPending ? "다시 만드는 중…" : "원장을 다시 만든다"}
+          {rebuild.isPending
+            ? "다시 만드는 중…"
+            : text.trim()
+              ? "붙여 넣은 시트로 다시 만든다"
+              : "코드에 든 사본으로 다시 만든다"}
         </button>
         {me.data?.role !== "대표" ? (
           <p className="s" style={{ marginTop: 6 }}>
@@ -140,7 +158,7 @@ export function SheetImportScreen() {
           <div style={{ marginTop: 10 }}>
             <Reauth
               what="원장 재이관"
-              onDone={() => rebuild.mutate({ text, confirm })}
+              onDone={() => rebuild.mutate({ ...rebuildInput(), confirm })}
             />
           </div>
         ) : null}

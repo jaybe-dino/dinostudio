@@ -9,6 +9,8 @@ import { describe, expect, it } from "vitest";
 import { LedgerService } from "./service.js";
 import { InMemoryLedgerStore } from "./store.js";
 import type { Actor } from "./service.js";
+import { SHEET_SEED } from "../../shared/erp/sheetSeed.js";
+import { DAILY_CASH_SUMMARY } from "../../shared/erp/data/dailyCash.js";
 
 const CEO: Actor = { id: "ceo@dinostudio.kr", role: "대표", stepUpFresh: true };
 const CFO: Actor = { id: "cfo@dinostudio.kr", role: "재무", stepUpFresh: true };
@@ -124,6 +126,64 @@ describe("재이관이 실제로 갈아엎는다", () => {
   });
 });
 
+describe("붙여 넣지 않으면 코드에 든 사본으로 깐다", () => {
+  it("시트를 붙여 넣지 않아도 돌아간다", async () => {
+    // 시트를 코드에 넣어 둔 이유가 붙여 넣는 수고를 없애려는 것이었다.
+    // 여기서 다시 붙여 넣으라고 하면 앞뒤가 맞지 않는다.
+    const s = svc();
+    const result = await s.rebuildFromDailyCashSheet({ confirm: CONFIRM }, CEO);
+    expect(result.source).toBe("embedded");
+    expect(result.inserted).toBe(SHEET_SEED.entries.length);
+    expect((await s.listEntries({}, CEO)).total).toBe(
+      SHEET_SEED.entries.length
+    );
+  });
+
+  it("**다시 깔아도 승인완료가 승인 대기로 되돌아가지 않는다**", async () => {
+    // 재이관이 따로 importSheet 를 부르던 때는 이 표시가 빠졌다. 다시 깔면
+    // 이미 나간 돈이 전부 승인 대기로 돌아가 잔액이 어긋난다.
+    const s = svc();
+    await s.rebuildFromDailyCashSheet({ confirm: CONFIRM }, CEO);
+    const after = (await s.listEntries({}, CEO)).entries;
+    const confirmed = after.filter(e => e.status === "confirmed");
+    expect(confirmed.length).toBe(SHEET_SEED.summary.confirmed);
+    expect(confirmed.length).toBeGreaterThan(0);
+    expect(confirmed.every(e => e.amount != null)).toBe(true);
+  });
+
+  it("붙여 넣은 시트에도 같은 규칙이 붙는다", async () => {
+    const s = svc();
+    await s.rebuildFromDailyCashSheet(
+      { text: SHEET, year: 2026, confirm: CONFIRM },
+      CEO
+    );
+    const after = (await s.listEntries({}, CEO)).entries;
+    expect(after.find(e => e.title === "저스트컴퍼니")?.status).toBe(
+      "confirmed"
+    );
+  });
+
+  it("일계를 이관으로 표시하지 않는다 — 시트의 「계」가 0 이기 때문이다", async () => {
+    const store = new InMemoryLedgerStore();
+    const s = new LedgerService(store);
+    await s.rebuildFromDailyCashSheet({ confirm: CONFIRM }, CEO);
+    const days = await store.listSnapshots();
+    expect(days.length).toBeGreaterThan(0);
+    expect(days.every(d => !d.isMigrated)).toBe(true);
+  });
+
+  it("머리말의 보유현금도 함께 갱신된다", async () => {
+    // 원장만 다시 깔고 기준값을 두면 화면 맨 위 숫자가 옛날 값으로 남는다.
+    const s = svc();
+    await s.rebuildFromDailyCashSheet({ confirm: CONFIRM }, CEO);
+    const settings = await s.settings();
+    const cash = settings.find(x => x.key === "cash_on_hand");
+    expect(cash?.value).toBe(DAILY_CASH_SUMMARY.cashOnHand);
+    // 시트에서 온 값이다 — 확정으로 보지 않는다 (원칙 8)
+    expect(cash?.isProvisional).toBe(true);
+  });
+});
+
 describe("엉뚱할 때는 안 돌아간다", () => {
   it("재무는 못 돌린다", async () => {
     const s = svc();
@@ -159,19 +219,30 @@ describe("엉뚱할 때는 안 돌아간다", () => {
   });
 
   it("마감된 기간이 있으면 거부한다 — 개시 전에만 쓰는 경로다", async () => {
-    const s = await withExisting();
-    await s.closePeriod({ ym: "2026-08", force: true }, CEO).catch(() => {
-      /* 마감 조건은 이 테스트의 관심사가 아니다 */
+    /*
+     * 마감을 **직접 넣는다.** 예전에는 `closePeriod` 를 부르고 실패하면
+     * 삼켰는데, 인자 모양이 달라 늘 실패했고 그래서 아래 `expect` 가 한 번도
+     * 돌지 않았다. 마감 조건은 이 테스트의 관심사가 아니므로 상태만 만든다.
+     */
+    const store = new InMemoryLedgerStore();
+    const s = new LedgerService(store);
+    await store.upsertPeriod({
+      ym: "2026-08",
+      status: "closed",
+      closedBy: CEO.id,
+      closedAt: "2026-09-01T00:00:00+09:00",
+      blockers: [],
     });
-    const periods = await s.masters(CEO).then(m => m.periods);
-    if (periods.some(p => p.status === "closed")) {
-      await expect(
-        s.rebuildFromDailyCashSheet(
-          { text: SHEET, year: 2026, confirm: CONFIRM },
-          CEO
-        )
-      ).rejects.toThrow(/마감된 기간/);
-    }
+    const kept = (await s.listEntries({}, CEO)).total;
+
+    await expect(
+      s.rebuildFromDailyCashSheet(
+        { text: SHEET, year: 2026, confirm: CONFIRM },
+        CEO
+      )
+    ).rejects.toThrow(/마감된 기간/);
+    // 거부됐으면 원장은 그대로여야 한다
+    expect((await s.listEntries({}, CEO)).total).toBe(kept);
   });
 
   it("읽을 줄이 없는 시트로는 원장을 비우지 않는다", async () => {

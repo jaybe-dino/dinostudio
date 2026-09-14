@@ -828,7 +828,8 @@ export const erpRouter = router({
   rebuildFromSheet: protectedProcedure
     .input(
       z.object({
-        text: z.string().min(1),
+        /** 비우면 코드에 박아 둔 시트 사본으로 깐다 */
+        text: z.string().min(1).optional(),
         year: z.number().int().min(2000).max(2100).optional(),
         confirm: z.string(),
       })
