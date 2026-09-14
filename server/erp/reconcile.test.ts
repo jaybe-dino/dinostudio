@@ -84,6 +84,27 @@ describe("거래내역 읽기", () => {
     expect(txns[1].in).toBe(5_500_000);
   });
 
+  it("입출식 예금 엑셀의 빈 첫 열과 거래후 잔액 헤더를 읽는다", () => {
+    const text = [
+      "\t거래일시\t출금\t입금\t거래후 잔액\t거래내용",
+      "1\t2026-09-01 14:23:11\t1,000\t0\t9,000\t테스트 출금",
+      "2\t2026-09-02 09:00:00\t0\t2,000\t11,000\t테스트 입금",
+    ].join("\n");
+    const { txns, skipped } = parseBankStatement(text, YEAR);
+    expect(skipped).toEqual([]);
+    expect(txns[0]).toMatchObject({
+      date: "2026-09-01",
+      out: 1000,
+      balance: 9000,
+      description: "테스트 출금",
+    });
+    expect(txns[1]).toMatchObject({
+      in: 2000,
+      balance: 11000,
+      description: "테스트 입금",
+    });
+  });
+
   it("거래일시에 시각이 붙어 있어도 읽는다", () => {
     const text = [
       "거래일시,내용,출금,입금",

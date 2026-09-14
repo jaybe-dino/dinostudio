@@ -9,6 +9,7 @@ import { Card, Money, Note, Tile, chipClass } from "../components/Bits";
 import { DataTable, type Column } from "../components/DataTable";
 import { matchesQuery, useErpUi } from "../context";
 import { won } from "../format";
+import { DebtEditor } from "../components/DebtEditor";
 
 type Line = ErpOutputs["debt"]["lines"][number];
 
@@ -16,6 +17,8 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
   const { query } = useErpUi();
   const utils = trpc.useUtils();
   const debt = trpc.erp.debt.useQuery();
+  const me = trpc.erp.me.useQuery();
+  const canEdit = ["대표", "재무"].includes(me.data?.role ?? "");
   const forecast = trpc.erp.forecast.useQuery({ scenario: "Base" });
   const [edit, setEdit] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
@@ -137,7 +140,7 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
           <button
             type="button"
             className="btn"
-            disabled={!edit[l.debt.id] || upsert.isPending}
+            disabled={!canEdit || !edit[l.debt.id] || upsert.isPending}
             onClick={() =>
               upsert.mutate({
                 kind: "debt",
@@ -160,7 +163,8 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
             <h1>부채 원장</h1>
             <div className="desc">
               만기·이자율·상환조건이 확인되면 13주 자금계획의 상환 라인과 만기
-              알람이 함께 살아납니다. 지금은 다섯 건 전부 미확인입니다.
+              알람을 확인할 수 있습니다. 13주 계획에 반영할 지급일과 금액은 상환
+              일정에 별도로 등록하십시오.
             </div>
           </div>
         </div>
@@ -218,6 +222,13 @@ export function DebtScreen({ variant }: { variant: "ledger" | "funding" }) {
             initialSort={{ key: "code", dir: "asc" }}
           />
         </Card>
+
+        {canEdit && (
+          <DebtEditor
+            debts={(debt.data?.lines ?? []).map(l => l.debt)}
+            schedules={debt.data?.schedules ?? []}
+          />
+        )}
 
         <Card title="이자는 영업활동, 원금 상환만 재무활동">
           <p style={{ margin: 0 }}>

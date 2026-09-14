@@ -1,0 +1,1 @@
+ALTER TABLE "erp_debt" ALTER COLUMN "rate" SET DATA TYPE numeric(7, 4);

@@ -17,6 +17,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -441,7 +442,7 @@ export const erpDebts = pgTable(
     creditor: varchar("creditor", { length: 200 }).notNull(),
     /** null = 건별 잔액 미분해 */
     principal: bigint("principal", { mode: "number" }),
-    rate: integer("rate"),
+    rate: numeric("rate", { precision: 7, scale: 4, mode: "number" }),
     maturityDate: date("maturityDate", { mode: "string" }),
     repayType: varchar("repayType", { length: 60 }),
     isRelatedParty: boolean("isRelatedParty").notNull().default(false),

@@ -233,3 +233,11 @@ describe("Postgres 원장 수정 결과와 낙관적 잠금", () => {
     expect((await store.getEntry(original.code))?.amount).toBe(original.amount);
   });
 });
+
+
+describe("차입 금리 저장", () => {
+  it("소수 금리를 반올림하지 않고 되읽는다", async () => {
+    await store.upsertDebt({ id: "decimal-rate", code: "RATE-TEST", creditor: "테스트", principal: 1000000, rate: 4.125, maturityDate: "2026-09-30", repayType: "일시상환", isRelatedParty: false, monthlyInterest: null, term: "단기", docUrl: null });
+    expect((await store.listDebts()).find(d => d.id === "decimal-rate")?.rate).toBe(4.125);
+  });
+});

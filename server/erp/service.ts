@@ -163,6 +163,7 @@ import {
   viewPath,
 } from "./attachments.js";
 import { erpError } from "./errors.js";
+import { debtInput, debtScheduleInput } from "./debtInput.js";
 import type { EntryFilter, LedgerStore } from "./store.js";
 
 export interface Actor {
@@ -816,18 +817,19 @@ export class LedgerService {
   }
 
   async debt(actor?: Actor) {
-    const [debts, settings, today] = await Promise.all([
+    const [debts, settings, today, schedules] = await Promise.all([
       this.store.listDebts(),
       this.store.listSettings(),
       this.today(),
+      this.store.listDebtSchedules(),
     ]);
     // 부채 열람도 기록한다 — 급여만 기록하던 것을 넓혔다 (D3)
     if (actor) await this.recordSensitiveAccess("debt", actor);
-    return buildDebtReport(
+    return { ...buildDebtReport(
       debts,
       today,
       settingValue<number>(settings, "debt_long_term_total")
-    );
+    ), schedules };
   }
 
   /** GET /forecast/13w — 주차별 잔액 · 예상런웨이 (§9.5) */
@@ -949,6 +951,27 @@ export class LedgerService {
     payload: Party | Project | Contract | Debt | DebtSchedule,
     actor: Actor
   ) {
+    let before: unknown = null;
+    if (kind === "debt" || kind === "debtSchedule") {
+      if (!["대표", "재무"].includes(actor.role))
+        throw erpError("forbidden_field", {}, "차입 및 상환 일정은 대표·재무만 변경할 수 있습니다");
+      const parsed = (kind === "debt" ? debtInput : debtScheduleInput).safeParse(payload);
+      if (!parsed.success)
+        throw erpError("invalid_transition", {}, "차입 입력값을 확인하십시오: " + parsed.error.issues.map(i => i.path.join(".") + " " + i.message).join(", "));
+      payload = parsed.data;
+      const debts = await this.store.listDebts();
+      if (kind === "debt") {
+        const row = payload as Debt;
+        if (debts.some(d => d.code === row.code && d.id !== row.id))
+          throw erpError("duplicate_suspected", {}, "이미 사용 중인 차입 코드입니다");
+        before = debts.find(d => d.id === row.id) ?? null;
+      } else {
+        const row = payload as DebtSchedule;
+        if (!debts.some(d => d.id === row.debtId))
+          throw erpError("not_found", {}, "상환 일정을 연결할 차입이 없습니다");
+        before = (await this.store.listDebtSchedules()).find(d => d.id === row.id) ?? null;
+      }
+    }
     let saved: unknown;
     if (kind === "party")
       saved = await this.store.upsertParty(payload as Party);
@@ -963,7 +986,7 @@ export class LedgerService {
       kind,
       (payload as { id: string }).id,
       "upsert",
-      null,
+      before,
       saved,
       actor
     );
