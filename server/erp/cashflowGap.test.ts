@@ -16,6 +16,9 @@ function block(key: string, close: number | null): CashflowBlock {
     inSum: 0,
     outSum: 0,
     close,
+    recordedClose: null,
+    recordedAsOf: null,
+    closeGap: null,
     nullReason: null,
     undecided: [],
     outEntries: [],
@@ -36,6 +39,7 @@ describe("빈 구간 표시", () => {
       to: "2026-09-29",
       days: 28,
       balance: 50_000_000,
+      recordedBalance: null,
     });
   });
 

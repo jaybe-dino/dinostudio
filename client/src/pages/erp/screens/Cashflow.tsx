@@ -201,8 +201,19 @@ export function CashflowScreen() {
                     건너뜁니다.{" "}
                     {gap.balance == null ? (
                       <>
-                        잔액은 <b>이 구간 내내 변하지 않았지만</b> 아직 확정
-                        표시하지 않습니다 — {nullReasonText(block.nullReason)}
+                        잔액은 <b>이 구간 내내 변하지 않았습니다.</b>{" "}
+                        {gap.recordedBalance != null ? (
+                          <>
+                            시트에 적힌 값은 <b>{won(gap.recordedBalance)}</b>{" "}
+                            이고, 계산 잔액은 아직 확정하지 않았습니다 —{" "}
+                            {nullReasonText(block.nullReason)}
+                          </>
+                        ) : (
+                          <>
+                            다만 아직 확정 표시하지 않습니다 —{" "}
+                            {nullReasonText(block.nullReason)}
+                          </>
+                        )}
                       </>
                     ) : (
                       <>
@@ -271,6 +282,23 @@ export function CashflowScreen() {
                     {won(block.close) ?? "계산 불가"}
                   </span>
                 </div>
+                {/*
+                  시트에 **적혀 있는** 잔액. 계산 종료 잔액은 판정 대기가
+                  하나라도 있으면 「계산 불가」가 되는데(원칙 8), 그 이유로
+                  시트에 적힌 숫자까지 감추면 화면이 시트보다 못해진다.
+                  지어내지 않고, 적힌 것도 버리지 않는다 — 이름으로 구분한다.
+                */}
+                {block.recordedClose != null ? (
+                  <div>
+                    <span className="lb">
+                      시트 잔액
+                      {block.recordedAsOf && block.recordedAsOf !== block.key
+                        ? ` ${shortDate(block.recordedAsOf)}`
+                        : ""}
+                    </span>
+                    <span className="vv">{won(block.recordedClose)}</span>
+                  </div>
+                ) : null}
               </div>
 
               {expanded ? (
@@ -286,6 +314,17 @@ export function CashflowScreen() {
                           : "이전 일자에서 승계"}
                         . 잔액을 억지로 잇기 위해 판정 대기 건을 0으로 처리하지
                         않습니다.
+                        {block.recordedClose != null ? (
+                          <>
+                            {" "}
+                            <b>
+                              시트에 적힌 이 날 잔액은{" "}
+                              {won(block.recordedClose)}
+                            </b>{" "}
+                            입니다 — 위 판정 대기 건의 금액을 넣으시면 계산
+                            잔액이 이 숫자와 맞는지 화면이 바로 대조해 드립니다.
+                          </>
+                        ) : null}
                       </Note>
                     </div>
                   ) : null}
@@ -459,7 +498,10 @@ export function CashflowScreen() {
               "시작",
               "지출",
               "입금",
-              "종료",
+              "종료 (계산)",
+              "시트 잔액",
+              "시트 잔액 기준일",
+              "차이",
               "계산 불가 사유",
               "판정 대기",
             ],
@@ -469,6 +511,9 @@ export function CashflowScreen() {
               b.outSum,
               b.inSum,
               b.close,
+              b.recordedClose,
+              b.recordedAsOf ?? "",
+              b.closeGap,
               b.close == null ? nullReasonText(b.nullReason) : "",
               b.undecided.map(u => u.code).join(" "),
             ]),
@@ -481,6 +526,13 @@ export function CashflowScreen() {
           판정 대기가 하나라도 남은 날부터 종료 잔액을 확정하지 않고 이후 일자로
           미확정을 승계합니다. 금액·단위·항목명이 확정되면 그 날부터 다시
           이어집니다.
+        </p>
+        <p style={{ margin: "10px 0 0" }}>
+          그동안 잔액을 못 보시는 일이 없도록 <b>「시트 잔액」</b>을 따로 보여
+          드립니다. 이것은 계산한 값이 아니라{" "}
+          <b>「데일리 현금흐름」 시트에 적혀 있는 그 날의 종료 잔액</b>
+          입니다. 판정 대기 건의 금액이 채워지면 계산 잔액이 서고, 두 숫자가
+          다르면 <b>그 차이만큼 원장에 아직 안 들어온 돈이 있다는 뜻</b>입니다.
         </p>
       </Card>
     </>
