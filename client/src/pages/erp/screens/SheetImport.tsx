@@ -41,12 +41,24 @@ export function SheetImportScreen() {
     onSuccess: async result => {
       setRebuildReauth(false);
       setConfirm("");
+      /*
+       * **검수함이 함께 비워진 것을 반드시 말한다.**
+       *
+       * 재이관은 원장뿐 아니라 전표·일계·검수함을 모두 비운다. 그런데 이
+       * 메시지가 원장 건수만 말해 주는 바람에, 슬랙에서 모아 둔 것이 사라진
+       * 것을 아무도 모른 채 지나갔다. 지운 것은 지웠다고 말해야 한다.
+       */
       setRebuildNote(
-        `원장을 다시 만들었습니다 — 지운 것 ${result.removed.entries}건 · ` +
+        `원장을 다시 만들었습니다 — 지운 것 원장 ${result.removed.entries}건 · ` +
+          `전표 ${result.removed.journals}건 · 일계 ${result.removed.snapshots}건 · ` +
+          `검수함 ${result.removed.intakes}건 / ` +
           `들여온 것 ${result.inserted}건 (${result.days.length}일) · ` +
           `금액 미확정 ${result.summary.undecided}건` +
           (result.warnings.length > 0
             ? ` · 못 읽은 줄 ${result.warnings.length}건`
+            : "") +
+          (result.removed.intakes > 0
+            ? " — 검수함이 비워졌습니다. 슬랙 수집을 다시 돌리십시오."
             : "")
       );
       await utils.erp.invalidate();
@@ -112,6 +124,9 @@ export function SheetImportScreen() {
             이미 돈이 오간 것이므로 승인완료로 섭니다.
           </b>{" "}
           머리말의 보유현금·장기부채도 함께 갱신됩니다.
+          <br />
+          <b>검수함(슬랙에서 모아 둔 것)도 함께 비워집니다.</b> 다시 깐 뒤에는
+          슬랙 수집을 한 번 더 돌리셔야 합니다.
           <br />
           <b>
             금액이 「적요」 칸에 들어가 있는 줄은 금액으로 올리지 않습니다.
