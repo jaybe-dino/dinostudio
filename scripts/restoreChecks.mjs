@@ -85,6 +85,82 @@ export function expectedMigrations(dir) {
   }));
 }
 
+/**
+ * 완전복구를 판정하려면 **셋 다** 있어야 한다.
+ *
+ * 하나만 맞아도 통과시키던 것이 QA-005 재오픈의 핵심이다. 건수는 같은데
+ * 금액이 통째로 다른 복구본이 **완전복구 통과**로 나온다. 건수·합계·기준시각은
+ * 서로 다른 것을 잡으므로 하나로 나머지를 대신할 수 없다.
+ */
+export const BASELINE_KEYS = ["asOf", "entries", "settledTotal"];
+
+/** 기준값이 쓸 수 없으면 **판정하지 않고 멈춘다** */
+export class RestoreArgumentError extends Error {
+  constructor(errors) {
+    super(
+      ["기준값을 쓸 수 없습니다:", ...errors.map(e => `  - ${e}`)].join("\n")
+    );
+    this.name = "RestoreArgumentError";
+    this.errors = errors;
+  }
+}
+
+const isGiven = v => v != null && v !== "";
+
+const FLAG_OF = {
+  asOf: "--as-of",
+  entries: "--entries",
+  settledTotal: "--settled-total",
+};
+
+/**
+ * 기준값 검사 — **틀린 값을 조용히 통과시키지 않는다.**
+ *
+ * 특히 날짜. `Date.parse("not-a-date")` 는 NaN 이고 `NaN > x` 는 **늘
+ * false** 다. 그래서 아무 글자나 넣으면 「기준시각 이후 데이터 없음」이
+ * 언제나 참이 됐다. 틀린 값을 준 사람이 통과를 보는 것이 가장 나쁘다.
+ *
+ * 틀린 것을 **전부** 모아서 돌려준다 — 하나 고치고 다시 돌렸더니 또 다른
+ * 것이 나오는 것보다 낫다.
+ */
+export function validateExpectation(expect = {}, now = Date.now()) {
+  const errors = [];
+
+  if (expect.asOf !== undefined && expect.asOf !== null) {
+    if (typeof expect.asOf !== "string" || expect.asOf.trim() === "") {
+      errors.push("기준시각(as-of)이 비어 있습니다");
+    } else {
+      const t = Date.parse(expect.asOf);
+      if (Number.isNaN(t)) {
+        errors.push(
+          `기준시각(as-of)을 날짜로 읽을 수 없습니다: ${expect.asOf}`
+        );
+      } else if (t < Date.parse("2000-01-01T00:00:00Z")) {
+        errors.push(`기준시각(as-of)이 2000년보다 이전입니다: ${expect.asOf}`);
+      } else if (t > now + 24 * 60 * 60 * 1000) {
+        // 연도 오타(2126)를 잡는다 — 미래로 복구할 수는 없다
+        errors.push(`기준시각(as-of)이 미래입니다: ${expect.asOf}`);
+      }
+    }
+  }
+
+  const whole = (key, label, min) => {
+    const v = expect[key];
+    if (v === undefined || v === null) return;
+    if (typeof v !== "number" || !Number.isFinite(v)) {
+      errors.push(`${label}을(를) 숫자로 읽을 수 없습니다: ${v}`);
+    } else if (!Number.isInteger(v)) {
+      errors.push(`${label}에 소수를 쓸 수 없습니다: ${v}`);
+    } else if (v < min) {
+      errors.push(`${label}이(가) ${min} 보다 작습니다: ${v}`);
+    }
+  };
+  whole("entries", "원장 건수(entries)", 0);
+  whole("settledTotal", "입출금 확인 합계(settled-total)", 0);
+
+  return errors;
+}
+
 const won = n => (n == null ? "—" : Number(n).toLocaleString("ko-KR"));
 
 async function tableNames(sql) {
@@ -126,6 +202,14 @@ export async function runRestoreChecks({
   expect = {},
   log = () => {},
 }) {
+  /*
+   * **여기서도 검사한다.** CLI 가 이미 보지만, 이 함수를 직접 부르는 쪽
+   * (테스트 · 다른 스크립트)은 CLI 를 거치지 않는다. 검사를 한 곳에만 두면
+   * 거치지 않는 경로가 그대로 뚫린다.
+   */
+  const argErrors = validateExpectation(expect);
+  if (argErrors.length > 0) throw new RestoreArgumentError(argErrors);
+
   const result = {
     schema: { status: "ok", missingTables: [], missingColumns: [] },
     migrations: {
@@ -251,9 +335,10 @@ export async function runRestoreChecks({
   /* ── [4] 완전복구 — 기준값이 있어야 판정한다 ──────────────────────────── */
   log("\n[4] 완전복구");
   const rows = [];
-  const check = (label, expected, actual, ok) => {
-    rows.push({ label, expected, actual, status: ok ? "ok" : "fail" });
-    log(`  ${ok ? "✓" : "✗"} ${label}  기대 ${expected} · 실제 ${actual}`);
+  const MARK = { ok: "✓", fail: "✗", unknown: "?" };
+  const check = (label, expected, actual, status) => {
+    rows.push({ label, expected, actual, status });
+    log(`  ${MARK[status]} ${label}  기대 ${expected} · 실제 ${actual}`);
   };
 
   if (expect.entries != null) {
@@ -261,7 +346,7 @@ export async function runRestoreChecks({
       "원장 건수",
       won(expect.entries),
       won(result.ledger.entries),
-      result.ledger.entries === expect.entries
+      result.ledger.entries === expect.entries ? "ok" : "fail"
     );
   }
   if (expect.settledTotal != null) {
@@ -269,7 +354,7 @@ export async function runRestoreChecks({
       "입출금 확인 합계",
       won(expect.settledTotal),
       won(settledTotal),
-      settledTotal === expect.settledTotal
+      settledTotal === expect.settledTotal ? "ok" : "fail"
     );
   }
   if (expect.asOf != null) {
@@ -277,25 +362,51 @@ export async function runRestoreChecks({
      * 복구 시점 **이후**의 데이터가 있으면 시점이 틀린 것이다. 없는 것은
      * 여기서 못 잡는다 — 그건 건수·합계가 잡는다.
      */
-    const after =
-      latestAuditAt != null &&
-      Date.parse(latestAuditAt) > Date.parse(expect.asOf);
+    /*
+     * 감사로그가 없으면 **확인할 수 없다.** 예전에는 그때도 통과로 셌다 —
+     * 「볼 것이 없으니 문제도 없다」는 검사가 아니다.
+     */
+    const status =
+      latestAuditAt == null
+        ? "unknown"
+        : Date.parse(latestAuditAt) > Date.parse(expect.asOf)
+          ? "fail"
+          : "ok";
     check(
       "기준시각 이후 데이터 없음",
       expect.asOf,
-      latestAuditAt ?? "—",
-      !after
+      latestAuditAt ?? "감사로그 없음",
+      status
     );
   }
 
+  const missing = BASELINE_KEYS.filter(k => !isGiven(expect[k]));
   result.completeness.rows = rows;
-  if (rows.length === 0) {
-    result.completeness.status = "unverified";
-    log("  **미검증** — 기준값(기준시각 · 건수 · 합계)을 주지 않았습니다.");
-    log("  원장이 비어 있지 않다는 것은 완전복구와 다른 말입니다.");
-    log("  --as-of / --entries / --settled-total 로 기준값을 주십시오.");
-  } else if (rows.some(r => r.status === "fail")) {
+  result.completeness.missing = missing;
+
+  /*
+   * **틀린 것이 하나라도 있으면 실패다** — 나머지를 안 줬다는 이유로 미검증에
+   * 숨기지 않는다. 틀린 것은 틀린 것이다.
+   *
+   * 틀린 것이 없더라도 **셋을 다 주고 다 확인됐을 때만** 통과다. 셋은 서로
+   * 다른 것을 잡으므로 하나로 나머지를 대신할 수 없다 — 건수가 같아도 금액이
+   * 통째로 다를 수 있다.
+   */
+  if (rows.some(r => r.status === "fail")) {
     result.completeness.status = "fail";
+  } else if (missing.length > 0 || rows.some(r => r.status === "unknown")) {
+    result.completeness.status = "unverified";
+    if (rows.length === 0) {
+      log("  **미검증** — 기준값(기준시각 · 건수 · 합계)을 주지 않았습니다.");
+      log("  원장이 비어 있지 않다는 것은 완전복구와 다른 말입니다.");
+    } else {
+      log("  **미검증** — 확인한 것은 맞지만 아직 덜 봤습니다.");
+    }
+    if (missing.length > 0)
+      log(`  안 준 기준값: ${missing.map(k => FLAG_OF[k]).join(" · ")}`);
+    for (const r of rows.filter(x => x.status === "unknown"))
+      log(`  확인 불가: ${r.label} (${r.actual})`);
+    log("  --as-of / --entries / --settled-total 을 **셋 다** 주십시오.");
   } else {
     result.completeness.status = "ok";
   }

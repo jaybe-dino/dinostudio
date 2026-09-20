@@ -26,7 +26,11 @@
  */
 import { neon } from "@neondatabase/serverless";
 import { join } from "node:path";
-import { runRestoreChecks } from "./restoreChecks.mjs";
+import {
+  RestoreArgumentError,
+  runRestoreChecks,
+  validateExpectation,
+} from "./restoreChecks.mjs";
 
 const args = process.argv.slice(2);
 const flags = new Map(
@@ -73,24 +77,56 @@ if (process.env.DATABASE_URL && process.env.DATABASE_URL === url) {
   process.exit(2);
 }
 
+/*
+ * **빈 값은 「안 줬다」가 아니라 오류다.**
+ *
+ * `--entries=` 처럼 쓰면 준 것도 아니고 안 준 것도 아닌 상태가 된다. 조용히
+ * 「안 줬다」로 처리하면 기준값을 줬다고 생각한 사람이 미검증 결과를 통과로
+ * 읽는다. 플래그를 썼으면 값이 있어야 한다.
+ */
+const raw = key => {
+  const env = `RESTORE_EXPECT_${key.toUpperCase().replace(/-/g, "_")}`;
+  if (flags.has(key)) return flags.get(key);
+  return process.env[env] ?? null;
+};
+
+const argErrors = [];
 const num = key => {
-  const raw =
-    flags.get(key) ??
-    process.env[`RESTORE_EXPECT_${key.toUpperCase().replace(/-/g, "_")}`];
-  if (raw == null || raw === "") return null;
-  const n = Number(raw.replace(/[,_]/g, ""));
+  const v = raw(key);
+  if (v == null) return null;
+  if (v.trim() === "") {
+    argErrors.push(`--${key} 에 값이 없습니다`);
+    return null;
+  }
+  const n = Number(v.replace(/[,_]/g, ""));
   if (!Number.isFinite(n)) {
-    console.error(`--${key} 값을 숫자로 읽을 수 없습니다: ${raw}`);
-    process.exit(2);
+    argErrors.push(`--${key} 값을 숫자로 읽을 수 없습니다: ${v}`);
+    return null;
   }
   return n;
 };
 
+const asOfRaw = raw("as-of");
+if (asOfRaw != null && asOfRaw.trim() === "")
+  argErrors.push("--as-of 에 값이 없습니다");
+
 const expect = {
-  asOf: flags.get("as-of") ?? process.env.RESTORE_EXPECT_AS_OF ?? null,
+  asOf: asOfRaw,
   entries: num("entries"),
   settledTotal: num("settled-total"),
 };
+
+/*
+ * 연결하기 **전에** 본다. 쓸 수 없는 기준값을 들고 DB 에 붙어 봐야 결과를
+ * 판정할 수 없다. 검사 자체는 `runRestoreChecks` 안에도 있다 — 그 함수를
+ * 직접 부르는 쪽은 이 껍데기를 거치지 않기 때문이다.
+ */
+argErrors.push(...validateExpectation(expect));
+if (argErrors.length > 0) {
+  console.error("기준값을 쓸 수 없습니다:");
+  for (const e of argErrors) console.error(`  - ${e}`);
+  process.exit(2);
+}
 
 const dir = join(import.meta.dirname, "..", "drizzle");
 
@@ -131,6 +167,10 @@ async function main() {
 }
 
 main().catch(error => {
+  if (error instanceof RestoreArgumentError) {
+    console.error(`\n${error.message}`);
+    process.exit(2);
+  }
   console.error("\n연결하거나 읽지 못했습니다:", error.message);
   console.error("연결 문자열과 복구 브랜치 상태를 확인하십시오.");
   process.exit(1);
