@@ -32,6 +32,7 @@ import {
   kstToday,
   flattenDailyCashSheet,
   buildSheetSeed,
+  buildLaunchReport,
   diffSheetAgainstLedger,
   settledAmount,
   summarize,
@@ -646,6 +647,17 @@ export class LedgerService {
       cashOnHandIsProvisional:
         settings.find(s => s.key === "cash_on_hand")?.isProvisional ?? true,
     };
+  }
+
+  /**
+   * 오픈 전 점검 — 설정 하나가 잘못돼 화면 전체가 조용히 틀리는 것을 막는다.
+   *
+   * 실제 시계로 본다. `today()` 로 보면 「오늘이 과거에 박혀 있다」를
+   * **자기 자신으로 검사**하게 되어 영영 안 걸린다.
+   */
+  async launchReport() {
+    const settings = await this.store.listSettings();
+    return buildLaunchReport(settings, kstToday());
   }
 
   /** §5.5 이관 검증 리포트 (G2) */

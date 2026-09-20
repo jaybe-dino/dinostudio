@@ -870,6 +870,12 @@ export const erpRouter = router({
    * 대표만 · 재인증 뒤에만 · 확인 문구를 직접 입력해야 · 마감 기간이 없어야.
    */
   /** §5.7 시트와 원장의 차이 — 읽기만 한다. 덮어쓰지 않는다 */
+  /** 오픈 전 점검 — 설정 하나가 화면 전체를 조용히 틀리게 하는 것을 막는다 */
+  launchReport: protectedProcedure.query(({ ctx }) => {
+    actorFrom(ctx);
+    return run(() => getLedgerService().launchReport());
+  }),
+
   sheetDiff: protectedProcedure
     .input(
       z
