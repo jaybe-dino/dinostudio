@@ -239,3 +239,144 @@ describe("**옛 시점 복구본** — 예전 도구가 성공이라고 하던 �
     expect(r.exitCode).toBe(1);
   }, 60_000);
 });
+
+/**
+ * QA-005 재오픈 — **일부만 맞는 것을 「다 맞다」로 말하고 있었다.**
+ *
+ * 건수 하나만 주면 그 하나만 보고 `completeness: ok` 를 냈다. 건수는 같은데
+ * 금액이 통째로 다른 복구본이 **완전복구 통과**로 나온다. 그리고 기준시각에
+ * 아무 글자나 넣으면 `Date.parse` 가 NaN 이 되고 `NaN > x` 는 늘 false 라
+ * **조용히 통과**했다 — 가장 나쁜 실패다. 틀린 값을 준 사람이 통과를 본다.
+ */
+describe("QA-005 재오픈 — 기준값을 일부만 줬을 때", () => {
+  let client: PGlite;
+  beforeAll(async () => {
+    client = await freshClient();
+    await client.query(`
+      insert into "erp_entry"
+        ("id","code","direction","status","title","cashDate","source","createdBy","createdAt")
+      values ('e1','EX-260920-01','out','confirmed','합성','2026-09-20','manual','qa@example.test','2026-09-20T00:00:00Z')
+    `);
+    await client.query(`
+      insert into "erp_audit_log" ("id","tableName","rowId","action","actor","at")
+      values ('a1','entry','e1','create','qa@example.test','2026-09-20T00:00:00Z')
+    `);
+  }, 60_000);
+
+  it("**건수만 맞아도 완전복구가 아니다** — 미검증이다", async () => {
+    const r = await runRestoreChecks({
+      sql: sqlOf(client),
+      dir: DIR,
+      expect: { entries: 1 },
+    });
+    // 본 것은 보여 준다
+    expect(r.completeness.rows).toHaveLength(1);
+    expect(r.completeness.rows[0].status).toBe("ok");
+    // 그러나 전체는 미검증이다
+    expect(r.completeness.status).toBe("unverified");
+    expect(r.completeness.missing).toEqual(["asOf", "settledTotal"]);
+    expect(r.exitCode).toBe(3);
+  });
+
+  it("둘만 줘도 미검증이다", async () => {
+    const r = await runRestoreChecks({
+      sql: sqlOf(client),
+      dir: DIR,
+      expect: { entries: 1, settledTotal: 0 },
+    });
+    expect(r.completeness.status).toBe("unverified");
+    expect(r.completeness.missing).toEqual(["asOf"]);
+    expect(r.exitCode).toBe(3);
+  });
+
+  it("일부만 줬어도 **틀리면 실패다** — 미검증으로 덮지 않는다", async () => {
+    const r = await runRestoreChecks({
+      sql: sqlOf(client),
+      dir: DIR,
+      expect: { entries: 99 },
+    });
+    expect(r.completeness.status).toBe("fail");
+    expect(r.exitCode).toBe(1);
+  });
+
+  it("셋 다 맞으면 통과한다", async () => {
+    const r = await runRestoreChecks({
+      sql: sqlOf(client),
+      dir: DIR,
+      expect: {
+        entries: 1,
+        settledTotal: 0,
+        asOf: "2026-09-20T09:00:00+09:00",
+      },
+    });
+    expect(r.completeness.status).toBe("ok");
+    expect(r.exitCode).toBe(0);
+  });
+
+  it("**감사로그가 없으면 기준시각을 확인할 수 없다** — 통과로 세지 않는다", async () => {
+    const noAudit = await freshClient();
+    await noAudit.query(`
+      insert into "erp_entry"
+        ("id","code","direction","status","title","cashDate","source","createdBy","createdAt")
+      values ('e1','EX-260920-01','out','confirmed','합성','2026-09-20','manual','qa@example.test','2026-09-20T00:00:00Z')
+    `);
+    const r = await runRestoreChecks({
+      sql: sqlOf(noAudit),
+      dir: DIR,
+      expect: {
+        entries: 1,
+        settledTotal: 0,
+        asOf: "2026-09-20T09:00:00+09:00",
+      },
+    });
+    const row = r.completeness.rows.find(x => x.label.includes("기준시각"));
+    expect(row?.status).toBe("unknown");
+    expect(r.completeness.status).toBe("unverified");
+    expect(r.exitCode).toBe(3);
+  }, 60_000);
+});
+
+describe("QA-005 재오픈 — 쓸 수 없는 기준값은 인자 오류다", () => {
+  let client: PGlite;
+  beforeAll(async () => {
+    client = await freshClient();
+  }, 60_000);
+
+  const bad = async (expect_: Record<string, unknown>) =>
+    runRestoreChecks({ sql: sqlOf(client), dir: DIR, expect: expect_ });
+
+  it("**날짜가 아닌 기준시각은 막는다** — NaN 비교는 늘 false 라 조용히 통과한다", async () => {
+    await expect(
+      bad({ entries: 1, settledTotal: 0, asOf: "not-a-date" })
+    ).rejects.toThrow(/기준시각/);
+  });
+
+  it("빈 기준시각도 막는다", async () => {
+    await expect(bad({ asOf: "" })).rejects.toThrow(/기준시각/);
+  });
+
+  it("말도 안 되는 연도는 막는다 — 오타를 통과시키지 않는다", async () => {
+    await expect(bad({ asOf: "2126-09-20T00:00:00Z" })).rejects.toThrow(
+      /기준시각/
+    );
+    await expect(bad({ asOf: "1999-01-01T00:00:00Z" })).rejects.toThrow(
+      /기준시각/
+    );
+  });
+
+  it("음수·소수 건수는 막는다", async () => {
+    await expect(bad({ entries: -1 })).rejects.toThrow(/건수/);
+    await expect(bad({ entries: 1.5 })).rejects.toThrow(/건수/);
+    await expect(bad({ entries: Number.NaN })).rejects.toThrow(/건수/);
+  });
+
+  it("음수 합계는 막는다 — 무효 처리를 뺀 합계는 음수가 될 수 없다", async () => {
+    await expect(bad({ settledTotal: -5 })).rejects.toThrow(/합계/);
+  });
+
+  it("틀린 값 여러 개면 **전부** 알려 준다", async () => {
+    await expect(bad({ entries: -1, asOf: "nope" })).rejects.toThrow(
+      /건수[\s\S]*기준시각|기준시각[\s\S]*건수/
+    );
+  });
+});
