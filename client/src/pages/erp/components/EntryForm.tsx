@@ -47,6 +47,8 @@ interface Draft {
   /** 4대보험 분리 (B6) */
   employeeInsurance: string;
   employerInsurance: string;
+  /** 개인이 식별되는 인건비 건인가 (원칙 10) */
+  isPersonal: boolean;
   /** 차입 상환의 원금 몫 (C3) */
   principalAmount: string;
   /** 이연 개월 수 (A7) */
@@ -73,6 +75,7 @@ const EMPTY: Draft = {
   withheldAmount: "",
   employeeInsurance: "",
   employerInsurance: "",
+  isPersonal: false,
   principalAmount: "",
   deferralMonths: "",
 };
@@ -165,6 +168,8 @@ export function EntryForm({ direction }: { direction?: Direction }) {
       withheldAmount: num(draft.withheldAmount),
       employeeInsurance: payroll ? num(draft.employeeInsurance) : null,
       employerInsurance: payroll ? num(draft.employerInsurance) : null,
+      // 인건비 계정이 아니면 개인 표시는 의미가 없다
+      isPersonal: payroll ? draft.isPersonal : false,
       principalAmount: debtRepayment ? num(draft.principalAmount) : null,
       deferralMonths: num(draft.deferralMonths),
       duplicateOverrideReason: overrideReason.trim() || undefined,
@@ -423,6 +428,28 @@ export function EntryForm({ direction }: { direction?: Direction }) {
                     setDraft(d => ({ ...d, employerInsurance: e.target.value }))
                   }
                 />
+              </label>
+              {/*
+               * 개인 식별을 켜면 금액이 **아무에게도** 안 나간다 — 대표·재무도
+               * 마찬가지다 (원칙 10). 그래서 총액 일괄 건에 켜면 재무가 송금할
+               * 금액을 못 본다. 선택지에 그 결과를 그대로 적어 둔다.
+               */}
+              <label className="field">
+                <span>급여 건 성격</span>
+                <select
+                  value={draft.isPersonal ? "y" : "n"}
+                  onChange={e =>
+                    setDraft(d => ({
+                      ...d,
+                      isPersonal: e.target.value === "y",
+                    }))
+                  }
+                >
+                  <option value="n">총액 일괄 — 재무가 금액을 봅니다</option>
+                  <option value="y">
+                    개인별 — 금액을 아무에게도 표시하지 않습니다
+                  </option>
+                </select>
               </label>
             </>
           ) : null}

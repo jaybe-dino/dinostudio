@@ -181,6 +181,29 @@ export function maskEntryForRole(entry: Entry, role: Role): MaskedEntry {
   return { ...entry, masked: false, maskReason: null };
 }
 
+/**
+ * 전표(분개)에 걸리는 같은 규칙 (원칙 10).
+ *
+ * 원장 목록은 `maskEntryForRole` 로 금액을 지우면 되지만 **전표는 금액을 지울
+ * 수 없다** — 차변·대변을 0 으로 바꾸면 시산표가 안 맞고, 남겨 두면 가린 것이
+ * 아니다. 그래서 전표는 **줄째로 내리지 않는다.**
+ *
+ * 판정 기준은 `maskEntryForRole` 과 **같은 두 갈래**다. 규칙이 두 곳에서
+ * 갈리면 한쪽이 반드시 뒤처진다.
+ *
+ * 건을 찾을 수 없으면 **안 보여 준다.** 계정을 모르면 인건비인지 판정할 수
+ * 없고, 모를 때 보여 주는 쪽을 택하면 규칙이 있으나 마나다 (원칙 8).
+ */
+export function journalVisibleToRole(
+  entry: Entry | undefined,
+  role: Role
+): boolean {
+  if (!entry) return false;
+  if (!isPayrollAccount(entry.accountCode)) return true;
+  if (!permissionFor(role, "payroll").read) return false;
+  return !entry.isPersonal;
+}
+
 /** 마스킹된 건들의 총액 — 화면은 이 값만 본다 */
 export function payrollTotal(entries: Entry[]): number {
   return entries
