@@ -239,6 +239,42 @@ export interface Approval {
   at: string;
 }
 
+/**
+ * §6.3 settlement — **실제 입출금 확인.**
+ *
+ * 승인(`approve`)과 **다른 사실**이다. 승인은 「나가도 된다」이고, 이것은
+ * 「실제로 나갔다」다. 둘을 한 상태로 합치면 결재만 끝난 돈이 이미 통장에서
+ * 빠져나간 것처럼 잡혀 잔액이 맞지 않는다.
+ *
+ * 건마다 **여러 줄**이 붙을 수 있다 — 부분 지급·분할 입금이 실제로 흔하다.
+ * 합계가 건 금액에 닿을 때 비로소 `entry.paidAt` 이 선다.
+ *
+ * 되돌릴 때도 줄을 지우지 않는다 (원칙 9). `voidedAt` 을 찍어 무효로 만든다 —
+ * 잘못 확인한 것도 이력이고, 지우면 왜 잔액이 바뀌었는지 설명할 수 없다.
+ */
+export interface Settlement {
+  id: string;
+  entryId: string;
+  /** 통장에서 실제로 움직인 날. 승인일도 예정일도 아니다 */
+  settledOn: string;
+  /** 이번 줄의 금액. 부분 지급이면 건 금액보다 작다 */
+  amount: number;
+  /** 어느 계좌에서 나갔나 / 들어왔나 */
+  bankAccount: string | null;
+  /**
+   * 은행 거래 식별자. 같은 은행 거래 줄을 **두 건에 붙이지 못하게** 하는 키다 —
+   * 이게 없으면 같은 출금을 두 건에 확인해 이중 차감이 난다.
+   */
+  bankRef: string | null;
+  note: string | null;
+  actor: string;
+  at: string;
+  /** 무효 처리 — 줄은 남기고 계산에서만 뺀다 (원칙 9) */
+  voidedAt: string | null;
+  voidedBy: string | null;
+  voidReason: string | null;
+}
+
 /** §6.3 entry_revision — 화면의 「이력」 탭이 이걸 그대로 그린다. */
 export interface EntryRevision {
   id: string;

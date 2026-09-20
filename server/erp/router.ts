@@ -270,6 +270,44 @@ export const erpRouter = router({
         )
       ),
 
+    /** §7.4 실제 입출금 확인 — 승인과 분리된 동작이다 */
+    settle: protectedProcedure
+      .input(
+        z.object({
+          code: z.string(),
+          version: z.number().int(),
+          settledOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          amount: z.number().int().positive(),
+          bankAccount: z.string().max(64).nullish(),
+          bankRef: z.string().max(128).nullish(),
+          note: z.string().max(500).nullish(),
+          allowDuplicate: z.boolean().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        run(() =>
+          getLedgerService().settleEntry(input, input.version, actorFrom(ctx))
+        )
+      ),
+
+    /** 확인 취소 — 줄은 남기고 무효로 만든다 (원칙 9) */
+    voidSettlement: protectedProcedure
+      .input(
+        z.object({
+          settlementId: z.string(),
+          reason: z.string().min(1).max(500),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        run(() => getLedgerService().voidSettlement(input, actorFrom(ctx)))
+      ),
+
+    settlements: protectedProcedure
+      .input(z.object({ code: z.string() }))
+      .query(({ ctx, input }) =>
+        run(() => getLedgerService().settlements(input.code, actorFrom(ctx)))
+      ),
+
     reject: protectedProcedure
       .input(
         z.object({

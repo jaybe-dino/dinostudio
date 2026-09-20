@@ -23,6 +23,7 @@ import type {
   Account,
   AppUser,
   Approval,
+  Settlement,
   Attachment,
   AuditLog,
   Contract,
@@ -73,6 +74,11 @@ export interface LedgerStore {
   listRevisions(entryId: string): Promise<EntryRevision[]>;
   appendApproval(approval: Approval): Promise<void>;
   listApprovals(entryId: string): Promise<Approval[]>;
+
+  /** 실제 입출금 확인 — entryId 를 비우면 전부 */
+  appendSettlement(settlement: Settlement): Promise<void>;
+  listSettlements(entryId?: string): Promise<Settlement[]>;
+  replaceSettlement(settlement: Settlement): Promise<Settlement | null>;
   appendAudit(log: AuditLog): Promise<void>;
   listAudit(filter?: { table?: string; rowId?: string }): Promise<AuditLog[]>;
   appendJournal(journal: Journal): Promise<void>;
@@ -159,6 +165,7 @@ export class InMemoryLedgerStore implements LedgerStore {
   private settings: Setting[];
   private revisions: EntryRevision[] = [];
   private approvals: Approval[] = [];
+  private settlements: Settlement[] = [];
   private audits: AuditLog[] = [];
   private journals: Journal[] = [];
   private accounts: Account[] = ACCOUNTS.map(a => ({ ...a }));
@@ -282,6 +289,22 @@ export class InMemoryLedgerStore implements LedgerStore {
     this.approvals.push(approval);
   }
 
+  async appendSettlement(settlement: Settlement): Promise<void> {
+    this.settlements.push({ ...settlement });
+  }
+  async listSettlements(entryId?: string): Promise<Settlement[]> {
+    const rows = entryId
+      ? this.settlements.filter(s => s.entryId === entryId)
+      : this.settlements;
+    return rows.map(s => ({ ...s }));
+  }
+  async replaceSettlement(settlement: Settlement): Promise<Settlement | null> {
+    const i = this.settlements.findIndex(s => s.id === settlement.id);
+    if (i < 0) return null;
+    this.settlements[i] = { ...settlement };
+    return { ...settlement };
+  }
+
   async listApprovals(entryId: string): Promise<Approval[]> {
     return this.approvals.filter(a => a.entryId === entryId);
   }
@@ -382,6 +405,7 @@ export class InMemoryLedgerStore implements LedgerStore {
     this.intakes = [];
     this.revisions = [];
     this.approvals = [];
+    this.settlements = [];
     this.attachments = [];
     // 감사로그 · 계정과목 · 기준값 · 마스터는 남긴다
     return removed;

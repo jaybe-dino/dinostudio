@@ -11,6 +11,7 @@
  * 드라이버뿐이다.
  */
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
@@ -29,6 +30,7 @@ import {
   erpSettings,
 } from "../../drizzle/erpSchema.js";
 import { DrizzleLedgerStore } from "./drizzleStore.js";
+import type { Settlement } from "../../shared/erp/types.js";
 
 const MIGRATION_DIR = join(import.meta.dirname, "..", "..", "drizzle");
 
@@ -222,22 +224,116 @@ describe("화면에서 누르는 시드 적재 (대표만 · 여러 번 눌러�
   }, 60_000);
 });
 
-
 describe("Postgres 원장 수정 결과와 낙관적 잠금", () => {
   it("실제 저장 성공을 반환하고 오래된 버전은 거절한다", async () => {
     const original = (await store.listEntries())[0];
     const updated = { ...original, version: original.version + 1 };
-    expect(await store.replaceEntry(updated, original.version)).toEqual(updated);
-    expect((await store.getEntry(original.code))?.version).toBe(updated.version);
-    expect(await store.replaceEntry({ ...updated, amount: 123 }, original.version)).toBeUndefined();
+    expect(await store.replaceEntry(updated, original.version)).toEqual(
+      updated
+    );
+    expect((await store.getEntry(original.code))?.version).toBe(
+      updated.version
+    );
+    expect(
+      await store.replaceEntry({ ...updated, amount: 123 }, original.version)
+    ).toBeUndefined();
     expect((await store.getEntry(original.code))?.amount).toBe(original.amount);
   });
 });
 
-
 describe("차입 금리 저장", () => {
   it("소수 금리를 반올림하지 않고 되읽는다", async () => {
-    await store.upsertDebt({ id: "decimal-rate", code: "RATE-TEST", creditor: "테스트", principal: 1000000, rate: 4.125, maturityDate: "2026-09-30", repayType: "일시상환", isRelatedParty: false, monthlyInterest: null, term: "단기", docUrl: null });
-    expect((await store.listDebts()).find(d => d.id === "decimal-rate")?.rate).toBe(4.125);
+    await store.upsertDebt({
+      id: "decimal-rate",
+      code: "RATE-TEST",
+      creditor: "테스트",
+      principal: 1000000,
+      rate: 4.125,
+      maturityDate: "2026-09-30",
+      repayType: "일시상환",
+      isRelatedParty: false,
+      monthlyInterest: null,
+      term: "단기",
+      docUrl: null,
+    });
+    expect(
+      (await store.listDebts()).find(d => d.id === "decimal-rate")?.rate
+    ).toBe(4.125);
   });
+});
+
+describe("실제 입출금 확인이 Postgres 에 저장된다", () => {
+  /*
+   * 다른 테스트는 전부 메모리 저장소로 돈다. 새 테이블은 **DB 를 붙인 다음에야**
+   * 터지므로 여기서 실제 엔진에 대고 한 번 통과시킨다 — 특히 부분 유니크
+   * 인덱스(`bankRef`)는 메모리 저장소에 아예 없는 개념이다.
+   */
+  const line = (over: Partial<Settlement>): Settlement => ({
+    id: randomUUID(),
+    entryId: "entry-x",
+    settledOn: "2026-09-14",
+    amount: 1_000_000,
+    bankAccount: "1110-01",
+    bankRef: null,
+    note: null,
+    actor: "cfo@dinostudio.kr",
+    at: "2026-09-14T10:00:00+09:00",
+    voidedAt: null,
+    voidedBy: null,
+    voidReason: null,
+    ...over,
+  });
+
+  it("넣고 읽으면 같은 값이 돌아온다 — 날짜·무효 표시 포함", async () => {
+    const row = line({ bankRef: `IBK-${randomUUID().slice(0, 8)}` });
+    await store.appendSettlement(row);
+    const back = (await store.listSettlements("entry-x")).find(
+      x => x.id === row.id
+    );
+    expect(back).toBeTruthy();
+    expect(back!.amount).toBe(1_000_000);
+    expect(back!.settledOn).toBe("2026-09-14");
+    expect(back!.voidedAt).toBeNull();
+  }, 60_000);
+
+  it("무효 처리는 줄을 지우지 않고 표시만 바꾼다 (원칙 9)", async () => {
+    const row = line({});
+    await store.appendSettlement(row);
+    const voided = {
+      ...row,
+      voidedAt: "2026-09-15T09:00:00+09:00",
+      voidedBy: "cfo@dinostudio.kr",
+      voidReason: "착오",
+    };
+    expect(await store.replaceSettlement(voided)).toBeTruthy();
+    const back = (await store.listSettlements("entry-x")).find(
+      x => x.id === row.id
+    );
+    expect(back!.voidedAt).not.toBeNull();
+    expect(back!.voidReason).toBe("착오");
+  }, 60_000);
+
+  it("**같은 은행 거래번호는 DB 가 거부한다** — 서비스 검사가 뚫려도 막힌다", async () => {
+    const ref = `IBK-${randomUUID().slice(0, 8)}`;
+    await store.appendSettlement(line({ bankRef: ref }));
+    await expect(
+      store.appendSettlement(line({ bankRef: ref }))
+    ).rejects.toThrow();
+  }, 60_000);
+
+  it("무효 처리한 거래번호는 자리를 비워 준다 — 다시 쓸 수 있어야 한다", async () => {
+    const ref = `IBK-${randomUUID().slice(0, 8)}`;
+    const first = line({ bankRef: ref });
+    await store.appendSettlement(first);
+    await store.replaceSettlement({
+      ...first,
+      voidedAt: "2026-09-15T09:00:00+09:00",
+      voidedBy: "cfo@dinostudio.kr",
+      voidReason: "건을 잘못 골랐다",
+    });
+    // 부분 유니크 인덱스라 무효 줄은 자리를 차지하지 않는다
+    await expect(
+      store.appendSettlement(line({ bankRef: ref }))
+    ).resolves.not.toThrow();
+  }, 60_000);
 });

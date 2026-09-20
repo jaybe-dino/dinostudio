@@ -32,6 +32,9 @@ import {
   kstToday,
   flattenDailyCashSheet,
   buildSheetSeed,
+  settledAmount,
+  summarize,
+  isOpenForSettlement,
   maskSensitive,
   permissionFor,
   segmentPnl,
@@ -126,6 +129,7 @@ import type {
   Project,
   Scenario,
   Setting,
+  Settlement,
   CashflowUnit,
   Direction,
   Entry,
@@ -259,11 +263,12 @@ export class LedgerService {
    * 같은 블록이 두 번 나오거나 건너뛴다 (§14). 커서는 마지막으로 받은 블록 키다.
    */
   async cashflow(unit: CashflowUnit, cursor: string | null = null, limit = 3) {
-    const [entries, snapshots] = await Promise.all([
+    const [entries, snapshots, settlements] = await Promise.all([
       this.store.listEntries(),
       this.store.listSnapshots(),
+      this.store.listSettlements(),
     ]);
-    const blocks = buildCashflow(entries, snapshots, unit);
+    const blocks = buildCashflow(entries, snapshots, unit, settlements);
     /*
      * 일별 보기는 **오늘을 맨 위에** 둔다. 시트에 앞으로 나갈 돈이 미리 적혀
      * 있어서, 그냥 최신순으로 두면 맨 위가 제일 먼 예정일이 된다. 그 숫자를
@@ -461,23 +466,37 @@ export class LedgerService {
     };
     const intakes = await this.store.listIntakes();
     const unreadFiles = (item: (typeof intakes)[number]) =>
-      ((item.parsed as { files?: Attachment[] } | null)?.files ?? [])
-        .filter(file => file.text == null && file.meta);
+      ((item.parsed as { files?: Attachment[] } | null)?.files ?? []).filter(
+        file => file.text == null && file.meta
+      );
     // Failures must not starve files that have never been tried.
-    const fileKey = (file: Attachment) => file.meta?.id ?? file.meta?.url_private_download ?? file.meta?.url_private;
+    const fileKey = (file: Attachment) =>
+      file.meta?.id ??
+      file.meta?.url_private_download ??
+      file.meta?.url_private;
     const knownText = new Map<string, string>();
     for (const item of intakes) {
-      for (const file of (item.parsed as { files?: Attachment[] } | null)?.files ?? []) {
+      for (const file of (item.parsed as { files?: Attachment[] } | null)
+        ?.files ?? []) {
         const key = fileKey(file);
         if (key && file.text) knownText.set(key, file.text);
       }
     }
-    const pending = intakes.filter(item => unreadFiles(item).length > 0)
-      .sort((a, b) =>
-        Math.min(...unreadFiles(a).map(f => f.readAttempts ?? 0)) -
-        Math.min(...unreadFiles(b).map(f => f.readAttempts ?? 0)));
-    let remaining = pending.reduce((n, item) => n + unreadFiles(item).length, 0);
-    let unattempted = pending.reduce((n, item) => n + unreadFiles(item).filter(f => !f.readAttempts).length, 0);
+    const pending = intakes
+      .filter(item => unreadFiles(item).length > 0)
+      .sort(
+        (a, b) =>
+          Math.min(...unreadFiles(a).map(f => f.readAttempts ?? 0)) -
+          Math.min(...unreadFiles(b).map(f => f.readAttempts ?? 0))
+      );
+    let remaining = pending.reduce(
+      (n, item) => n + unreadFiles(item).length,
+      0
+    );
+    let unattempted = pending.reduce(
+      (n, item) => n + unreadFiles(item).filter(f => !f.readAttempts).length,
+      0
+    );
 
     let read = 0;
     let failed = 0;
@@ -496,29 +515,39 @@ export class LedgerService {
       // Persist each file before starting the next expensive model call.
       const key = fileKey(selected);
       const cached = key ? knownText.get(key) : undefined;
-      const result = cached ? { text: cached, reason: null } : (await readFiles([selected.meta], {
-        token: process.env.SLACK_BOT_TOKEN,
-      }))[0];
+      const result = cached
+        ? { text: cached, reason: null }
+        : (
+            await readFiles([selected.meta], {
+              token: process.env.SLACK_BOT_TOKEN,
+            })
+          )[0];
       if (!result) continue;
       const ok = Boolean(result.text);
       if (!selected.readAttempts) unattempted -= 1;
       if (ok) {
-        read += 1; remaining -= 1;
+        read += 1;
+        remaining -= 1;
         if (key) knownText.set(key, result.text!);
-      }
-      else failed += 1;
+      } else failed += 1;
       rows.push({
         id: intake.id,
         name: selected.name,
         ok,
-        note: ok ? `${result.text!.length}자 읽음` : (result.reason ?? "읽지 못함"),
+        note: ok
+          ? `${result.text!.length}자 읽음`
+          : (result.reason ?? "읽지 못함"),
       });
-      const updated = files.map(file => file === selected ? {
-        ...file,
-        text: ok ? result.text : null,
-        reason: result.reason,
-        readAttempts: (file.readAttempts ?? 0) + 1,
-      } : file);
+      const updated = files.map(file =>
+        file === selected
+          ? {
+              ...file,
+              text: ok ? result.text : null,
+              reason: result.reason,
+              readAttempts: (file.readAttempts ?? 0) + 1,
+            }
+          : file
+      );
 
       /*
        * 읽은 내용을 원문 뒤에 이어 붙이고 **다시 파싱한다.**
@@ -825,11 +854,14 @@ export class LedgerService {
     ]);
     // 부채 열람도 기록한다 — 급여만 기록하던 것을 넓혔다 (D3)
     if (actor) await this.recordSensitiveAccess("debt", actor);
-    return { ...buildDebtReport(
-      debts,
-      today,
-      settingValue<number>(settings, "debt_long_term_total")
-    ), schedules };
+    return {
+      ...buildDebtReport(
+        debts,
+        today,
+        settingValue<number>(settings, "debt_long_term_total")
+      ),
+      schedules,
+    };
   }
 
   /** GET /forecast/13w — 주차별 잔액 · 예상런웨이 (§9.5) */
@@ -954,22 +986,41 @@ export class LedgerService {
     let before: unknown = null;
     if (kind === "debt" || kind === "debtSchedule") {
       if (!["대표", "재무"].includes(actor.role))
-        throw erpError("forbidden_field", {}, "차입 및 상환 일정은 대표·재무만 변경할 수 있습니다");
-      const parsed = (kind === "debt" ? debtInput : debtScheduleInput).safeParse(payload);
+        throw erpError(
+          "forbidden_field",
+          {},
+          "차입 및 상환 일정은 대표·재무만 변경할 수 있습니다"
+        );
+      const parsed = (
+        kind === "debt" ? debtInput : debtScheduleInput
+      ).safeParse(payload);
       if (!parsed.success)
-        throw erpError("invalid_transition", {}, "차입 입력값을 확인하십시오: " + parsed.error.issues.map(i => i.path.join(".") + " " + i.message).join(", "));
+        throw erpError(
+          "invalid_transition",
+          {},
+          "차입 입력값을 확인하십시오: " +
+            parsed.error.issues
+              .map(i => i.path.join(".") + " " + i.message)
+              .join(", ")
+        );
       payload = parsed.data;
       const debts = await this.store.listDebts();
       if (kind === "debt") {
         const row = payload as Debt;
         if (debts.some(d => d.code === row.code && d.id !== row.id))
-          throw erpError("duplicate_suspected", {}, "이미 사용 중인 차입 코드입니다");
+          throw erpError(
+            "duplicate_suspected",
+            {},
+            "이미 사용 중인 차입 코드입니다"
+          );
         before = debts.find(d => d.id === row.id) ?? null;
       } else {
         const row = payload as DebtSchedule;
         if (!debts.some(d => d.id === row.debtId))
           throw erpError("not_found", {}, "상환 일정을 연결할 차입이 없습니다");
-        before = (await this.store.listDebtSchedules()).find(d => d.id === row.id) ?? null;
+        before =
+          (await this.store.listDebtSchedules()).find(d => d.id === row.id) ??
+          null;
       }
     }
     let saved: unknown;
@@ -1404,18 +1455,29 @@ export class LedgerService {
    * 큰 건을 먼저 내면 작은 건 여러 개가 동시에 연체되기 때문이다.
    */
   async paymentOrder(actor: Actor) {
-    const [entries, parties] = await Promise.all([
+    const [entries, parties, settlements] = await Promise.all([
       this.store.listEntries(),
       this.store.listParties(),
+      this.store.listSettlements(),
     ]);
     const partyName = new Map(parties.map(p => [p.id, p.name]));
     const today = kstToday();
+    /*
+     * 확인 줄로 목록을 거른다 — `paidAt` 만 보면 **부분 지급이 통째로 빠진다.**
+     * 절반만 나간 건은 남은 금액만큼 아직 집행대기다.
+     */
+    const byEntry = new Map<string, Settlement[]>();
+    for (const line of settlements) {
+      const list = byEntry.get(line.entryId);
+      if (list) list.push(line);
+      else byEntry.set(line.entryId, [line]);
+    }
     const open = entries.filter(
       e =>
         e.direction === "out" &&
         (e.status === "pending" || e.status === "confirmed") &&
-        e.paidAt == null &&
-        e.amount != null
+        e.amount != null &&
+        isOpenForSettlement(e, byEntry.get(e.id) ?? [])
     );
     const byPriority = new Map<string, Entry[]>();
     for (const entry of open) {
@@ -1430,14 +1492,28 @@ export class LedgerService {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([priority, list]) => ({
           priority,
-          total: list.reduce((s, e) => s + (e.amount ?? 0), 0),
+          /*
+           * 합계는 **남은 금액**으로 낸다. 건 금액으로 내면 절반이 이미 나간
+           * 건을 전액 다시 막아야 하는 것처럼 보여 필요액이 부풀어 오른다.
+           */
+          total: list.reduce(
+            (sum, e) =>
+              sum +
+              (summarize(e, byEntry.get(e.id) ?? []).remaining ??
+                e.amount ??
+                0),
+            0
+          ),
           entries: paymentOrder(list, today).map(e => {
             const due = e.dueDate ?? e.cashDate;
+            const settlement = summarize(e, byEntry.get(e.id) ?? []);
             return {
               entry: maskEntryForRole(e, actor.role),
               partyName: e.partyId
                 ? (partyName.get(e.partyId) ?? "거래처 미등록")
                 : null,
+              /** 부분 지급이면 남은 금액만 막으면 된다 */
+              settlement,
               due,
               // 음수는 연체 일수다 — 화면에서 부호로 갈라 쓴다
               daysToDue: due == null ? null : daysBetween(today, due),
@@ -2634,7 +2710,9 @@ export class LedgerService {
     const cursors: Record<string, string> = {};
     // Rotate work that made progress behind untouched channels. A very large
     // notification channel must not block every other channel on each retry.
-    for (const line of [...report].sort((a, b) => Number(a.scanned > 0) - Number(b.scanned > 0))) {
+    for (const line of [...report].sort(
+      (a, b) => Number(a.scanned > 0) - Number(b.scanned > 0)
+    )) {
       if (!line.done) cursors[line.channel] = line.cursor ?? "";
     }
 
@@ -3427,6 +3505,278 @@ export class LedgerService {
       journal,
       affectedBlock: affected,
     };
+  }
+
+  /**
+   * §7.4 실제 입출금 확인 — **승인과 다른 사실이다.**
+   *
+   * 승인은 「나가도 된다」이고 이것은 「실제로 나갔다」다. 지금까지 이 동작이
+   * 없어서 `paidAt` 을 채울 길이 없었고, 그 결과 두 가지가 동시에 틀어져 있었다.
+   *
+   *   ① 집행대기 목록(`paymentOrder`)이 `paidAt == null` 로 목록을 만드는데
+   *      아무도 그 칸을 채울 수 없어 **건이 영원히 쌓였다**
+   *   ② 승인만 하면 현금흐름 계에 들어가 **결재만 끝난 돈이 이미 통장에서
+   *      빠져나간 것처럼** 잡혔다
+   *
+   * 건 하나에 여러 줄이 붙는다 — 부분 지급·분할 입금이 실제로 흔하다. 합계가
+   * 건 금액에 닿을 때만 `paidAt` 이 선다.
+   */
+  async settleEntry(
+    input: {
+      code: string;
+      settledOn: string;
+      amount: number;
+      bankAccount?: string | null;
+      bankRef?: string | null;
+      note?: string | null;
+      /** 같은 날·같은 금액을 정말 두 번 보냈을 때만 */
+      allowDuplicate?: boolean;
+    },
+    expectedVersion: number,
+    actor: Actor
+  ) {
+    /*
+     * 통장을 보는 사람만 확인할 수 있다. 담당자·사업부리더는 요청과 입력까지고,
+     * 돈이 실제로 움직였는지는 계좌를 여는 역할이 확인한다 (§13.1).
+     */
+    if (!["대표", "부대표", "재무"].includes(actor.role))
+      throw erpError(
+        "forbidden_field",
+        { role: actor.role },
+        "실제 입출금 확인은 대표·부대표·재무만 할 수 있습니다"
+      );
+
+    const entry = await this.requireWritable(input.code, actor);
+    this.assertFresh(entry, expectedVersion);
+
+    // 승인이 끝난 건만 확인한다 — 결재 없이 나간 돈을 장부에 세우면
+    // 승인 절차가 사후 추인으로 바뀐다
+    if (entry.status !== "confirmed")
+      throw erpError(
+        "invalid_transition",
+        { status: entry.status },
+        "승인이 끝난 건만 입출금을 확인할 수 있습니다"
+      );
+    if (entry.amount == null) throw erpError("amount_undecided");
+
+    const amount = Math.trunc(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0)
+      throw erpError(
+        "reason_required",
+        {},
+        "확인 금액은 0보다 커야 합니다 — 되돌리려면 확인 줄을 무효 처리하십시오"
+      );
+
+    /*
+     * 아직 오지 않은 날은 확인할 수 없다 — 「예정」과 「실제」를 가르는 선이다.
+     *
+     * 다만 기준은 `today()` 가 아니라 **실제 시계와 비교해 더 늦은 쪽**이다.
+     * `today_override` 기준값이 과거(시드 기본값 2026-08-27)로 남아 있으면
+     * `today()` 가 과거를 가리키고, 그러면 **이미 통장에서 나간 돈이 「미래」로
+     * 판정돼** 확인 자체가 막힌다. 실제로 일어난 일을 기준값이 부정할 수는 없다.
+     */
+    const [anchor, realToday] = [await this.today(), kstToday()];
+    const latest = anchor > realToday ? anchor : realToday;
+    if (input.settledOn > latest)
+      throw erpError("settlement_future", {
+        settledOn: input.settledOn,
+        today: latest,
+      });
+
+    const existing = await this.store.listSettlements(entry.id);
+    const already = settledAmount(existing);
+
+    /*
+     * **같은 줄을 두 번 적는 것**을 막는다.
+     *
+     * 버전 충돌로는 이걸 못 잡는다 — 부분 확인은 건을 바꾸지 않으므로 두
+     * 사람이 같은 화면을 열어 두고 각자 눌러도 버전이 그대로다. 그런데 실제로
+     * 분할 지급은 흔하므로 두 줄 자체를 막을 수도 없다. 그래서 **같은 날·같은
+     * 금액**이 이미 있으면 되묻는다. 진짜로 같은 날 같은 금액을 두 번 보냈다면
+     * `allowDuplicate` 로 통과시키고, 그 사실을 적요에 남긴다.
+     */
+    const twin = existing.find(
+      x =>
+        x.voidedAt == null &&
+        x.settledOn === input.settledOn &&
+        x.amount === amount
+    );
+    if (twin && !input.allowDuplicate)
+      throw erpError(
+        "duplicate_suspected",
+        {
+          settlementId: twin.id,
+          settledOn: twin.settledOn,
+          amount: twin.amount,
+        },
+        `같은 날(${twin.settledOn}) 같은 금액이 이미 확인돼 있습니다 — 두 번 보낸 것이 맞으면 「중복 확인」을 체크하십시오`
+      );
+    if (already + amount > entry.amount)
+      throw erpError("settlement_exceeds", {
+        amount: entry.amount,
+        already,
+        attempted: amount,
+      });
+
+    /*
+     * 같은 은행 거래 줄을 두 건에 붙이지 못하게 한다.
+     *
+     * DB 에는 부분 유니크 인덱스가 걸려 있지만 메모리 저장소에는 제약이 없고,
+     * 무엇보다 **제약 위반 오류보다 사람이 읽을 수 있는 말**이 나가야 한다.
+     * 이게 없으면 같은 출금을 두 건에 확인해 이중 차감이 난다.
+     */
+    const bankRef = input.bankRef?.trim() || null;
+    if (bankRef) {
+      const all = await this.store.listSettlements();
+      const clash = all.find(
+        x =>
+          x.bankRef === bankRef && x.voidedAt == null && x.entryId !== entry.id
+      );
+      if (clash) {
+        const other = (await this.store.listEntries()).find(
+          e => e.id === clash.entryId
+        );
+        throw erpError("settlement_duplicate_ref", {
+          bankRef,
+          otherCode: other?.code ?? null,
+        });
+      }
+    }
+
+    const settlement: Settlement = {
+      id: randomUUID(),
+      entryId: entry.id,
+      settledOn: input.settledOn,
+      amount,
+      bankAccount: input.bankAccount?.trim() || entry.bankAccount || null,
+      bankRef,
+      note: input.note?.trim() || null,
+      actor: actor.id,
+      at: nowIso(),
+      voidedAt: null,
+      voidedBy: null,
+      voidReason: null,
+    };
+    await this.store.appendSettlement(settlement);
+
+    const after = [...existing, settlement];
+    const entryAfter = await this.syncPaidAt(entry, after, expectedVersion);
+
+    await this.audit(
+      "entry",
+      entry.id,
+      "settle",
+      { paidAt: entry.paidAt, settled: already },
+      {
+        paidAt: entryAfter.paidAt,
+        settled: already + amount,
+        settledOn: settlement.settledOn,
+        bankRef,
+      },
+      actor
+    );
+
+    return {
+      entry: maskEntryForRole(entryAfter, actor.role),
+      settlement,
+      summary: summarize(entryAfter, after),
+    };
+  }
+
+  /**
+   * 확인을 되돌린다 — **줄은 지우지 않는다** (원칙 9).
+   *
+   * 잘못 확인한 것도 이력이다. 지우면 잔액이 왜 바뀌었는지 설명할 수 없고,
+   * 은행 대사에서 「이 줄은 어디 갔나」를 추적할 수 없다.
+   */
+  async voidSettlement(
+    input: { settlementId: string; reason: string },
+    actor: Actor
+  ) {
+    if (!["대표", "부대표", "재무"].includes(actor.role))
+      throw erpError(
+        "forbidden_field",
+        { role: actor.role },
+        "입출금 확인 취소는 대표·부대표·재무만 할 수 있습니다"
+      );
+    const reason = input.reason?.trim();
+    if (!reason)
+      throw erpError("reason_required", {}, "취소 사유를 적어야 합니다");
+
+    const all = await this.store.listSettlements();
+    const target = all.find(x => x.id === input.settlementId);
+    if (!target) throw erpError("not_found", { id: input.settlementId });
+    if (target.voidedAt)
+      throw erpError("invalid_transition", {}, "이미 무효 처리된 확인입니다");
+
+    const entries = await this.store.listEntries();
+    const entry = entries.find(e => e.id === target.entryId);
+    if (!entry) throw erpError("not_found", { id: target.entryId });
+    // 마감 확인은 원장 수정과 같은 기준을 쓴다
+    await this.requireWritable(entry.code, actor);
+
+    const voided: Settlement = {
+      ...target,
+      voidedAt: nowIso(),
+      voidedBy: actor.id,
+      voidReason: reason,
+    };
+    await this.store.replaceSettlement(voided);
+
+    const after = (await this.store.listSettlements(entry.id)).map(x =>
+      x.id === voided.id ? voided : x
+    );
+    const entryAfter = await this.syncPaidAt(entry, after, entry.version);
+
+    await this.audit(
+      "entry",
+      entry.id,
+      "settle-void",
+      { settlementId: target.id, amount: target.amount },
+      { reason, paidAt: entryAfter.paidAt },
+      actor
+    );
+    return {
+      entry: maskEntryForRole(entryAfter, actor.role),
+      summary: summarize(entryAfter, after),
+    };
+  }
+
+  /** 건별 확인 줄 + 요약 — 화면의 「입출금」 탭이 이걸 그린다 */
+  async settlements(code: string, actor: Actor) {
+    const entry = await this.store.getEntry(code);
+    if (!entry) throw erpError("not_found", { code });
+    if (!permissionFor(actor.role, "entry").read)
+      throw erpError("forbidden_field", { role: actor.role });
+    const rows = await this.store.listSettlements(entry.id);
+    return { code, rows, summary: summarize(entry, rows) };
+  }
+
+  /**
+   * `paidAt` 은 **파생값**이다 — 확인 줄에서 계산하고 사람이 직접 적지 않는다.
+   *
+   * 두 군데서 따로 적으면 반드시 어긋난다. 다 채워졌을 때만 마지막 확인일이
+   * 서고, 무효 처리로 다시 모자라면 도로 비운다.
+   */
+  private async syncPaidAt(
+    entry: Entry,
+    settlements: Settlement[],
+    expectedVersion: number
+  ): Promise<Entry> {
+    const summary = summarize(entry, settlements);
+    const paidAt = summary.state === "확인 완료" ? summary.lastSettledOn : null;
+    if (paidAt === entry.paidAt) return entry;
+    const updated: Entry = {
+      ...entry,
+      paidAt,
+      version: entry.version + 1,
+    };
+    const saved = await this.store.replaceEntry(updated, expectedVersion);
+    if (!saved)
+      throw erpError("version_conflict", {
+        current: await this.store.getEntry(entry.code),
+      });
+    return updated;
   }
 
   async reject(

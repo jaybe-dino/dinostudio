@@ -8,6 +8,7 @@ import type {
   Account,
   AppUser,
   Approval,
+  Settlement,
   Attachment,
   AuditLog,
   Contract,
@@ -29,6 +30,7 @@ import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import {
   erpAccounts,
   erpApprovals,
+  erpSettlements,
   erpAuditLogs,
   erpDaySnapshots,
   erpEntries,
@@ -139,6 +141,24 @@ function narrowParty(row: {
     incomeType: INCOME_TYPES.includes(row.incomeType as IncomeType)
       ? (row.incomeType as IncomeType)
       : null,
+  };
+}
+
+type SettlementRow = typeof erpSettlements.$inferSelect;
+
+function rowFromSettlement(s: Settlement) {
+  return {
+    ...s,
+    at: new Date(s.at),
+    voidedAt: s.voidedAt == null ? null : new Date(s.voidedAt),
+  };
+}
+
+function settlementFromRow(r: SettlementRow): Settlement {
+  return {
+    ...r,
+    at: r.at.toISOString(),
+    voidedAt: r.voidedAt ? r.voidedAt.toISOString() : null,
   };
 }
 
@@ -339,6 +359,29 @@ export class DrizzleLedgerStore implements LedgerStore {
       .where(eq(erpApprovals.entryId, entryId))
       .orderBy(asc(erpApprovals.at));
     return rows.map(r => ({ ...r, at: r.at.toISOString() }));
+  }
+
+  async appendSettlement(settlement: Settlement): Promise<void> {
+    await this.db.insert(erpSettlements).values(rowFromSettlement(settlement));
+  }
+
+  async listSettlements(entryId?: string): Promise<Settlement[]> {
+    const q = this.db.select().from(erpSettlements);
+    const rows = entryId
+      ? await q
+          .where(eq(erpSettlements.entryId, entryId))
+          .orderBy(asc(erpSettlements.settledOn))
+      : await q.orderBy(asc(erpSettlements.settledOn));
+    return rows.map(settlementFromRow);
+  }
+
+  async replaceSettlement(settlement: Settlement): Promise<Settlement | null> {
+    const rows = await this.db
+      .update(erpSettlements)
+      .set(rowFromSettlement(settlement))
+      .where(eq(erpSettlements.id, settlement.id))
+      .returning();
+    return rows[0] ? settlementFromRow(rows[0]) : null;
   }
 
   async appendAudit(log: AuditLog): Promise<void> {

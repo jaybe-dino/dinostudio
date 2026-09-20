@@ -12,7 +12,7 @@
  * 파생 뷰는 계산 결과이고 저장하지 않는다 (§4). 이 파일에 부수효과가 없어야 한다.
  */
 import { countsInCashflow } from "./status.js";
-import type { DaySnapshot, Entry } from "./types.js";
+import type { DaySnapshot, Entry, Settlement } from "./types.js";
 
 export type CashflowUnit = "day" | "month" | "year";
 
@@ -44,6 +44,17 @@ export interface CashflowBlock {
   recordedClose: number | null;
   /** 그 기록이 **어느 날짜의 것인지** — 월·연 블록은 기간 안 마지막 기록일 */
   recordedAsOf: string | null;
+  /**
+   * **은행 대사 잔액** — 실제 입출금이 확인된 것만으로 이은 잔액.
+   *
+   * `close` 는 「승인된 것」 기준이고 이것은 「통장에서 실제로 움직인 것」
+   * 기준이다. 승인만 하고 아직 안 나간 돈이 있으면 둘이 갈린다. 은행 잔액과
+   * 맞춰 볼 수 있는 것은 **이쪽뿐**이다.
+   */
+  settledClose: number | null;
+  /** 그 날 실제로 확인된 입금 / 출금 */
+  settledIn: number;
+  settledOut: number;
   /**
    * 계산값 − 기록값. 둘 다 있을 때만 나온다.
    *
@@ -87,7 +98,12 @@ function sum(entries: Entry[]): number {
  */
 export function buildDailyBlocks(
   entries: Entry[],
-  snapshots: DaySnapshot[]
+  snapshots: DaySnapshot[],
+  /**
+   * 실제 입출금 확인 줄. 없으면 대사 잔액은 서지 않는다 — 0 이 아니라 **모름**
+   * 이다. 확인을 아직 안 한 것과 실제로 0 원인 것은 다르다 (원칙 8).
+   */
+  settlements: Settlement[] = []
 ): CashflowBlock[] {
   const byDate = new Map<string, Entry[]>();
   for (const e of entries) {
@@ -98,14 +114,43 @@ export function buildDailyBlocks(
   }
 
   const snapByDate = new Map(snapshots.map(s => [s.date, s]));
+
+  /*
+   * 확인 줄은 **확인된 날짜**에 붙인다 — 건의 예정일이 아니다. 9/14 예정이던
+   * 돈이 9/18 에 나갔으면 통장에서 줄어든 날은 9/18 이고, 은행 잔액과 맞춰
+   * 보려면 그 날로 세어야 한다.
+   */
+  const dirById = new Map(entries.map(e => [e.id, e.direction]));
+  const settledByDate = new Map<string, { in: number; out: number }>();
+  for (const line of settlements) {
+    if (line.voidedAt != null) continue;
+    const dir = dirById.get(line.entryId);
+    if (!dir) continue;
+    const slot = settledByDate.get(line.settledOn) ?? { in: 0, out: 0 };
+    if (dir === "in") slot.in += line.amount;
+    else slot.out += line.amount;
+    settledByDate.set(line.settledOn, slot);
+  }
+  const hasSettlements = settledByDate.size > 0;
   const dates = Array.from(
-    new Set(Array.from(byDate.keys()).concat(Array.from(snapByDate.keys())))
+    new Set(
+      Array.from(byDate.keys())
+        .concat(Array.from(snapByDate.keys()))
+        .concat(Array.from(settledByDate.keys()))
+    )
   ).sort();
 
   const blocks: CashflowBlock[] = [];
   let carry: number | null = null;
   let carryNullReason: string | null = null;
   let first = true;
+  /*
+   * 대사 잔액은 **시작 잔액을 알아야** 이을 수 있다. 첫 날 일계의 시작값에서
+   * 출발하고, 그마저 없으면 내내 null 로 둔다 — 0 에서 시작했다고 치면 은행
+   * 잔액과 비교할 수 없는 숫자가 나온다.
+   */
+  let settledCarry: number | null = null;
+  let first2 = true;
 
   for (const date of dates) {
     const snap = snapByDate.get(date);
@@ -149,6 +194,16 @@ export function buildDailyBlocks(
 
     const recordedClose = snap?.close ?? null;
 
+    const settled = settledByDate.get(date) ?? { in: 0, out: 0 };
+    if (first2) {
+      settledCarry = snap?.open ?? null;
+      first2 = false;
+    }
+    const settledClose: number | null =
+      !hasSettlements || settledCarry == null
+        ? null
+        : settledCarry + settled.in - settled.out;
+
     blocks.push({
       unit: "day",
       key: date,
@@ -157,6 +212,9 @@ export function buildDailyBlocks(
       outSum,
       close,
       recordedClose,
+      settledClose,
+      settledIn: settled.in,
+      settledOut: settled.out,
       recordedAsOf: recordedClose == null ? null : date,
       closeGap:
         close != null && recordedClose != null ? close - recordedClose : null,
@@ -172,6 +230,7 @@ export function buildDailyBlocks(
     });
 
     carry = close;
+    settledCarry = settledClose;
     if (close == null) carryNullReason = nullReason ?? UNDECIDED_CARRYOVER;
   }
 
@@ -220,6 +279,9 @@ export function foldBlocks(
         inSum: days.reduce((acc, d) => acc + d.inSum, 0),
         outSum: days.reduce((acc, d) => acc + d.outSum, 0),
         close: lastDay.close,
+        settledClose: lastDay.settledClose,
+        settledIn: days.reduce((acc, d) => acc + d.settledIn, 0),
+        settledOut: days.reduce((acc, d) => acc + d.settledOut, 0),
         recordedClose,
         recordedAsOf: recorded?.recordedAsOf ?? null,
         closeGap:
@@ -242,9 +304,10 @@ export function foldBlocks(
 export function buildCashflow(
   entries: Entry[],
   snapshots: DaySnapshot[],
-  unit: CashflowUnit = "month"
+  unit: CashflowUnit = "month",
+  settlements: Settlement[] = []
 ): CashflowBlock[] {
-  return foldBlocks(buildDailyBlocks(entries, snapshots), unit);
+  return foldBlocks(buildDailyBlocks(entries, snapshots, settlements), unit);
 }
 
 /** §10.2 ③ 확정 지출·수입 합계 + 무엇이 빠졌는지 */
@@ -368,6 +431,9 @@ export function anchorToday(
        */
       recordedClose: previous?.recordedClose ?? null,
       recordedAsOf: previous?.recordedAsOf ?? null,
+      settledClose: previous?.settledClose ?? null,
+      settledIn: 0,
+      settledOut: 0,
       closeGap: null,
       nullReason:
         previous?.close == null ? (previous?.nullReason ?? null) : null,

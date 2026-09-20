@@ -18,7 +18,10 @@ export type ErpErrorCode =
   | "export_forbidden"
   | "reauth_required"
   | "not_found"
-  | "invalid_transition";
+  | "invalid_transition"
+  | "settlement_exceeds"
+  | "settlement_duplicate_ref"
+  | "settlement_future";
 
 const MAP: Record<
   ErpErrorCode,
@@ -82,6 +85,21 @@ const MAP: Record<
   invalid_transition: {
     trpc: "UNPROCESSABLE_CONTENT",
     message: "현재 상태에서는 그 처리를 할 수 없습니다",
+  },
+  settlement_exceeds: {
+    trpc: "UNPROCESSABLE_CONTENT",
+    message:
+      "확인 금액이 건 금액을 넘습니다 — 금액이 달라졌다면 건을 먼저 수정하십시오",
+  },
+  settlement_duplicate_ref: {
+    trpc: "CONFLICT",
+    message:
+      "같은 은행 거래번호가 다른 건에 이미 확인돼 있습니다 — 같은 출금을 두 번 차감하게 됩니다",
+  },
+  settlement_future: {
+    trpc: "UNPROCESSABLE_CONTENT",
+    message:
+      "아직 오지 않은 날짜로는 입출금을 확인할 수 없습니다. 예정일은 건의 입출금일에 적습니다",
   },
 };
 

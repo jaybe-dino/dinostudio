@@ -25,6 +25,7 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * 환율 저장 배율 (A8). 이 파일은 DECIMAL/FLOAT 를 쓰지 않으므로 환율도 정수로
@@ -200,7 +201,9 @@ export const erpEntries = pgTable(
     deferralMonths: integer("deferralMonths"),
     /** 낙관적 잠금 (§4) */
     version: integer("version").notNull().default(1),
-    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
     createdBy: varchar("createdBy", { length: 64 }).notNull(),
   },
   table => [
@@ -244,6 +247,38 @@ export const erpApprovals = pgTable(
   table => [index("erp_approval_entry_idx").on(table.entryId)]
 );
 
+/**
+ * §6.3 settlement — 실제 입출금 확인. 승인과 분리된 별도 사실이다.
+ *
+ * `bankRef` 에 부분 유니크 인덱스를 건다 — 같은 은행 거래 줄을 두 건에
+ * 붙이면 같은 출금이 두 번 빠진 것으로 잡힌다. 무효 처리된 줄은 그 자리를
+ * 비워 줘야 하므로 `voidedAt IS NULL` 일 때만 건다.
+ */
+export const erpSettlements = pgTable(
+  "erp_settlement",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    entryId: varchar("entryId", { length: 36 }).notNull(),
+    settledOn: date("settledOn", { mode: "string" }).notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    bankAccount: varchar("bankAccount", { length: 64 }),
+    bankRef: varchar("bankRef", { length: 128 }),
+    note: text("note"),
+    actor: varchar("actor", { length: 64 }).notNull(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+    voidedAt: timestamp("voidedAt", { withTimezone: true }),
+    voidedBy: varchar("voidedBy", { length: 64 }),
+    voidReason: text("voidReason"),
+  },
+  table => [
+    index("erp_settlement_entry_idx").on(table.entryId),
+    index("erp_settlement_on_idx").on(table.settledOn),
+    uniqueIndex("erp_settlement_bankref_uq")
+      .on(table.bankRef)
+      .where(sql`"bankRef" is not null and "voidedAt" is null`),
+  ]
+);
+
 /** §6.3 day_snapshot — 이관 구간 일계 + 이관 검증 기준값 (§5.4) */
 export const erpDaySnapshots = pgTable("erp_day_snapshot", {
   date: date("date", { mode: "string" }).primaryKey(),
@@ -271,9 +306,7 @@ export const erpAttachments = pgTable(
      * file = 이 시스템에 올린 파일 · link = 드라이브 등 외부 링크 (§11.2)
      * none = 증빙이 실제로 없는 건 — 사유(reason)를 반드시 함께 받는다
      */
-    storage: storageEnum("storage")
-      .notNull()
-      .default("link"),
+    storage: storageEnum("storage").notNull().default("link"),
     /** 증빙 없이 등록한 사유. storage=none 일 때만 채워진다 */
     reason: text("reason"),
     sizeBytes: bigint("sizeBytes", { mode: "number" }),
@@ -485,7 +518,9 @@ export const erpIntakes = pgTable(
     status: varchar("status", { length: 30 }).notNull().default("waiting"),
     failReason: varchar("failReason", { length: 300 }),
     entryId: varchar("entryId", { length: 36 }),
-    receivedAt: timestamp("receivedAt", { withTimezone: true }).defaultNow().notNull(),
+    receivedAt: timestamp("receivedAt", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   table => [
     uniqueIndex("erp_intake_source_uq").on(table.source, table.sourceRef),
@@ -513,7 +548,9 @@ export const erpNotifications = pgTable(
     screen: varchar("screen", { length: 60 }),
     sentAt: timestamp("sentAt", { withTimezone: true }),
     readAt: timestamp("readAt", { withTimezone: true }),
-    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("createdAt", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   table => [index("erp_notification_rule_idx").on(table.ruleId)]
 );
@@ -521,9 +558,7 @@ export const erpNotifications = pgTable(
 /** 월 마감 잠금 — closed면 그 기간 entry 수정을 거부한다 (3차) */
 export const erpPeriods = pgTable("erp_period", {
   ym: varchar("ym", { length: 7 }).primaryKey(),
-  status: periodStatusEnum("status")
-    .notNull()
-    .default("open"),
+  status: periodStatusEnum("status").notNull().default("open"),
   closedBy: varchar("closedBy", { length: 64 }),
   closedAt: timestamp("closedAt", { withTimezone: true }),
   blockers: jsonb("blockers"),
