@@ -359,6 +359,12 @@ export function IntakeScreen() {
         </Card>
       ) : null}
 
+      {/*
+        서버가 들고 있는 진행 상태. 예전에는 커서를 이 화면이 들고 있어서
+        화면을 닫는 순간 진도가 사라졌다 — 첨부 133건이 그렇게 남았다.
+      */}
+      <SyncStatus />
+
       <Card title="슬랙 과거 메시지 가져오기" meta="대표만">
         <Note>
           슬랙 연동은 <b>구독을 켠 다음</b>에 올라온 메시지만 보냅니다. 그
@@ -708,5 +714,87 @@ export function IntakeScreen() {
         </p>
       </Card>
     </>
+  );
+}
+
+/**
+ * 크론이 어디까지 했는지 — **화면을 안 열어도 돌고 있다**는 것을 보여 준다.
+ *
+ * 막힌 것은 막혔다고 적는다. 「실패 8건」이 아니라 「API 잔액 부족」이라고
+ * 적혀야 사람이 무엇을 해야 하는지 안다.
+ */
+function SyncStatus() {
+  const q = trpc.erp.intake.syncState.useQuery();
+  const s = q.data;
+  if (!s) return null;
+
+  const never = s.lastRunAt == null;
+  return (
+    <Card
+      title="자동 수집 상태"
+      meta={never ? "아직 돌지 않음" : `마지막 ${shortDate(s.lastRunAt!)}`}
+    >
+      {s.blocked ? (
+        <Note tone={s.blocked.needsPerson ? "alert" : "warn"}>
+          <b>
+            {s.blocked.what}이 막혀 있습니다 — {s.blocked.reason}
+          </b>
+          <br />
+          {s.blocked.needsPerson ? (
+            <>
+              이것은 <b>사람이 처리해야 풀립니다.</b> 재시도로는 안 됩니다.
+            </>
+          ) : (
+            <>잠시 뒤 자동으로 다시 시도합니다.</>
+          )}
+        </Note>
+      ) : (
+        <Note>
+          {never
+            ? "아직 한 번도 돌지 않았습니다. 매시 정각에 자동으로 이어 갑니다."
+            : "막힌 것 없이 돌고 있습니다. 이 화면을 닫아도 계속됩니다."}
+        </Note>
+      )}
+      <div className="kpis" style={{ marginTop: 10 }}>
+        <Tile
+          label="과거 메시지"
+          value={s.backfillDone ? "다 훑음" : "진행 중"}
+          note={`누적 ${s.collected}건 수집`}
+          tone={s.backfillDone ? "ok" : undefined}
+        />
+        <Tile
+          label="첨부 판독"
+          value={
+            s.attachmentsRemaining == null
+              ? "—"
+              : s.attachmentsRemaining === 0
+                ? "다 읽음"
+                : `${s.attachmentsRemaining}건 남음`
+          }
+          note={`누적 ${s.attachmentsRead}건 판독`}
+          tone={s.attachmentsRemaining === 0 ? "ok" : undefined}
+        />
+      </div>
+      {s.failures.length > 0 ? (
+        <div className="scroll" style={{ marginTop: 10 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>읽지 못한 파일</th>
+                <th>이유</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.failures.map((f, i) => (
+                <tr key={`${f.name}-${i}`}>
+                  <td className="wrap">{f.name}</td>
+                  <td className="wrap s">{f.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </Card>
   );
 }

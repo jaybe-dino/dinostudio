@@ -6,6 +6,7 @@ export * from "./codes.js";
 export * from "./status.js";
 export * from "./settlement.js";
 export * from "./cashEffect.js";
+export * from "./syncBlock.js";
 export * from "./cashflow.js";
 export * from "./cashPosition.js";
 export * from "./duplicates.js";

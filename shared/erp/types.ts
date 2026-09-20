@@ -532,3 +532,33 @@ export interface Period {
   closedAt: string | null;
   blockers: string[];
 }
+
+/**
+ * §11.3 슬랙 수집 진행 상태 — **서버가 들고 있는다.**
+ *
+ * 화면이 커서를 들고 있으면 그 화면을 닫는 순간 진도가 사라진다. 실제로
+ * 첨부 133건이 그렇게 남았다. 크론이 이 상태를 보고 멈춘 자리부터 잇는다.
+ */
+export interface SlackSyncState {
+  /** 채널별 커서 — 비면 처음부터 */
+  cursors: Record<string, string>;
+  days: number;
+  lastRunAt: string | null;
+  lastNote: string | null;
+  backfillDone: boolean;
+  collected: number;
+  attachmentsRead: number;
+  /** 남은 첨부 — null 이면 아직 세어 보지 않았다 */
+  attachmentsRemaining: number | null;
+  /**
+   * 막힌 이유. **성공으로 처리하지 않는다** — 「실패 5건」이 아니라
+   * 「API 잔액 부족」이라고 적혀야 사람이 무엇을 해야 하는지 안다.
+   */
+  blocked: {
+    what: string;
+    reason: string;
+    /** 사람이 처리해야 풀리는가 (잔액·키·권한) — 재시도로는 안 풀린다 */
+    needsPerson: boolean;
+  } | null;
+  failures: { name: string; reason: string }[];
+}

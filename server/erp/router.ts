@@ -687,6 +687,12 @@ export const erpRouter = router({
 
   /** §11.1 수집 검수함 — 검수 통과해야 원장으로 올라간다 */
   intake: router({
+    /** 서버가 들고 있는 수집 진행 상태 — 화면을 닫아도 남는다 (§11.3) */
+    syncState: protectedProcedure.query(({ ctx }) => {
+      actorFrom(ctx);
+      return run(() => getLedgerService().slackSyncState());
+    }),
+
     promote: protectedProcedure
       .input(z.object({ id: z.string() }))
       .mutation(({ ctx, input }) =>

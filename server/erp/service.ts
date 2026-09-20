@@ -34,6 +34,8 @@ import {
   buildSheetSeed,
   settledAmount,
   summarize,
+  classifyBlock,
+  needsPerson,
   isOpenForSettlement,
   maskSensitive,
   permissionFor,
@@ -130,6 +132,7 @@ import type {
   Scenario,
   Setting,
   Settlement,
+  SlackSyncState,
   CashflowUnit,
   Direction,
   Entry,
@@ -2744,6 +2747,173 @@ export class LedgerService {
           : "아직 남았습니다 — 「이어서 가져오기」를 누르면 멈춘 자리에서 계속합니다"
         : "지정한 기간을 모두 훑었습니다",
     };
+  }
+
+  /**
+   * §11.3 **사람 없이 도는 수집** — 화면을 열어 두지 않아도 이어진다.
+   *
+   * 지금까지 슬랙 수집과 첨부 판독은 **버튼을 누르고 그 화면을 켜 둔 동안만**
+   * 돌았다. 서버리스 함수는 짧게 끊기므로 한 번에 다 못 가져오고, 그래서
+   * 사람이 「이어서 가져오기」를 수십 번 눌러야 끝났다. 실제로는 끝까지 누른
+   * 적이 없고, 첨부 133건이 미판독으로 남았다.
+   *
+   * 그래서 **진행 상태를 서버에 적어 둔다.** 크론이 깨워서 멈춘 자리부터
+   * 이어 가고, 사람은 결과만 본다.
+   *
+   * 막힌 이유는 **정확히** 남긴다. 「실패 5건」이 아니라 「API 잔액 부족」이라고
+   * 적혀야 사람이 무엇을 해야 하는지 안다. 막힌 것을 성공으로 처리하지 않는다.
+   */
+  static readonly SYNC_STATE_KEY = "slack_sync_state";
+
+  async slackSyncState(): Promise<SlackSyncState> {
+    const settings = await this.store.listSettings();
+    const raw = settingValue<SlackSyncState>(
+      settings,
+      LedgerService.SYNC_STATE_KEY
+    );
+    return {
+      cursors: raw?.cursors ?? {},
+      days: raw?.days ?? 365,
+      lastRunAt: raw?.lastRunAt ?? null,
+      lastNote: raw?.lastNote ?? null,
+      backfillDone: raw?.backfillDone ?? false,
+      collected: raw?.collected ?? 0,
+      attachmentsRead: raw?.attachmentsRead ?? 0,
+      attachmentsRemaining: raw?.attachmentsRemaining ?? null,
+      blocked: raw?.blocked ?? null,
+      failures: raw?.failures ?? [],
+    };
+  }
+
+  private async saveSyncState(next: SlackSyncState) {
+    await this.store.putSetting({
+      key: LedgerService.SYNC_STATE_KEY,
+      value: next as unknown as Setting["value"],
+      // 진행 상태는 사람이 확인할 값이 아니라 기계가 적는 값이다
+      isProvisional: false,
+      ownerRole: "재무",
+      updatedBy: "cron",
+      updatedAt: nowIso(),
+    });
+  }
+
+  /**
+   * 한 번 깨어났을 때 하는 일 — 수집 한 조각, 그다음 첨부 몇 건.
+   *
+   * 순서가 중요하다. 첨부 판독은 한 건에 모델 호출이 붙어 느리므로, 먼저
+   * 수집을 밀어 놓고 남은 예산으로 첨부를 읽는다. 반대로 하면 수집이 영영
+   * 진도가 안 나간다.
+   */
+  async runSlackSync(
+    input: { budgetMs?: number; attachmentLimit?: number } = {},
+    deps: Parameters<LedgerService["backfillSlackHistory"]>[2] & {
+      readFiles?: typeof readSlackFiles;
+    } = {}
+  ) {
+    const now = deps.now ?? (() => Date.now());
+    const startedAt = now();
+    const budgetMs = Math.min(
+      Math.max(input.budgetMs ?? 45_000, 5_000),
+      280_000
+    );
+    // 사람 세션이 없다. 수집은 대표 권한이 필요하므로 크론 배우를 쓴다
+    const actor: Actor = { id: "cron", role: "대표" };
+    const state = await this.slackSyncState();
+
+    const next: SlackSyncState = {
+      ...state,
+      lastRunAt: nowIso(),
+      blocked: null,
+      failures: [],
+    };
+
+    // ── ① 수집 ────────────────────────────────────────────────────────────
+    if (!state.backfillDone) {
+      try {
+        const half = Math.floor(budgetMs * 0.5);
+        const result = await this.backfillSlackHistory(
+          {
+            days: state.days,
+            cursors: Object.keys(state.cursors).length
+              ? state.cursors
+              : undefined,
+            budgetMs: half,
+          },
+          actor,
+          deps
+        );
+        next.cursors = result.cursors;
+        next.backfillDone = !result.remaining;
+        next.collected = state.collected + result.totals.collected;
+        next.lastNote = result.note;
+        if (result.stopped === "ratelimited")
+          next.blocked = {
+            what: "슬랙 수집",
+            reason: `슬랙이 속도 제한을 걸었습니다 — ${result.retryAfterSec ?? 60}초 뒤 자동으로 다시 시도합니다`,
+            needsPerson: false,
+          };
+      } catch (error) {
+        /*
+         * 막힌 이유를 **그대로** 남긴다. 토큰이 없는 것과 권한이 모자란 것과
+         * 슬랙이 죽은 것은 사람이 할 일이 전혀 다르다.
+         */
+        const reason =
+          error instanceof Error ? error.message : "알 수 없는 오류";
+        next.blocked = {
+          what: "슬랙 수집",
+          reason,
+          needsPerson: needsPerson(reason),
+        };
+      }
+    }
+
+    // ── ② 첨부 판독 ──────────────────────────────────────────────────────
+    const left = budgetMs - (now() - startedAt);
+    if (left > 3_000) {
+      try {
+        const read = await this.readPendingAttachments(
+          {
+            limit: input.attachmentLimit ?? 8,
+            budgetMs: Math.max(left - 1_000, 1_000),
+          },
+          actor,
+          deps
+        );
+        next.attachmentsRead = state.attachmentsRead + read.read;
+        next.attachmentsRemaining = read.remaining;
+        next.failures = read.rows
+          .filter(r => !r.ok)
+          .map(r => ({ name: r.name, reason: r.note }));
+
+        /*
+         * **판독이 한 건도 안 되고 전부 같은 이유로 실패했다면 막힌 것이다.**
+         * 「실패 8건」으로 두면 크론이 계속 돌면서 같은 벽에 부딪힌다.
+         * 잔액 부족·키 없음은 사람이 처리해야 풀린다.
+         */
+        /*
+         * 먼저 잡힌 차단을 **덮어쓰지 않는다.** 수집이 토큰 없음으로 막혔는데
+         * 첨부 단계가 조용히 null 로 지우면, 화면에는 아무 문제 없는 것처럼
+         * 보이면서 아무것도 안 들어온다 — 가장 나쁜 실패다.
+         */
+        next.blocked =
+          next.blocked ??
+          classifyBlock("첨부 판독", {
+            read: read.read,
+            failures: next.failures,
+          });
+      } catch (error) {
+        const reason =
+          error instanceof Error ? error.message : "알 수 없는 오류";
+        next.blocked = next.blocked ?? {
+          what: "첨부 판독",
+          reason,
+          needsPerson: needsPerson(reason),
+        };
+      }
+    }
+
+    await this.saveSyncState(next);
+    return next;
   }
 
   /** POST /intake/:id/promote — 검수 통과 → entry 생성 (§10.1) */
