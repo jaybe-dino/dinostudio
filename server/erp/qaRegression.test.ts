@@ -458,3 +458,43 @@ describe("QA-001 — 세션이 사업부를 실어 나른다", () => {
     setAssignedRoles([]);
   });
 });
+
+describe("자원 권한 — 「로그인했는가」는 권한 검사가 아니다", () => {
+  /*
+   * 라우터가 `actorFrom(ctx)` 를 부르고 **결과를 버리는** 자리가 여럿 있었다.
+   * 그건 로그인 여부만 보는 것이고, 매트릭스에 `N` 으로 적힌 자원이 그대로
+   * 열려 있었다.
+   */
+  it("**감사로그** — audit: N 인 역할은 못 읽는다", async () => {
+    // 감사로그에는 원장 수정 전후 스냅샷이 통째로 들어 있다 (금액·거래처)
+    const s = svc();
+    for (const actor of [LEAD_IP, STAFF_A]) {
+      await expect(s.auditTrail({}, actor)).rejects.toThrow();
+    }
+    await expect(s.auditTrail({}, CEO)).resolves.toBeDefined();
+  });
+
+  it("**기준값** — setting: N 인 역할은 못 읽는다 (급여 실액이 들어 있다)", async () => {
+    const s = svc();
+    for (const actor of [LEAD_IP, STAFF_A]) {
+      await expect(s.settings(actor)).rejects.toThrow();
+    }
+    const asCfo = await s.settings(CFO);
+    expect(Array.isArray(asCfo)).toBe(true);
+  });
+
+  it("**부채** — debt: N 인 역할은 못 읽는다", async () => {
+    const s = svc();
+    for (const actor of [LEAD_IP, STAFF_A]) {
+      await expect(s.debt(actor)).rejects.toThrow();
+    }
+    await expect(s.debt(CFO)).resolves.toBeDefined();
+  });
+
+  it("외부세무는 감사·부채를 읽는다 — 막는 것이 목적이 아니라 매트릭스대로다", async () => {
+    const s = svc();
+    const TAX: Actor = { id: "tax@outside.kr", role: "외부세무" };
+    await expect(s.auditTrail({}, TAX)).resolves.toBeDefined();
+    await expect(s.debt(TAX)).resolves.toBeDefined();
+  });
+});

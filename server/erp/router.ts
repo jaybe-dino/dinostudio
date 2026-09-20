@@ -857,10 +857,9 @@ export const erpRouter = router({
       run(() => getLedgerService().putAccount(input, actorFrom(ctx)))
     ),
 
-  settings: protectedProcedure.query(({ ctx }) => {
-    actorFrom(ctx);
-    return run(() => getLedgerService().settings());
-  }),
+  settings: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().settings(actorFrom(ctx)))
+  ),
 
   audit: protectedProcedure
     .input(
@@ -868,10 +867,9 @@ export const erpRouter = router({
         .object({ table: z.string().optional(), rowId: z.string().optional() })
         .optional()
     )
-    .query(({ ctx, input }) => {
-      actorFrom(ctx);
-      return run(() => getLedgerService().auditTrail(input ?? {}));
-    }),
+    .query(({ ctx, input }) =>
+      run(() => getLedgerService().auditTrail(input ?? {}, actorFrom(ctx)))
+    ),
 
   /** §13.1 역할별 대기함 — 「지금 이 건은 누가 움직여야 하는가」 */
   approvalQueues: protectedProcedure.query(({ ctx }) =>

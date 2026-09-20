@@ -147,6 +147,7 @@ import type {
   MaskedEntry,
   Priority,
   PriorityOverrideInput,
+  Resource,
   Role,
 } from "../../shared/erp/index.js";
 import { DAILY_CASH_SUMMARY } from "../../shared/erp/data/dailyCash.js";
@@ -810,11 +811,38 @@ export class LedgerService {
     return this.store.listAccounts();
   }
 
-  async settings() {
+  async settings(actor?: Actor) {
+    /*
+     * 기준값에는 **급여 실액(`payroll_monthly_actual`)** 이 들어 있다.
+     * 매트릭스에서 사업부리더·담당자·외부열람은 `setting: N` 인데 이 경로로
+     * 그대로 읽을 수 있었다 — 급여 마스킹을 원장에서만 하고 기준값은
+     * 열어 두면 가린 의미가 없다.
+     */
+    if (actor) this.requireResource(actor, "setting");
     return this.store.listSettings();
   }
 
-  async auditTrail(filter: { table?: string; rowId?: string }) {
+  /**
+   * §13.1 자원 권한을 서버에서 본다.
+   *
+   * 라우터가 `actorFrom(ctx)` 를 부르고 **결과를 버리는** 자리가 여럿 있었다.
+   * 그건 「로그인했는가」만 보는 것이지 권한 검사가 아니다. 매트릭스에
+   * `N` 으로 적힌 자원이 그대로 열려 있었다.
+   */
+  private requireResource(actor: Actor, resource: Resource): void {
+    if (permissionFor(actor.role, resource).read) return;
+    throw erpError("forbidden_field", { role: actor.role, resource });
+  }
+
+  async auditTrail(filter: { table?: string; rowId?: string }, actor?: Actor) {
+    /*
+     * 감사로그에는 원장의 **수정 전후 스냅샷**이 통째로 들어 있다 — 금액과
+     * 거래처가 그대로다. 매트릭스에서 사업부리더·담당자·외부열람은 `audit: N`
+     * 인데 이 경로로 전부 읽을 수 있었다.
+     *
+     * `actor` 를 안 받는 내부 호출(테스트·자기 점검)은 그대로 둔다.
+     */
+    if (actor) this.requireResource(actor, "audit");
     return this.store.listAudit(filter);
   }
 
@@ -908,6 +936,8 @@ export class LedgerService {
   }
 
   async debt(actor?: Actor) {
+    // 매트릭스에서 담당자·사업부리더는 `debt: N` 이다
+    if (actor) this.requireResource(actor, "debt");
     const [debts, settings, today, schedules] = await Promise.all([
       this.store.listDebts(),
       this.store.listSettings(),
