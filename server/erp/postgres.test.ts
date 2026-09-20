@@ -337,3 +337,95 @@ describe("실제 입출금 확인이 Postgres 에 저장된다", () => {
     ).resolves.not.toThrow();
   }, 60_000);
 });
+
+describe("동시 확인이 실제 Postgres 에서도 막힌다 (QA-002)", () => {
+  /*
+   * 메모리 저장소는 `await` 가 없는 블록으로 원자성을 얻지만, 운영은 **여러
+   * 서버리스 인스턴스**가 동시에 같은 건을 건드린다. 그때 막는 것은 조건부
+   * INSERT 한 문장이다 — 이건 실제 엔진에 대고 확인해야 의미가 있다.
+   */
+  const line = (id: string, entryId: string, amount: number): Settlement => ({
+    id,
+    entryId,
+    settledOn: "2026-09-14",
+    amount,
+    bankAccount: null,
+    bankRef: null,
+    note: null,
+    actor: "cfo@dinostudio.kr",
+    at: "2026-09-14T10:00:00+09:00",
+    voidedAt: null,
+    voidedBy: null,
+    voidReason: null,
+  });
+
+  it("**한도를 넘는 동시 삽입은 하나만 들어간다**", async () => {
+    const entryId = randomUUID(); // varchar(36) — 접두사를 붙이면 넘친다
+    const results = await Promise.all([
+      store.appendSettlementGuarded(line(randomUUID(), entryId, 600), 1_000),
+      store.appendSettlementGuarded(line(randomUUID(), entryId, 600), 1_000),
+    ]);
+    expect(results.filter(r => r.inserted).length).toBe(1);
+
+    const rows = (await store.listSettlements(entryId)).filter(
+      r => r.voidedAt == null
+    );
+    expect(rows.reduce((n, r) => n + r.amount, 0)).toBe(600);
+  }, 60_000);
+
+  it("한도 안이면 둘 다 들어간다 — 분할 지급은 막지 않는다", async () => {
+    const entryId = randomUUID(); // varchar(36) — 접두사를 붙이면 넘친다
+    const results = await Promise.all([
+      store.appendSettlementGuarded(line(randomUUID(), entryId, 400), 1_000),
+      store.appendSettlementGuarded(line(randomUUID(), entryId, 400), 1_000),
+    ]);
+    expect(results.filter(r => r.inserted).length).toBe(2);
+  }, 60_000);
+
+  it("무효 처리된 줄은 한도를 다시 열어 준다", async () => {
+    const entryId = randomUUID(); // varchar(36) — 접두사를 붙이면 넘친다
+    const first = line(randomUUID(), entryId, 1_000);
+    expect((await store.appendSettlementGuarded(first, 1_000)).inserted).toBe(
+      true
+    );
+    // 꽉 찼으므로 더 못 넣는다
+    expect(
+      (
+        await store.appendSettlementGuarded(
+          line(randomUUID(), entryId, 1),
+          1_000
+        )
+      ).inserted
+    ).toBe(false);
+
+    await store.voidSettlementIfLive(first.id, {
+      voidedAt: "2026-09-15T09:00:00+09:00",
+      voidedBy: "cfo@dinostudio.kr",
+      voidReason: "착오",
+    });
+    expect(
+      (
+        await store.appendSettlementGuarded(
+          line(randomUUID(), entryId, 1_000),
+          1_000
+        )
+      ).inserted
+    ).toBe(true);
+  }, 60_000);
+
+  it("**동시 취소는 하나만 성공한다**", async () => {
+    const entryId = randomUUID(); // varchar(36) — 접두사를 붙이면 넘친다
+    const row = line(randomUUID(), entryId, 500);
+    await store.appendSettlementGuarded(row, 1_000);
+    const patch = {
+      voidedAt: "2026-09-15T09:00:00+09:00",
+      voidedBy: "cfo@dinostudio.kr",
+      voidReason: "착오",
+    };
+    const both = await Promise.all([
+      store.voidSettlementIfLive(row.id, patch),
+      store.voidSettlementIfLive(row.id, patch),
+    ]);
+    expect(both.filter(Boolean).length).toBe(1);
+  }, 60_000);
+});

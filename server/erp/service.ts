@@ -4065,9 +4065,27 @@ export class LedgerService {
       voidedBy: null,
       voidReason: null,
     };
-    await this.store.appendSettlement(settlement);
+    /*
+     * **검사와 삽입을 한 연산으로 한다.**
+     *
+     * 위의 `already + amount` 검사는 사람에게 읽을 수 있는 말을 돌려주기 위한
+     * 것이고, 동시 호출을 실제로 막는 것은 여기다. 서비스에서 읽고-검사하고-
+     * 넣으면 두 호출이 같은 시점에 합계를 읽어 둘 다 통과한다 — 1,000원짜리
+     * 건에 600 + 600 이 들어간다. 버전으로도 못 막는다: 부분 확인은 건을
+     * 바꾸지 않으므로 두 호출의 expectedVersion 이 똑같이 유효하다.
+     */
+    const guard = await this.store.appendSettlementGuarded(
+      settlement,
+      entry.amount
+    );
+    if (!guard.inserted)
+      throw erpError("settlement_exceeds", {
+        amount: entry.amount,
+        already: guard.settled,
+        attempted: amount,
+      });
 
-    const after = [...existing, settlement];
+    const after = await this.store.listSettlements(entry.id);
     const entryAfter = await this.syncPaidAt(entry, after, expectedVersion);
 
     await this.audit(
@@ -4123,17 +4141,25 @@ export class LedgerService {
     // 마감 확인은 원장 수정과 같은 기준을 쓴다
     await this.requireWritable(entry.code, actor);
 
-    const voided: Settlement = {
-      ...target,
+    /*
+     * **살아 있을 때만 바꾼다.** 위의 `target.voidedAt` 검사는 사람에게 말을
+     * 돌려주기 위한 것이고, 동시 취소를 실제로 막는 것은 여기다. 둘 다
+     * 성공했다고 답하면 감사로그에 취소가 두 번 남고 무엇이 실제로 일어났는지
+     * 알 수 없게 된다.
+     */
+    const voided = await this.store.voidSettlementIfLive(target.id, {
       voidedAt: nowIso(),
       voidedBy: actor.id,
       voidReason: reason,
-    };
-    await this.store.replaceSettlement(voided);
+    });
+    if (!voided)
+      throw erpError(
+        "invalid_transition",
+        { settlementId: target.id },
+        "다른 사람이 먼저 취소했습니다"
+      );
 
-    const after = (await this.store.listSettlements(entry.id)).map(x =>
-      x.id === voided.id ? voided : x
-    );
+    const after = await this.store.listSettlements(entry.id);
     const entryAfter = await this.syncPaidAt(entry, after, entry.version);
 
     await this.audit(
@@ -4180,11 +4206,25 @@ export class LedgerService {
       version: entry.version + 1,
     };
     const saved = await this.store.replaceEntry(updated, expectedVersion);
-    if (!saved)
-      throw erpError("version_conflict", {
-        current: await this.store.getEntry(entry.code),
-      });
-    return updated;
+    if (saved) return updated;
+
+    /*
+     * **여기서 오류를 내면 안 된다.** 확인 줄은 이미 들어갔다. 실패를
+     * 돌려주면 사람은 「안 들어갔다」고 읽고 다시 누른다 — 그러면 같은 지급이
+     * 두 번 기록된다.
+     *
+     * `paidAt` 은 확인 줄에서 나오는 **파생값**이므로 늦게 맞춰도 된다.
+     * 다른 흐름이 먼저 건을 바꿨으면 그 최신본 위에 한 번 더 시도하고,
+     * 그래도 안 되면 최신본을 그대로 돌려준다 — 다음 조회에서 다시 맞춰진다.
+     */
+    const current = await this.store.getEntry(entry.code);
+    if (!current) return updated;
+    if (current.paidAt === paidAt) return current;
+    const retried = await this.store.replaceEntry(
+      { ...current, paidAt, version: current.version + 1 },
+      current.version
+    );
+    return retried ?? current;
   }
 
   async reject(

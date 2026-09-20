@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { LedgerService } from "./service.js";
 import { InMemoryLedgerStore } from "./store.js";
 import type { Actor } from "./service.js";
+import { kstToday } from "../../shared/erp/index.js";
 
 const CEO: Actor = { id: "ceo@dinostudio.kr", role: "대표" };
 const CFO: Actor = { id: "cfo@dinostudio.kr", role: "재무" };
@@ -97,5 +98,95 @@ describe("QA-003 — 예측 기준일이 실제 집행을 열어 주면 안 된�
       CFO
     );
     expect(done.summary.state).toBe("확인 완료");
+  });
+});
+
+describe("QA-002 — 동시 확인이 건 금액을 넘어서는 안 된다", () => {
+  /*
+   * 합계 읽기 → 금액 검사 → 줄 추가 → paidAt 갱신이 **원자적이지 않다.**
+   * 두 호출이 같은 시점에 합계를 읽으면 둘 다 「아직 여유가 있다」고 판단하고
+   * 둘 다 통과한다. 1,000원짜리 건에 600 + 600 = 1,200 이 들어간다.
+   *
+   * 버전으로는 못 막는다 — 부분 확인은 건을 바꾸지 않으므로 두 호출의
+   * expectedVersion 이 똑같이 유효하다. **화면에서 두 번 누르지 못하게
+   * 막는 것도 대책이 아니다.** API 를 직접 부르면 그대로 통과한다.
+   */
+  it("같은 버전으로 동시에 불러도 합계가 건 금액을 넘지 않는다", async () => {
+    const s = svc();
+    const e = await approved(s, 1_000);
+    const today = kstToday();
+
+    const results = await Promise.allSettled([
+      s.settleEntry(
+        { code: e.entry.code, settledOn: today, amount: 600 },
+        e.entry.version,
+        CFO
+      ),
+      s.settleEntry(
+        { code: e.entry.code, settledOn: today, amount: 600 },
+        e.entry.version,
+        CEO
+      ),
+    ]);
+
+    const ok = results.filter(r => r.status === "fulfilled");
+    expect(ok.length).toBe(1); // 하나만 통과해야 한다
+
+    const view = await s.settlements(e.entry.code, CEO);
+    expect(view.summary.settled).toBe(600);
+    expect(view.summary.settled).toBeLessThanOrEqual(1_000);
+  });
+
+  it("여러 건이 동시에 들어와도 총합이 건 금액을 넘지 않는다", async () => {
+    const s = svc();
+    const e = await approved(s, 1_000);
+    const today = kstToday();
+
+    // 400 짜리 네 건 — 둘까지만 들어가야 한다
+    const results = await Promise.allSettled(
+      [0, 1, 2, 3].map(i =>
+        s.settleEntry(
+          {
+            code: e.entry.code,
+            settledOn: today,
+            amount: 400,
+            // 같은 날·같은 금액 되묻기를 피해 **초과 검사만** 본다
+            allowDuplicate: true,
+            bankRef: `CONC-${i}`,
+          },
+          e.entry.version,
+          CFO
+        )
+      )
+    );
+    const view = await s.settlements(e.entry.code, CEO);
+    expect(view.summary.settled).toBeLessThanOrEqual(1_000);
+    expect(results.filter(r => r.status === "fulfilled").length).toBe(2);
+  });
+
+  it("동시 취소도 합계를 음수로 만들지 않는다", async () => {
+    const s = svc();
+    const e = await approved(s, 1_000);
+    const today = kstToday();
+    const done = await s.settleEntry(
+      { code: e.entry.code, settledOn: today, amount: 1_000 },
+      e.entry.version,
+      CFO
+    );
+
+    const results = await Promise.allSettled([
+      s.voidSettlement(
+        { settlementId: done.settlement.id, reason: "착오" },
+        CFO
+      ),
+      s.voidSettlement(
+        { settlementId: done.settlement.id, reason: "착오" },
+        CEO
+      ),
+    ]);
+    expect(results.filter(r => r.status === "fulfilled").length).toBe(1);
+
+    const view = await s.settlements(e.entry.code, CEO);
+    expect(view.summary.settled).toBe(0);
   });
 });
