@@ -869,6 +869,20 @@ export const erpRouter = router({
    * §5.6 개시 전 재이관 — 「데일리 현금흐름」 시트를 최종본으로 다시 깐다.
    * 대표만 · 재인증 뒤에만 · 확인 문구를 직접 입력해야 · 마감 기간이 없어야.
    */
+  /** §5.7 시트와 원장의 차이 — 읽기만 한다. 덮어쓰지 않는다 */
+  sheetDiff: protectedProcedure
+    .input(
+      z
+        .object({
+          text: z.string().min(1).optional(),
+          year: z.number().int().min(2000).max(2100).optional(),
+        })
+        .optional()
+    )
+    .query(({ ctx, input }) =>
+      run(() => getLedgerService().sheetDiff(input ?? {}, actorFrom(ctx)))
+    ),
+
   rebuildFromSheet: protectedProcedure
     .input(
       z.object({

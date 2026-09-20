@@ -32,6 +32,7 @@ import {
   kstToday,
   flattenDailyCashSheet,
   buildSheetSeed,
+  diffSheetAgainstLedger,
   settledAmount,
   summarize,
   classifyBlock,
@@ -142,6 +143,7 @@ import type {
   PriorityOverrideInput,
   Role,
 } from "../../shared/erp/index.js";
+import { DAILY_CASH_SUMMARY } from "../../shared/erp/data/dailyCash.js";
 import { randomUUID } from "node:crypto";
 import {
   decodeBackfillCursor,
@@ -2073,6 +2075,31 @@ export class LedgerService {
    * 구멍이 된다.
    */
   static readonly REBUILD_CONFIRM = "기존 원장을 모두 지우고 다시 만든다";
+
+  /**
+   * §5.7 시트와 원장의 차이 — **읽기만 한다.**
+   *
+   * 「최신 시트로 다시 깔기」는 이제 쓸 수 없다. 그 사이 사람이 원장에서 고친
+   * 것과 슬랙에서 올라온 것이 전부 날아가기 때문이다. 대신 무엇이 다른지만
+   * 보여 주고, 고치는 것은 사람이 건별로 한다.
+   *
+   * 붙여 넣지 않으면 코드에 박아 둔 사본과 비교한다.
+   */
+  async sheetDiff(input: { text?: string; year?: number }, actor: Actor) {
+    if (!permissionFor(actor.role, "entry").read)
+      throw erpError("forbidden_field", { role: actor.role });
+    const pasted = input.text?.trim();
+    const year = input.year ?? Number((await this.today()).slice(0, 4));
+    const seed = buildSheetSeed(pasted ? { text: pasted, year } : undefined);
+    const ledger = await this.store.listEntries();
+    const diff = diffSheetAgainstLedger(seed.entries, ledger);
+    return {
+      source: pasted ? ("pasted" as const) : ("embedded" as const),
+      asOf: pasted ? null : DAILY_CASH_SUMMARY.asOf,
+      sheetRows: seed.entries.length,
+      ...diff,
+    };
+  }
 
   async rebuildFromDailyCashSheet(
     input: { text?: string; year?: number; confirm: string },
