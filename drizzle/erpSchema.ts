@@ -555,6 +555,8 @@ export const erpNotifications = pgTable(
     sendAttempts: integer("sendAttempts").notNull().default(0),
     lastError: text("lastError"),
     lastAttemptAt: timestamp("lastAttemptAt", { withTimezone: true }),
+    /** 발송 선점의 임대 만료 — 지나기 전에는 다른 인스턴스가 못 집는다 (QA-004) */
+    leaseUntil: timestamp("leaseUntil", { withTimezone: true }),
     readAt: timestamp("readAt", { withTimezone: true }),
     createdAt: timestamp("createdAt", { withTimezone: true })
       .defaultNow()

@@ -429,3 +429,140 @@ describe("동시 확인이 실제 Postgres 에서도 막힌다 (QA-002)", () => 
     expect(both.filter(Boolean).length).toBe(1);
   }, 60_000);
 });
+
+/**
+ * QA-004 — 알림 발송 선점이 실제 Postgres 에서도 하나만 통과한다.
+ *
+ * 메모리 저장소의 검증은 「한 프로세스 안에서」만 의미가 있다. 운영은 화면과
+ * 크론이 **다른 서버리스 인스턴스**에서 같은 순간에 같은 알림을 집는다.
+ * 그때 막는 것은 `INSERT ... ON CONFLICT DO UPDATE ... WHERE` 한 문장이다.
+ */
+describe("알림 발송 선점이 실제 Postgres 에서도 하나만 통과한다 (QA-004)", () => {
+  const note = (id: string) => ({
+    id,
+    ruleId: "R-T3-01",
+    title: "가용자금 음수",
+    body: "P0까지 부족합니다",
+    screen: null,
+    sentAt: null,
+    sendAttempts: 0,
+    lastError: null,
+    lastAttemptAt: null,
+    leaseUntil: null,
+    readAt: null,
+    createdAt: "2026-09-21T00:00:00.000Z",
+  });
+  const at = (iso: string, plusMs: number) =>
+    new Date(Date.parse(iso) + plusMs).toISOString();
+  const T0 = "2026-09-21T00:00:00.000Z";
+
+  it("**동시에 집으면 하나만 성공한다**", async () => {
+    const n = note(randomUUID());
+    const opts = {
+      now: T0,
+      leaseUntil: at(T0, 120_000),
+      maxAttempts: 3,
+    };
+    const both = await Promise.all([
+      store.claimNotification(n, opts),
+      store.claimNotification(n, opts),
+    ]);
+    expect(both.filter(r => r.claimed).length).toBe(1);
+    // 진 쪽도 현재 상태를 받는다 — 화면에 「안 갔다」로 보이면 안 된다
+    expect(both.every(r => r.current.id === n.id)).toBe(true);
+  }, 60_000);
+
+  it("임대가 지나야 다시 집힌다 — 보내다 죽은 건이 갇히지 않는다", async () => {
+    const n = note(randomUUID());
+    await store.claimNotification(n, {
+      now: T0,
+      leaseUntil: at(T0, 120_000),
+      maxAttempts: 3,
+    });
+    // 임대 중에는 못 집는다
+    expect(
+      (
+        await store.claimNotification(n, {
+          now: at(T0, 1_000),
+          leaseUntil: at(T0, 121_000),
+          maxAttempts: 3,
+        })
+      ).claimed
+    ).toBe(false);
+    // 지나면 집힌다
+    const later = await store.claimNotification(n, {
+      now: at(T0, 180_000),
+      leaseUntil: at(T0, 300_000),
+      maxAttempts: 3,
+    });
+    expect(later.claimed).toBe(true);
+    expect(later.current.sendAttempts).toBe(2);
+  }, 60_000);
+
+  it("**성공한 뒤에는 임대가 풀려도 다시 안 집는다**", async () => {
+    const n = note(randomUUID());
+    await store.claimNotification(n, {
+      now: T0,
+      leaseUntil: at(T0, 120_000),
+      maxAttempts: 3,
+    });
+    const released = await store.releaseNotification(n.id, {
+      sentAt: at(T0, 500),
+      lastError: null,
+    });
+    expect(released.sentAt).not.toBeNull();
+    expect(released.leaseUntil).toBeNull();
+
+    expect(
+      (
+        await store.claimNotification(n, {
+          now: at(T0, 3_600_000),
+          leaseUntil: at(T0, 3_720_000),
+          maxAttempts: 3,
+        })
+      ).claimed
+    ).toBe(false);
+  }, 60_000);
+
+  it("**늦게 온 실패가 먼저 온 성공을 지우지 않는다**", async () => {
+    const n = note(randomUUID());
+    await store.claimNotification(n, {
+      now: T0,
+      leaseUntil: at(T0, 120_000),
+      maxAttempts: 3,
+    });
+    await store.releaseNotification(n.id, {
+      sentAt: at(T0, 500),
+      lastError: null,
+    });
+    const after = await store.releaseNotification(n.id, {
+      sentAt: null,
+      lastError: "channel_not_found",
+    });
+    expect(after.sentAt).not.toBeNull();
+    expect(after.lastError).toBeNull();
+  }, 60_000);
+
+  it("시도 횟수를 다 쓰면 임대가 지나도 안 집는다", async () => {
+    const n = note(randomUUID());
+    for (let i = 0; i < 3; i += 1) {
+      const claim = await store.claimNotification(n, {
+        now: at(T0, i * 200_000),
+        leaseUntil: at(T0, i * 200_000 + 120_000),
+        maxAttempts: 3,
+      });
+      expect(claim.claimed).toBe(true);
+      await store.releaseNotification(n.id, {
+        sentAt: null,
+        lastError: "channel_not_found",
+      });
+    }
+    const exhausted = await store.claimNotification(n, {
+      now: at(T0, 900_000),
+      leaseUntil: at(T0, 1_020_000),
+      maxAttempts: 3,
+    });
+    expect(exhausted.claimed).toBe(false);
+    expect(exhausted.current.sendAttempts).toBe(3);
+  }, 60_000);
+});

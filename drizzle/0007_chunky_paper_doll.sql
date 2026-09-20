@@ -1,0 +1,1 @@
+ALTER TABLE "erp_notification" ADD COLUMN "leaseUntil" timestamp with time zone;

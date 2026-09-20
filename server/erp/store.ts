@@ -129,6 +129,29 @@ export interface LedgerStore {
   /** §12 알림 — 미발송이어도 적재된다 (B7) */
   listNotifications(): Promise<Notification[]>;
   upsertNotification(notification: Notification): Promise<Notification>;
+  /**
+   * 발송 직전에 **한 문장으로** 선점한다 (QA-004).
+   *
+   * 「읽고 → 보내고 → 저장」 사이에는 아무 보호가 없었다. 화면 조회와 크론이
+   * 겹치면 둘 다 「아직 안 보냈다」를 읽고 둘 다 보낸다. 프로세스 안의 잠금
+   * 으로는 못 막는다 — 운영은 서버리스라 인스턴스가 여럿이다.
+   *
+   * 집었으면 `claimed: true`. 못 집었으면 이미 보냈거나, 다른 쪽이 보내는
+   * 중이거나, 시도 횟수를 다 쓴 것이다. `current` 는 화면에 보여 줄 현재
+   * 상태다 — 진 쪽도 「보냈다」를 보여 줘야 사람이 다시 누르지 않는다.
+   */
+  claimNotification(
+    notification: Notification,
+    opts: { now: string; leaseUntil: string; maxAttempts: number }
+  ): Promise<{ claimed: boolean; current: Notification }>;
+  /**
+   * 선점을 놓는다. **성공은 덮지 않는다** — 늦게 도착한 실패가 먼저 성공한
+   * 발송을 지우면 「안 갔다」로 보여 사람이 다시 보낸다.
+   */
+  releaseNotification(
+    id: string,
+    patch: { sentAt: string | null; lastError: string | null }
+  ): Promise<Notification>;
   listAppUsers(): Promise<AppUser[]>;
   upsertAppUser(user: AppUser): Promise<AppUser>;
   /**
@@ -446,6 +469,61 @@ export class InMemoryLedgerStore implements LedgerStore {
   }
   async upsertNotification(notification: Notification): Promise<Notification> {
     return upsertBy(this.notifications, notification, "id");
+  }
+
+  /**
+   * **이 블록에는 `await` 가 하나도 없다.** 자바스크립트는 한 번에 한 흐름만
+   * 돌기 때문에, `await` 가 없는 동안에는 다른 호출이 끼어들 수 없다. 한 줄
+   * 이라도 넣으면 그 자리에서 갈라져 둘 다 선점에 성공한다.
+   */
+  async claimNotification(
+    notification: Notification,
+    opts: { now: string; leaseUntil: string; maxAttempts: number }
+  ): Promise<{ claimed: boolean; current: Notification }> {
+    const existing = this.notifications.find(n => n.id === notification.id);
+    if (!existing) {
+      const row: Notification = {
+        ...notification,
+        sendAttempts: 1,
+        lastAttemptAt: opts.now,
+        leaseUntil: opts.leaseUntil,
+      };
+      this.notifications.push(row);
+      return { claimed: true, current: { ...row } };
+    }
+    /*
+     * **시각은 문자열로 비교하지 않는다.**
+     *
+     * `nowIso()` 는 KST 오프셋(`+09:00`)으로 찍고 임대는 UTC(`Z`)로 찍힌다.
+     * 문자열로 비교하면 `2026-09-20T16:52Z <= 2026-09-21T01:50+09:00` 이
+     * 참이 된다 — 같은 순간인데 임대가 이미 지난 것처럼 보이고, 선점이
+     * 통째로 무력해진다. 실제로 이 테스트가 그걸 잡았다.
+     */
+    const expired =
+      existing.leaseUntil == null ||
+      Date.parse(existing.leaseUntil) <= Date.parse(opts.now);
+    const claimable =
+      existing.sentAt == null &&
+      existing.sendAttempts < opts.maxAttempts &&
+      expired;
+    if (!claimable) return { claimed: false, current: { ...existing } };
+    existing.sendAttempts += 1;
+    existing.lastAttemptAt = opts.now;
+    existing.leaseUntil = opts.leaseUntil;
+    return { claimed: true, current: { ...existing } };
+  }
+
+  async releaseNotification(
+    id: string,
+    patch: { sentAt: string | null; lastError: string | null }
+  ): Promise<Notification> {
+    const existing = this.notifications.find(n => n.id === id);
+    if (!existing) throw new Error(`알림을 찾을 수 없습니다: ${id}`);
+    // 먼저 성공한 쪽이 이긴다
+    if (existing.sentAt == null) existing.sentAt = patch.sentAt;
+    existing.lastError = existing.sentAt == null ? patch.lastError : null;
+    existing.leaseUntil = null;
+    return { ...existing };
   }
   async resetLedger() {
     const removed = {
