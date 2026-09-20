@@ -35,7 +35,10 @@ describe("차입 입력", () => {
   it("권한 없는 역할과 잘못된 날짜·금액·코드 중복을 거부한다", async () => {
     const service = new LedgerService(new InMemoryLedgerStore());
     await expect(
-      service.upsertMaster("debt", row, { id: "staff", role: "담당자" } as Actor)
+      service.upsertMaster("debt", row, {
+        id: "staff",
+        role: "담당자",
+      } as Actor)
     ).rejects.toMatchObject({ code: "forbidden_field" });
     await expect(
       service.upsertMaster("debt", { ...row, maturityDate: "2026-02-30" }, ceo)

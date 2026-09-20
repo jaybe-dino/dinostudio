@@ -240,7 +240,8 @@ export function IntakeScreen() {
   const readAttachments = trpc.erp.intake.readAttachments.useMutation({
     onSuccess: async result => {
       setAttachNote(result.note);
-      if (result.unattempted === 0 || result.read + result.failed === 0) setAutoAttachments(false);
+      if (result.unattempted === 0 || result.read + result.failed === 0)
+        setAutoAttachments(false);
       await refresh();
     },
     onError: error => {
@@ -254,7 +255,10 @@ export function IntakeScreen() {
   });
   useEffect(() => {
     if (!autoAttachments || readAttachments.isPending) return;
-    const timer = window.setTimeout(() => readAttachments.mutate({ limit: 3 }), 1000);
+    const timer = window.setTimeout(
+      () => readAttachments.mutate({ limit: 3 }),
+      1000
+    );
     return () => window.clearTimeout(timer);
   }, [autoAttachments, readAttachments.isPending]);
 
@@ -354,6 +358,12 @@ export function IntakeScreen() {
           </Note>
         </Card>
       ) : null}
+
+      {/*
+        서버가 들고 있는 진행 상태. 예전에는 커서를 이 화면이 들고 있어서
+        화면을 닫는 순간 진도가 사라졌다 — 첨부 133건이 그렇게 남았다.
+      */}
+      <SyncStatus />
 
       <Card title="슬랙 과거 메시지 가져오기" meta="대표만">
         <Note>
@@ -514,7 +524,9 @@ export function IntakeScreen() {
           수집은 파일 <b>이름만</b> 먼저 남깁니다. 내용은 여기서 읽습니다 —
           수집하면서 같이 읽으면 파일 하나마다 내려받기와 해독이 붙어 서버가
           시간 안에 못 끝냅니다.
-          <br />한 번에 <b>최대 3개 파일</b>을 읽습니다. 처음 읽는 파일을 먼저 처리하며, 실패한 파일도 남은 수에 포함됩니다. 남았다고 나오면 다시 누르십시오.
+          <br />한 번에 <b>최대 3개 파일</b>을 읽습니다. 처음 읽는 파일을 먼저
+          처리하며, 실패한 파일도 남은 수에 포함됩니다. 남았다고 나오면 다시
+          누르십시오.
         </Note>
         <button
           type="button"
@@ -525,11 +537,20 @@ export function IntakeScreen() {
         >
           {readAttachments.isPending ? "읽는 중…" : "첨부 읽기"}
         </button>
-        <button type="button" className="btn" style={{ marginLeft: 8 }}
-          onClick={() => setAutoAttachments(value => !value)}>
-          {autoAttachments ? "첨부 자동 읽기 일시정지" : "남은 첨부 자동으로 읽기"}
+        <button
+          type="button"
+          className="btn"
+          style={{ marginLeft: 8 }}
+          onClick={() => setAutoAttachments(value => !value)}
+        >
+          {autoAttachments
+            ? "첨부 자동 읽기 일시정지"
+            : "남은 첨부 자동으로 읽기"}
         </button>
-        <p className="s">자동 읽기는 이 화면을 열어 둔 동안 진행됩니다. 모든 미시도 파일을 한 번씩 처리한 뒤 멈추며, 실패 파일은 원인과 함께 남습니다.</p>
+        <p className="s">
+          자동 읽기는 이 화면을 열어 둔 동안 진행됩니다. 모든 미시도 파일을 한
+          번씩 처리한 뒤 멈추며, 실패 파일은 원인과 함께 남습니다.
+        </p>
         {attachNote ? (
           <div style={{ marginTop: 10 }}>
             <Note>{attachNote}</Note>
@@ -693,5 +714,87 @@ export function IntakeScreen() {
         </p>
       </Card>
     </>
+  );
+}
+
+/**
+ * 크론이 어디까지 했는지 — **화면을 안 열어도 돌고 있다**는 것을 보여 준다.
+ *
+ * 막힌 것은 막혔다고 적는다. 「실패 8건」이 아니라 「API 잔액 부족」이라고
+ * 적혀야 사람이 무엇을 해야 하는지 안다.
+ */
+function SyncStatus() {
+  const q = trpc.erp.intake.syncState.useQuery();
+  const s = q.data;
+  if (!s) return null;
+
+  const never = s.lastRunAt == null;
+  return (
+    <Card
+      title="자동 수집 상태"
+      meta={never ? "아직 돌지 않음" : `마지막 ${shortDate(s.lastRunAt!)}`}
+    >
+      {s.blocked ? (
+        <Note tone={s.blocked.needsPerson ? "alert" : "warn"}>
+          <b>
+            {s.blocked.what}이 막혀 있습니다 — {s.blocked.reason}
+          </b>
+          <br />
+          {s.blocked.needsPerson ? (
+            <>
+              이것은 <b>사람이 처리해야 풀립니다.</b> 재시도로는 안 됩니다.
+            </>
+          ) : (
+            <>잠시 뒤 자동으로 다시 시도합니다.</>
+          )}
+        </Note>
+      ) : (
+        <Note>
+          {never
+            ? "아직 한 번도 돌지 않았습니다. 매시 정각에 자동으로 이어 갑니다."
+            : "막힌 것 없이 돌고 있습니다. 이 화면을 닫아도 계속됩니다."}
+        </Note>
+      )}
+      <div className="kpis" style={{ marginTop: 10 }}>
+        <Tile
+          label="과거 메시지"
+          value={s.backfillDone ? "다 훑음" : "진행 중"}
+          note={`누적 ${s.collected}건 수집`}
+          tone={s.backfillDone ? "ok" : undefined}
+        />
+        <Tile
+          label="첨부 판독"
+          value={
+            s.attachmentsRemaining == null
+              ? "—"
+              : s.attachmentsRemaining === 0
+                ? "다 읽음"
+                : `${s.attachmentsRemaining}건 남음`
+          }
+          note={`누적 ${s.attachmentsRead}건 판독`}
+          tone={s.attachmentsRemaining === 0 ? "ok" : undefined}
+        />
+      </div>
+      {s.failures.length > 0 ? (
+        <div className="scroll" style={{ marginTop: 10 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>읽지 못한 파일</th>
+                <th>이유</th>
+              </tr>
+            </thead>
+            <tbody>
+              {s.failures.map((f, i) => (
+                <tr key={`${f.name}-${i}`}>
+                  <td className="wrap">{f.name}</td>
+                  <td className="wrap s">{f.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </Card>
   );
 }

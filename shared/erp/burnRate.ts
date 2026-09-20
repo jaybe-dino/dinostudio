@@ -75,8 +75,20 @@ export interface BurnCondition {
 
 export interface RunwaySet {
   burnRate: Metric;
-  /** 확정 운영비만으로 계산한 하한 — 반드시 「하한」 라벨을 붙인다 */
+  /**
+   * 확정 운영비만 센 값 — **운영비의 하한**이다. 급여 실액처럼 아직 못 채운
+   * 항목이 빠져 있으므로 실제 운영비는 이것보다 크다.
+   */
   lowerBoundMonthlyOpex: number;
+  /**
+   * 그 하한 운영비로 낸 런웨이 — **런웨이의 상한**이다.
+   *
+   * 방향이 뒤집히는 자리다. 비용을 덜 세면 런웨이는 **길어진다.** 그래서
+   * 「누락 비용을 제외한 런웨이」는 하한이 아니라 상한이고, 실제 런웨이는
+   * 이것보다 **짧다.** 이걸 「하한」이라고 부르면 「적어도 이만큼은 버틴다」로
+   * 읽혀 정반대의 판단을 부른다 — 이 시스템에서 가장 위험한 오표기다.
+   */
+  upperBoundRunwayMonths: number | null;
   simple: Metric;
   expected: Metric;
   reserved: Metric;
@@ -229,6 +241,10 @@ export function buildRunway(input: RunwayInput): RunwaySet {
   return {
     burnRate: metric("월 번레이트", monthlyBurn, "burn_rate_unavailable"),
     lowerBoundMonthlyOpex: breakdown.opex.amount,
+    upperBoundRunwayMonths:
+      breakdown.opex.amount > 0 && input.cashOnHand != null
+        ? Number((input.cashOnHand / breakdown.opex.amount).toFixed(2))
+        : null,
     simple: metric("단순런웨이", simpleValue, "burn_rate_unavailable"),
     expected: {
       value: input.expectedRunwayWeeks,

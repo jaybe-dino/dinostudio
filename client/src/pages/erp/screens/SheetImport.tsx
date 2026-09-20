@@ -108,6 +108,13 @@ export function SheetImportScreen() {
         잡아야 합니다.
       </Note>
 
+      {/*
+        운영이 시작된 뒤에는 **다시 깔기를 쓰면 안 된다.** 그 사이 사람이
+        원장에서 고친 것과 슬랙에서 올라온 것이 전부 날아간다. 그래서
+        차이만 보여 주는 이 카드를 위에 둔다 — 먼저 보이는 쪽이 기본이다.
+      */}
+      <SheetDiffCard text={text} />
+
       <Card
         title="시트를 최종본으로 다시 깔기 (§5.6)"
         meta="대표만 · 되돌릴 수 없음"
@@ -415,5 +422,143 @@ export function SheetImportScreen() {
         </ol>
       </Card>
     </>
+  );
+}
+
+/**
+ * 시트와 원장의 차이 — **읽기만 한다.**
+ *
+ * 다시 깔기와 달리 아무것도 지우지 않는다. 무엇이 다른지 보여 주고 고치는
+ * 것은 사람이 건별로 한다. 운영이 시작된 뒤에는 이쪽이 유일하게 안전한 길이다.
+ */
+function SheetDiffCard({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const q = trpc.erp.sheetDiff.useQuery(
+    text.trim() ? { text: text.trim() } : {},
+    { enabled: open }
+  );
+  const d = q.data;
+
+  return (
+    <Card
+      title="시트와 원장의 차이 보기"
+      meta="읽기만 합니다 · 아무것도 지우지 않습니다"
+    >
+      <Note>
+        <b>운영이 시작된 뒤에는 「다시 깔기」를 쓰지 마십시오.</b> 그 사이
+        원장에서 고친 것과 슬랙에서 올라온 것이 전부 날아갑니다. 대신 여기서
+        차이를 보고 <b>건별로</b> 고치십시오.
+        {text.trim() ? (
+          <>
+            <br />
+            위에 붙여 넣은 시트와 비교합니다.
+          </>
+        ) : (
+          <>
+            <br />
+            붙여 넣지 않으면 코드에 든 사본과 비교합니다.
+          </>
+        )}
+      </Note>
+      <button
+        type="button"
+        className="btn pri"
+        style={{ marginTop: 10 }}
+        onClick={() => {
+          setOpen(true);
+          void q.refetch();
+        }}
+        disabled={q.isFetching}
+      >
+        {q.isFetching ? "대조하는 중…" : "차이 보기"}
+      </button>
+
+      {q.error ? (
+        <div style={{ marginTop: 10 }}>
+          <Note tone="warn">{q.error.message}</Note>
+        </div>
+      ) : null}
+
+      {d ? (
+        <>
+          <div className="kpis" style={{ marginTop: 12 }}>
+            <Tile
+              label="시트에만"
+              value={`${d.summary["시트에만"]}건`}
+              note="원장에 없는 줄"
+              tone={d.summary["시트에만"] > 0 ? "warn" : "ok"}
+            />
+            <Tile
+              label="원장에만"
+              value={`${d.summary["원장에만"]}건`}
+              note="시트에서 지워진 줄"
+              tone={d.summary["원장에만"] > 0 ? "warn" : "ok"}
+            />
+            <Tile
+              label="금액 다름"
+              value={`${d.summary["금액 다름"]}건`}
+              note="양쪽 다 금액이 있는 줄만"
+              tone={d.summary["금액 다름"] > 0 ? "warn" : "ok"}
+            />
+            <Tile
+              label="방향 다름"
+              value={`${d.summary["방향 다름"]}건`}
+              note="수입/지출이 반대"
+              tone={d.summary["방향 다름"] > 0 ? "alert" : "ok"}
+            />
+          </div>
+          {d.rows.length === 0 ? (
+            <Note>
+              차이가 없습니다 — 시트 {d.sheetRows}줄과 원장{" "}
+              {d.ledgerCompared}건이 맞습니다.
+            </Note>
+          ) : (
+            <div className="scroll" style={{ marginTop: 10 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>종류</th>
+                    <th>날짜</th>
+                    <th>항목</th>
+                    <th className="n">시트</th>
+                    <th className="n">원장</th>
+                    <th>할 일</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.rows.map((r, i) => (
+                    <tr key={`${r.kind}-${r.title}-${i}`}>
+                      <td className="nw">
+                        <span
+                          className={
+                            r.kind === "방향 다름" ? "chip a" : "chip w"
+                          }
+                        >
+                          {r.kind}
+                        </span>
+                      </td>
+                      <td className="nw">
+                        {r.date ? shortDate(r.date) : "—"}
+                      </td>
+                      <td className="wrap k">{r.title}</td>
+                      <td className="n">
+                        {r.sheetAmount == null ? "—" : won(r.sheetAmount)}
+                      </td>
+                      <td className="n">
+                        {r.ledgerAmount == null ? "—" : won(r.ledgerAmount)}
+                        {r.ledgerCode ? (
+                          <div className="s">{r.ledgerCode}</div>
+                        ) : null}
+                      </td>
+                      <td className="wrap s">{r.action}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      ) : null}
+    </Card>
   );
 }

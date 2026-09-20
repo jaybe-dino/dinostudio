@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { buildCashflow, cashflowGap } from "../../shared/erp/cashflow.js";
 import { SHEET_SEED } from "../../shared/erp/sheetSeed.js";
-import type { DaySnapshot, Entry } from "../../shared/erp/types.js";
+import type { DaySnapshot, Entry, Settlement } from "../../shared/erp/types.js";
 
 const day = (date: string, close: number | null): DaySnapshot => ({
   date,
@@ -162,5 +162,115 @@ describe("실제 시트로 확인한다", () => {
     );
     expect(month.recordedClose).toBe(162_167_880);
     expect(month.recordedAsOf).toBe("2026-09-21");
+  });
+});
+
+describe("은행 대사 잔액 — 실제 확인된 것만으로 이은 잔액", () => {
+  /*
+   * 잔액이 네 가지가 됐다. 섞으면 아무 의미가 없으므로 각자 무엇인지 고정한다.
+   *   시트 잔액   — 시트에 사람이 적어 둔 그 날 잔액 (기록)
+   *   계산 잔액   — 승인된 건으로 이은 잔액 (판정 대기가 있으면 안 선다)
+   *   대사 잔액   — **실제 입출금이 확인된 것만**으로 이은 잔액 (은행과 맞춰 본다)
+   *   보유현금    — 기준값. 사람이 통장을 보고 적는다
+   */
+  const line = (over: Partial<Settlement>): Settlement => ({
+    id: "s-1",
+    entryId: "e-1",
+    settledOn: "2026-09-14",
+    amount: 1_000_000,
+    bankAccount: null,
+    bankRef: null,
+    note: null,
+    actor: "cfo@dinostudio.kr",
+    at: "2026-09-14T10:00:00+09:00",
+    voidedAt: null,
+    voidedBy: null,
+    voidReason: null,
+    ...over,
+  });
+
+  const entries = [
+    entry({
+      id: "e-1",
+      code: "E-1",
+      cashDate: "2026-09-14",
+      amount: 3_000_000,
+    }),
+    entry({
+      id: "e-2",
+      code: "E-2",
+      cashDate: "2026-09-14",
+      amount: 5_000_000,
+      direction: "in",
+    }),
+  ];
+  const snapshots = [{ ...day("2026-09-14", 106_700_000), open: 110_000_000 }];
+
+  it("확인 줄이 없으면 대사 잔액은 **0 이 아니라 모름**이다", () => {
+    const [block] = buildCashflow(entries, snapshots, "day");
+    expect(block.settledClose).toBeNull();
+    expect(block.settledIn).toBe(0);
+    expect(block.settledOut).toBe(0);
+  });
+
+  it("확인된 것만 세어 잔액을 잇는다", () => {
+    const [block] = buildCashflow(entries, snapshots, "day", [
+      line({ id: "s-1", entryId: "e-1", amount: 3_000_000 }),
+      line({ id: "s-2", entryId: "e-2", amount: 5_000_000 }),
+    ]);
+    expect(block.settledOut).toBe(3_000_000);
+    expect(block.settledIn).toBe(5_000_000);
+    expect(block.settledClose).toBe(110_000_000 - 3_000_000 + 5_000_000);
+  });
+
+  it("**확인 날짜에 붙인다 — 건의 예정일이 아니다**", () => {
+    // 9/14 예정이던 돈이 9/18 에 나갔으면 통장이 줄어든 날은 9/18 이다.
+    // 예정일로 세면 은행 잔액과 영영 안 맞는다.
+    const blocks = buildCashflow(entries, snapshots, "day", [
+      line({
+        id: "s-1",
+        entryId: "e-1",
+        amount: 3_000_000,
+        settledOn: "2026-09-18",
+      }),
+    ]);
+    const d14 = blocks.find(b => b.key === "2026-09-14")!;
+    const d18 = blocks.find(b => b.key === "2026-09-18")!;
+    expect(d14.settledOut).toBe(0);
+    expect(d18.settledOut).toBe(3_000_000);
+  });
+
+  it("무효 처리된 줄은 세지 않는다", () => {
+    const [block] = buildCashflow(entries, snapshots, "day", [
+      line({
+        id: "s-1",
+        entryId: "e-1",
+        amount: 3_000_000,
+        voidedAt: "2026-09-15T09:00:00+09:00",
+        voidedBy: "cfo@dinostudio.kr",
+        voidReason: "착오",
+      }),
+    ]);
+    expect(block.settledOut).toBe(0);
+  });
+
+  it("월별에도 붙는다 — 마지막 날의 대사 잔액이 그 달의 잔액이다", () => {
+    const [month] = buildCashflow(entries, snapshots, "month", [
+      line({ id: "s-1", entryId: "e-1", amount: 3_000_000 }),
+    ]);
+    expect(month.key).toBe("2026-09");
+    expect(month.settledOut).toBe(3_000_000);
+    expect(month.settledClose).toBe(107_000_000);
+  });
+
+  it("**계산 잔액과 대사 잔액이 갈린다** — 승인만 하고 안 나간 돈이 그 차이다", () => {
+    // 두 건 다 승인됐지만 지출만 실제로 나갔다.
+    const [block] = buildCashflow(entries, snapshots, "day", [
+      line({ id: "s-1", entryId: "e-1", amount: 3_000_000 }),
+    ]);
+    // 계산 잔액은 둘 다 반영한다 (승인 기준)
+    expect(block.close).toBe(110_000_000 - 3_000_000 + 5_000_000);
+    // 대사 잔액은 나간 것만 반영한다 — 5,000,000 은 아직 안 들어왔다
+    expect(block.settledClose).toBe(107_000_000);
   });
 });

@@ -231,6 +231,7 @@ function toArEntry(input: ArInput): Entry {
     partyId: input.partyId,
     contractId: null,
     priority: null,
+    internalTransferId: null,
     priorityOverride: null,
     priorityReason: null,
     payMethod: null,

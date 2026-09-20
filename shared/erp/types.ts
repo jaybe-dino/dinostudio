@@ -130,6 +130,14 @@ export interface Entry {
   projectId: string | null;
   partyId: string | null;
   contractId: string | null;
+  /**
+   * **내부 계좌이체**의 짝 키. 같은 값을 가진 두 건이 한 쌍이다 (나간 쪽 · 들어온 쪽).
+   *
+   * 우리 계좌에서 우리 계좌로 옮긴 것이므로 보유현금 총액은 변하지 않고
+   * 손익에도 잡히지 않는다. 그런데 양쪽을 그냥 두면 그 날 지출계와 입금계가
+   * 동시에 부풀어 「이번 달에 3억을 썼다」가 사실은 계좌를 옮긴 것이 된다.
+   */
+  internalTransferId: string | null;
   /** 계정으로 자동 부여 (§8.2) */
   priority: Priority | null;
   /** 사람이 올린 등급. 설정 시 priorityReason 필수 */
@@ -237,6 +245,42 @@ export interface Approval {
   decision: "approve" | "reject" | "hold";
   reason: string | null;
   at: string;
+}
+
+/**
+ * §6.3 settlement — **실제 입출금 확인.**
+ *
+ * 승인(`approve`)과 **다른 사실**이다. 승인은 「나가도 된다」이고, 이것은
+ * 「실제로 나갔다」다. 둘을 한 상태로 합치면 결재만 끝난 돈이 이미 통장에서
+ * 빠져나간 것처럼 잡혀 잔액이 맞지 않는다.
+ *
+ * 건마다 **여러 줄**이 붙을 수 있다 — 부분 지급·분할 입금이 실제로 흔하다.
+ * 합계가 건 금액에 닿을 때 비로소 `entry.paidAt` 이 선다.
+ *
+ * 되돌릴 때도 줄을 지우지 않는다 (원칙 9). `voidedAt` 을 찍어 무효로 만든다 —
+ * 잘못 확인한 것도 이력이고, 지우면 왜 잔액이 바뀌었는지 설명할 수 없다.
+ */
+export interface Settlement {
+  id: string;
+  entryId: string;
+  /** 통장에서 실제로 움직인 날. 승인일도 예정일도 아니다 */
+  settledOn: string;
+  /** 이번 줄의 금액. 부분 지급이면 건 금액보다 작다 */
+  amount: number;
+  /** 어느 계좌에서 나갔나 / 들어왔나 */
+  bankAccount: string | null;
+  /**
+   * 은행 거래 식별자. 같은 은행 거래 줄을 **두 건에 붙이지 못하게** 하는 키다 —
+   * 이게 없으면 같은 출금을 두 건에 확인해 이중 차감이 난다.
+   */
+  bankRef: string | null;
+  note: string | null;
+  actor: string;
+  at: string;
+  /** 무효 처리 — 줄은 남기고 계산에서만 뺀다 (원칙 9) */
+  voidedAt: string | null;
+  voidedBy: string | null;
+  voidReason: string | null;
 }
 
 /** §6.3 entry_revision — 화면의 「이력」 탭이 이걸 그대로 그린다. */
@@ -487,4 +531,34 @@ export interface Period {
   closedBy: string | null;
   closedAt: string | null;
   blockers: string[];
+}
+
+/**
+ * §11.3 슬랙 수집 진행 상태 — **서버가 들고 있는다.**
+ *
+ * 화면이 커서를 들고 있으면 그 화면을 닫는 순간 진도가 사라진다. 실제로
+ * 첨부 133건이 그렇게 남았다. 크론이 이 상태를 보고 멈춘 자리부터 잇는다.
+ */
+export interface SlackSyncState {
+  /** 채널별 커서 — 비면 처음부터 */
+  cursors: Record<string, string>;
+  days: number;
+  lastRunAt: string | null;
+  lastNote: string | null;
+  backfillDone: boolean;
+  collected: number;
+  attachmentsRead: number;
+  /** 남은 첨부 — null 이면 아직 세어 보지 않았다 */
+  attachmentsRemaining: number | null;
+  /**
+   * 막힌 이유. **성공으로 처리하지 않는다** — 「실패 5건」이 아니라
+   * 「API 잔액 부족」이라고 적혀야 사람이 무엇을 해야 하는지 안다.
+   */
+  blocked: {
+    what: string;
+    reason: string;
+    /** 사람이 처리해야 풀리는가 (잔액·키·권한) — 재시도로는 안 풀린다 */
+    needsPerson: boolean;
+  } | null;
+  failures: { name: string; reason: string }[];
 }

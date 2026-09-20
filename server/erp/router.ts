@@ -270,6 +270,44 @@ export const erpRouter = router({
         )
       ),
 
+    /** §7.4 실제 입출금 확인 — 승인과 분리된 동작이다 */
+    settle: protectedProcedure
+      .input(
+        z.object({
+          code: z.string(),
+          version: z.number().int(),
+          settledOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+          amount: z.number().int().positive(),
+          bankAccount: z.string().max(64).nullish(),
+          bankRef: z.string().max(128).nullish(),
+          note: z.string().max(500).nullish(),
+          allowDuplicate: z.boolean().optional(),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        run(() =>
+          getLedgerService().settleEntry(input, input.version, actorFrom(ctx))
+        )
+      ),
+
+    /** 확인 취소 — 줄은 남기고 무효로 만든다 (원칙 9) */
+    voidSettlement: protectedProcedure
+      .input(
+        z.object({
+          settlementId: z.string(),
+          reason: z.string().min(1).max(500),
+        })
+      )
+      .mutation(({ ctx, input }) =>
+        run(() => getLedgerService().voidSettlement(input, actorFrom(ctx)))
+      ),
+
+    settlements: protectedProcedure
+      .input(z.object({ code: z.string() }))
+      .query(({ ctx, input }) =>
+        run(() => getLedgerService().settlements(input.code, actorFrom(ctx)))
+      ),
+
     reject: protectedProcedure
       .input(
         z.object({
@@ -649,6 +687,12 @@ export const erpRouter = router({
 
   /** §11.1 수집 검수함 — 검수 통과해야 원장으로 올라간다 */
   intake: router({
+    /** 서버가 들고 있는 수집 진행 상태 — 화면을 닫아도 남는다 (§11.3) */
+    syncState: protectedProcedure.query(({ ctx }) => {
+      actorFrom(ctx);
+      return run(() => getLedgerService().slackSyncState());
+    }),
+
     promote: protectedProcedure
       .input(z.object({ id: z.string() }))
       .mutation(({ ctx, input }) =>
@@ -825,6 +869,20 @@ export const erpRouter = router({
    * §5.6 개시 전 재이관 — 「데일리 현금흐름」 시트를 최종본으로 다시 깐다.
    * 대표만 · 재인증 뒤에만 · 확인 문구를 직접 입력해야 · 마감 기간이 없어야.
    */
+  /** §5.7 시트와 원장의 차이 — 읽기만 한다. 덮어쓰지 않는다 */
+  sheetDiff: protectedProcedure
+    .input(
+      z
+        .object({
+          text: z.string().min(1).optional(),
+          year: z.number().int().min(2000).max(2100).optional(),
+        })
+        .optional()
+    )
+    .query(({ ctx, input }) =>
+      run(() => getLedgerService().sheetDiff(input ?? {}, actorFrom(ctx)))
+    ),
+
   rebuildFromSheet: protectedProcedure
     .input(
       z.object({

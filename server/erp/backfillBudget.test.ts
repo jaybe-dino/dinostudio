@@ -217,17 +217,35 @@ describe("첨부는 따로, 조금씩 읽는다", () => {
     const parsed = intake.parsed as { files: { name: string; meta: object }[] };
     // Add a second unread file to the same intake.
     const backing = (s as unknown as { store: InMemoryLedgerStore }).store;
-    await backing.upsertIntake({ ...(await backing.listIntakes())[0], parsed: { ...parsed, files: [
-      ...parsed.files,
-      { name: "second.pdf", meta: { name: "second.pdf", mimetype: "application/pdf" } },
-    ] } });
+    await backing.upsertIntake({
+      ...(await backing.listIntakes())[0],
+      parsed: {
+        ...parsed,
+        files: [
+          ...parsed.files,
+          {
+            name: "second.pdf",
+            meta: { name: "second.pdf", mimetype: "application/pdf" },
+          },
+        ],
+      },
+    });
     const attempted: string[] = [];
-    const deps = { readFiles: async (files: { name?: string }[]) => {
-      attempted.push(files[0].name!);
-      return [{ name: files[0].name!, mimetype: "application/pdf", size: 1,
-        permalink: null, text: files[0].name === "second.pdf" ? "총 100원" : null,
-        reason: "읽기 실패" }];
-    } };
+    const deps = {
+      readFiles: async (files: { name?: string }[]) => {
+        attempted.push(files[0].name!);
+        return [
+          {
+            name: files[0].name!,
+            mimetype: "application/pdf",
+            size: 1,
+            permalink: null,
+            text: files[0].name === "second.pdf" ? "총 100원" : null,
+            reason: "읽기 실패",
+          },
+        ];
+      },
+    };
     const first = await s.readPendingAttachments({}, CEO, deps);
     expect(first.remaining).toBe(2);
     expect(first.unattempted).toBe(1);
@@ -242,14 +260,28 @@ describe("첨부는 따로, 조금씩 읽는다", () => {
     const s = await withPending();
     const backing = (s as unknown as { store: InMemoryLedgerStore }).store;
     const original = (await backing.listIntakes())[0];
-    await s.readPendingAttachments({}, CEO, { readFiles: async () => [{
-      name: "contract.pdf", mimetype: "application/pdf", size: 1, permalink: null,
-      text: "금액: 총 100원", reason: null,
-    }] });
-    await backing.upsertIntake({ ...original, id: "second-intake", sourceRef: "601.1" });
-    const result = await s.readPendingAttachments({}, CEO, { readFiles: async () => {
-      throw new Error("동일 파일을 다시 내려받으면 안 됨");
-    } });
+    await s.readPendingAttachments({}, CEO, {
+      readFiles: async () => [
+        {
+          name: "contract.pdf",
+          mimetype: "application/pdf",
+          size: 1,
+          permalink: null,
+          text: "금액: 총 100원",
+          reason: null,
+        },
+      ],
+    });
+    await backing.upsertIntake({
+      ...original,
+      id: "second-intake",
+      sourceRef: "601.1",
+    });
+    const result = await s.readPendingAttachments({}, CEO, {
+      readFiles: async () => {
+        throw new Error("동일 파일을 다시 내려받으면 안 됨");
+      },
+    });
     expect(result.read).toBe(1);
     expect(result.remaining).toBe(0);
   });
@@ -330,18 +362,26 @@ describe("백필 진행 위치 복구", () => {
   });
 });
 
-
 describe("대량 채널 뒤의 채널도 진행한다", () => {
   it("재개 지도 순서를 지켜 앞선 대량 채널을 뒤로 보낸다", async () => {
     const s = new LedgerService(new InMemoryLedgerStore());
     const visited: string[] = [];
-    const out = await s.backfillSlackHistory({ days: 365, cursors: { C2: "next2", C1: "next1" } }, CEO, {
-      listChannels: async () => ({ channels: [{ id: "C1", name: "대량" }, { id: "C2", name: "지출" }] }),
-      fetchPage: async ({ channel }) => {
-        visited.push(channel);
-        return { messages: [], nextCursor: null };
-      },
-    });
+    const out = await s.backfillSlackHistory(
+      { days: 365, cursors: { C2: "next2", C1: "next1" } },
+      CEO,
+      {
+        listChannels: async () => ({
+          channels: [
+            { id: "C1", name: "대량" },
+            { id: "C2", name: "지출" },
+          ],
+        }),
+        fetchPage: async ({ channel }) => {
+          visited.push(channel);
+          return { messages: [], nextCursor: null };
+        },
+      }
+    );
     expect(visited).toEqual(["C2", "C1"]);
     expect(out.remaining).toBe(false);
   });

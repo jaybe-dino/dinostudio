@@ -13,6 +13,7 @@
  * 두 계단의 영업이익이 다르면 배부 로직이 틀린 것이다. 이 일치 검증을 자동 테스트로 둔다.
  */
 import { findAccount } from "./accounts.js";
+import { isInternalTransfer } from "./cashEffect.js";
 import { expandDeferrals } from "./ledgerExtras.js";
 import type { Entry } from "./types.js";
 
@@ -76,6 +77,11 @@ export function buildPnl(
    * 실제보다 좋아 보인다. 현금흐름은 펼치지 않는다 — 돈은 한 번에 나갔다.
    */
   const scoped = expandDeferrals(entries).filter(e => {
+    /*
+     * **내부 계좌이체는 손익이 아니다.** 우리 계좌에서 우리 계좌로 옮긴 것이라
+     * 비용도 수익도 아닌데, 계정이 붙어 있으면 그대로 손익에 잡힌다.
+     */
+    if (isInternalTransfer(e)) return false;
     if (!inScope(e, options.from, options.to)) return false;
     if (options.buCode && e.buCode !== options.buCode) return false;
     if (options.projectId && e.projectId !== options.projectId) return false;

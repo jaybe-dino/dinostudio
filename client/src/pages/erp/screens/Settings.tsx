@@ -161,25 +161,37 @@ export function SettingsScreen() {
     if (kind === "number") {
       const digits = raw.replace(/,/g, "").trim();
       if (!/^-?\d+$/.test(digits) || !Number.isSafeInteger(Number(digits)))
-        throw new Error("금액과 인원 수는 정수로 입력하십시오. 단위 문자는 넣지 않습니다.");
+        throw new Error(
+          "금액과 인원 수는 정수로 입력하십시오. 단위 문자는 넣지 않습니다."
+        );
       return Number(digits);
     }
     if (kind === "date") return raw.trim();
     try {
       return JSON.parse(raw);
     } catch {
-      throw new Error("입력 형식이 올바르지 않습니다. 안내된 배열·객체 형식을 확인하십시오.");
+      throw new Error(
+        "입력 형식이 올바르지 않습니다. 안내된 배열·객체 형식을 확인하십시오."
+      );
     }
   };
   // Earlier databases may contain only six initial settings. Display missing
   // fields without storing example values or reseeding the production ledger.
   const present = settings.data ?? [];
-  const available = [...present, ...Object.keys(LABELS)
-    .filter(key => !present.some(s => s.key === key))
-    .map(key => ({ key, value: null, isProvisional: true, ownerRole: "재무" as const, updatedBy: "", updatedAt: "" }))];
-  const rows = available.filter(s =>
-    matchesQuery(query, s.key, LABELS[s.key])
-  );
+  const available = [
+    ...present,
+    ...Object.keys(LABELS)
+      .filter(key => !present.some(s => s.key === key))
+      .map(key => ({
+        key,
+        value: null,
+        isProvisional: true,
+        ownerRole: "재무" as const,
+        updatedBy: "",
+        updatedAt: "",
+      })),
+  ];
+  const rows = available.filter(s => matchesQuery(query, s.key, LABELS[s.key]));
   const provisional = rows.filter(s => s.isProvisional);
   const empty = rows.filter(s => s.value == null);
 
@@ -385,19 +397,29 @@ export function SettingsScreen() {
                             }
                             onClick={() => {
                               if (!reasons[setting.key]?.trim()) {
-                                setMessage("변경 근거와 기준일을 입력하십시오.");
+                                setMessage(
+                                  "변경 근거와 기준일을 입력하십시오."
+                                );
                                 return;
                               }
-                              try { put.mutate({
-                                key: setting.key,
-                                value: parseValue(
-                                  setting.key,
-                                  draft[setting.key] ?? ""
-                                ),
-                                isProvisional: temporary[setting.key] ?? setting.isProvisional,
-                                reason: reasons[setting.key].trim(),
-                              }); } catch (error) {
-                                setMessage(error instanceof Error ? error.message : "입력값을 확인하십시오.");
+                              try {
+                                put.mutate({
+                                  key: setting.key,
+                                  value: parseValue(
+                                    setting.key,
+                                    draft[setting.key] ?? ""
+                                  ),
+                                  isProvisional:
+                                    temporary[setting.key] ??
+                                    setting.isProvisional,
+                                  reason: reasons[setting.key].trim(),
+                                });
+                              } catch (error) {
+                                setMessage(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "입력값을 확인하십시오."
+                                );
                               }
                             }}
                           >
@@ -405,9 +427,35 @@ export function SettingsScreen() {
                           </button>
                         </div>
                         <label style={{ display: "block", marginTop: 6 }}>
-                          <input type="checkbox" aria-label={`${setting.key} 임시값으로 저장`} checked={temporary[setting.key] ?? setting.isProvisional} disabled={!canWrite} onChange={e => setTemporary(prev => ({ ...prev, [setting.key]: e.target.checked }))} /> 임시값으로 저장
+                          <input
+                            type="checkbox"
+                            aria-label={`${setting.key} 임시값으로 저장`}
+                            checked={
+                              temporary[setting.key] ?? setting.isProvisional
+                            }
+                            disabled={!canWrite}
+                            onChange={e =>
+                              setTemporary(prev => ({
+                                ...prev,
+                                [setting.key]: e.target.checked,
+                              }))
+                            }
+                          />{" "}
+                          임시값으로 저장
                         </label>
-                        <input aria-label={`${setting.key} 변경 근거`} placeholder="변경 근거 · 자료 기준일" value={reasons[setting.key] ?? ""} disabled={!canWrite} onChange={e => setReasons(prev => ({ ...prev, [setting.key]: e.target.value }))} style={{ width: "100%", minWidth: 180, marginTop: 4 }} />
+                        <input
+                          aria-label={`${setting.key} 변경 근거`}
+                          placeholder="변경 근거 · 자료 기준일"
+                          value={reasons[setting.key] ?? ""}
+                          disabled={!canWrite}
+                          onChange={e =>
+                            setReasons(prev => ({
+                              ...prev,
+                              [setting.key]: e.target.value,
+                            }))
+                          }
+                          style={{ width: "100%", minWidth: 180, marginTop: 4 }}
+                        />
                       </td>
                     </tr>
                   ))}

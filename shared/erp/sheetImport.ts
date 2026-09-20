@@ -312,6 +312,7 @@ export function importSheet(
         partyId: null,
         contractId: null,
         priority: direction === "in" ? null : defaultPriorityOf(null),
+        internalTransferId: null,
         priorityOverride: null,
         priorityReason: null,
         payMethod: null,
