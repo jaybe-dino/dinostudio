@@ -65,6 +65,7 @@ import {
   counterAccountFor,
   defaultPriorityOf,
   findDuplicateCandidates,
+  journalVisibleToRole,
   maskEntryForRole,
   nextCode,
   nextRevisionCode,
@@ -976,7 +977,23 @@ export class LedgerService {
   }
 
   /** 전표 · 분개장 + 시산표 */
-  async journals() {
+  /**
+   * 전표 · 분개장.
+   *
+   * **원장에서 가린 인건비가 여기로 새 나가고 있었다.** 목록은
+   * `maskEntryForRole` 로 막혀 있는데 전표는 actor 를 받지도 않아 차변·대변이
+   * 그대로 나갔다. 시드에 확정된 인건비 건이 없어 드러나지 않았을 뿐, 급여는
+   * 매달 확정되므로 **운영 첫 달에 열리는 구멍**이었다.
+   *
+   * 전표는 금액만 지울 수가 없다 — 0 으로 바꾸면 시산표가 안 맞는다. 그래서
+   * 줄째로 내리고 **가린 건수를 숫자로 알려 준다.** 조용히 빼면 장부가 원래
+   * 그만큼인 줄 안다.
+   *
+   * **시산표는 가리지 않는다.** 계정별 합계는 개인이 아니라 총액이고,
+   * 인수 기준 T10 이 「담당자도 인건비 총액은 본다」를 못박고 있다. 전표는
+   * 개인 한 건이지만 시산표 6110 한 줄은 그 달 인건비 총액이다.
+   */
+  async journals(actor: Actor) {
     const [journals, entries] = await Promise.all([
       this.store.listJournals(),
       this.store.listEntries(),
@@ -986,11 +1003,23 @@ export class LedgerService {
       ...j,
       entryCode: byId.get(j.entryId)?.code ?? j.entryId,
     }));
+
+    const visible = withCode.filter(j =>
+      journalVisibleToRole(byId.get(j.entryId), actor.role)
+    );
+    const hiddenCount = withCode.length - visible.length;
+
     return {
-      journals: withCode,
+      journals: visible,
+      hiddenCount,
+      hiddenReason:
+        hiddenCount === 0
+          ? null
+          : "개인별 인건비 전표는 표시하지 않습니다. 시산표의 인건비 합계로만 확인할 수 있습니다 (원칙 10)",
+      // 시산표는 전부를 쓴다 — 총액이라 가릴 대상이 아니고, 가리면 차·대가 안 맞는다
       trialBalance: trialBalance(journals),
       // 수정된 건의 원본 · 역분개 · 재분개 대응 (A16)
-      chains: journalChains(withCode),
+      chains: journalChains(visible),
     };
   }
 

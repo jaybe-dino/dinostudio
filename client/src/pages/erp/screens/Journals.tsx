@@ -21,6 +21,9 @@ export function JournalsScreen() {
   );
   const tb = data.data?.trialBalance;
   const chains = data.data?.chains ?? [];
+  // 가린 전표는 건수만 알린다 — 조용히 빼면 장부가 원래 그만큼인 줄 안다
+  const hiddenCount = data.data?.hiddenCount ?? 0;
+  const hiddenReason = data.data?.hiddenReason ?? null;
 
   return (
     <>
@@ -94,6 +97,13 @@ export function JournalsScreen() {
         </div>
       </Card>
 
+      {hiddenCount > 0 && hiddenReason != null && (
+        <Note>
+          {hiddenReason} — 가려진 전표 {hiddenCount}건. 시산표 합계에는 그대로
+          들어 있습니다.
+        </Note>
+      )}
+
       <Card title="분개장" meta={`${journals.length}건`} body={false}>
         <div className="scroll">
           <table>
@@ -112,7 +122,9 @@ export function JournalsScreen() {
               {journals.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ color: "var(--muted)" }}>
-                    확정된 건이 없어 전표가 없습니다
+                    {hiddenCount > 0
+                      ? "표시할 수 있는 전표가 없습니다"
+                      : "확정된 건이 없어 전표가 없습니다"}
                   </td>
                 </tr>
               ) : (

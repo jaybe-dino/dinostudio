@@ -526,7 +526,7 @@ describe("B6 급여 3분할이 승인 경로를 타고 전표까지 간다", () 
     // 본인 승인 금지 — 만든 사람과 다른 사람이 승인한다 (D1)
     await s.approve(created.entry.code, ready.entry.version, CEO);
 
-    const { journals } = await s.journals();
+    const { journals } = await s.journals(CFO);
     const mine = journals.filter(j => j.entryCode === created.entry.code);
     expect(mine).toHaveLength(1);
     const at = (code: string) =>

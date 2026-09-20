@@ -184,7 +184,7 @@ describe("§9.6 번레이트 · 런웨이 3종 (T15)", () => {
 
 describe("§9.8 재무제표 5종 · 전표", () => {
   it("확정 건마다 전표가 있고 차변 합 == 대변 합", async () => {
-    const { journals, trialBalance: tb } = await service().journals();
+    const { journals, trialBalance: tb } = await service().journals(CFO);
     expect(journals.length).toBeGreaterThan(0);
     for (const journal of journals) {
       const debit = journal.lines.reduce((a, l) => a + l.debit, 0);
@@ -251,7 +251,7 @@ describe("§12 알림", () => {
 describe("§7.3 대체됨 — 전표는 역분개로 상계한다", () => {
   it("확정 건을 수정하면 원본 전표가 역분개로 상계되어 시산표에 이중 계상되지 않는다", async () => {
     const svc = service();
-    const before = await svc.journals();
+    const before = await svc.journals(CFO);
     const beforeNet =
       before.trialBalance.rows.find(r => r.accountCode === "8110")?.balance ??
       0;
@@ -266,7 +266,7 @@ describe("§7.3 대체됨 — 전표는 역분개로 상계한다", () => {
       "이자 재계산"
     );
 
-    const after = await svc.journals();
+    const after = await svc.journals(CFO);
     // 원본 전표는 그대로 남고(원칙 9) 역분개가 하나 더 생겨 순액이 0이 된다
     expect(after.journals.length).toBe(before.journals.length + 1);
     expect(
@@ -281,7 +281,7 @@ describe("§7.3 대체됨 — 전표는 역분개로 상계한다", () => {
     const svc = service();
     const { entry } = await svc.getEntry("EX-260826-04", CFO);
     await svc.cancelEntry("EX-260826-04", "중복 청구 확인", entry.version, CFO);
-    const after = await svc.journals();
+    const after = await svc.journals(CFO);
     expect(
       after.trialBalance.rows.find(r => r.accountCode === "6520")?.balance ?? 0
     ).toBe(0);

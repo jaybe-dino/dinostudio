@@ -464,8 +464,8 @@ export const erpRouter = router({
     }),
 
   journals: protectedProcedure.query(({ ctx }) => {
-    actorFrom(ctx);
-    return run(() => getLedgerService().journals());
+    const actor = actorFrom(ctx);
+    return run(() => getLedgerService().journals(actor));
   }),
 
   masters: protectedProcedure.query(({ ctx }) => {
