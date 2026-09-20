@@ -50,6 +50,13 @@
       "when": 1789920179219,
       "tag": "0006_warm_vector",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789923094716,
+      "tag": "0007_chunky_paper_doll",
+      "breakpoints": true
     }
   ]
 }

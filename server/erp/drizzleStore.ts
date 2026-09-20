@@ -695,6 +695,7 @@ export class DrizzleLedgerStore implements LedgerStore {
       ...r,
       sentAt: r.sentAt ? r.sentAt.toISOString() : null,
       lastAttemptAt: r.lastAttemptAt ? r.lastAttemptAt.toISOString() : null,
+      leaseUntil: r.leaseUntil ? r.leaseUntil.toISOString() : null,
       readAt: r.readAt ? r.readAt.toISOString() : null,
       createdAt: r.createdAt.toISOString(),
     }));
@@ -707,6 +708,9 @@ export class DrizzleLedgerStore implements LedgerStore {
       lastAttemptAt: notification.lastAttemptAt
         ? new Date(notification.lastAttemptAt)
         : null,
+      leaseUntil: notification.leaseUntil
+        ? new Date(notification.leaseUntil)
+        : null,
       readAt: notification.readAt ? new Date(notification.readAt) : null,
       createdAt: new Date(notification.createdAt),
     };
@@ -715,6 +719,88 @@ export class DrizzleLedgerStore implements LedgerStore {
       set: row,
     });
     return notification;
+  }
+
+  /**
+   * 발송 선점 — **한 문장이다** (QA-004).
+   *
+   * `INSERT ... ON CONFLICT DO UPDATE ... WHERE` 하나로 「없으면 만들고,
+   * 있으면 집을 수 있을 때만 집는다」를 처리한다. `WHERE` 가 안 맞으면
+   * 돌아오는 행이 없다 — 그게 「못 집었다」다.
+   *
+   * 두 문장으로 나누면(있는지 보고 → 집는다) 그 사이에서 갈라진다. neon-http
+   * 는 상태가 없어 트랜잭션을 못 쓰므로, 한 문장이 유일한 방법이다.
+   */
+  async claimNotification(
+    notification: Notification,
+    opts: { now: string; leaseUntil: string; maxAttempts: number }
+  ): Promise<{ claimed: boolean; current: Notification }> {
+    const n = notification;
+    const now = new Date(opts.now);
+    const lease = new Date(opts.leaseUntil);
+    const rows = await this.db.execute(sql`
+      insert into "erp_notification"
+        ("id", "ruleId", "title", "body", "screen", "sentAt", "sendAttempts",
+         "lastError", "lastAttemptAt", "leaseUntil", "readAt", "createdAt")
+      values (${n.id}, ${n.ruleId}, ${n.title}, ${n.body}, ${n.screen}, null, 1,
+              null, ${now}::timestamptz, ${lease}::timestamptz, null,
+              ${new Date(n.createdAt)}::timestamptz)
+      on conflict ("id") do update
+        set "sendAttempts" = "erp_notification"."sendAttempts" + 1,
+            "lastAttemptAt" = excluded."lastAttemptAt",
+            "leaseUntil" = excluded."leaseUntil"
+        where "erp_notification"."sentAt" is null
+          and "erp_notification"."sendAttempts" < ${opts.maxAttempts}
+          and ("erp_notification"."leaseUntil" is null
+               or "erp_notification"."leaseUntil" <= ${now}::timestamptz)
+      returning "id"
+    `);
+    const list = (rows as unknown as { rows?: unknown[] }).rows ?? rows;
+    const claimed = Array.isArray(list) ? list.length > 0 : false;
+    const current = await this.readNotification(n.id);
+    return { claimed, current: current ?? n };
+  }
+
+  /**
+   * 선점 해제. **성공은 덮지 않는다** — `coalesce` 로 이미 선 `sentAt` 을
+   * 남긴다. 늦게 도착한 실패가 먼저 성공한 발송을 지우면 「안 갔다」로 보여
+   * 사람이 같은 알림을 다시 보낸다.
+   */
+  async releaseNotification(
+    id: string,
+    patch: { sentAt: string | null; lastError: string | null }
+  ): Promise<Notification> {
+    const sentAt = patch.sentAt ? new Date(patch.sentAt) : null;
+    await this.db.execute(sql`
+      update "erp_notification"
+        set "sentAt" = coalesce("sentAt", ${sentAt}::timestamptz),
+            "lastError" = case
+              when coalesce("sentAt", ${sentAt}::timestamptz) is null
+              then ${patch.lastError}
+              else null end,
+            "leaseUntil" = null
+      where "id" = ${id}
+    `);
+    const current = await this.readNotification(id);
+    if (!current) throw new Error(`알림을 찾을 수 없습니다: ${id}`);
+    return current;
+  }
+
+  private async readNotification(id: string): Promise<Notification | null> {
+    const rows = await this.db
+      .select()
+      .from(erpNotifications)
+      .where(eq(erpNotifications.id, id));
+    const r = rows[0];
+    if (!r) return null;
+    return {
+      ...r,
+      sentAt: r.sentAt ? r.sentAt.toISOString() : null,
+      lastAttemptAt: r.lastAttemptAt ? r.lastAttemptAt.toISOString() : null,
+      leaseUntil: r.leaseUntil ? r.leaseUntil.toISOString() : null,
+      readAt: r.readAt ? r.readAt.toISOString() : null,
+      createdAt: r.createdAt.toISOString(),
+    };
   }
 
   /**

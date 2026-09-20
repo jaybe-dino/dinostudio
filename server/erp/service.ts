@@ -1175,6 +1175,18 @@ export class LedgerService {
    */
   static readonly NOTIFY_MAX_ATTEMPTS = 3;
 
+  /**
+   * 발송 선점의 임대 길이 (QA-004).
+   *
+   * 슬랙 호출이 끝나기를 기다리는 시간보다는 넉넉하고, 보내다 죽은 건이
+   * 다음 크론(매시)까지 갇히지 않을 만큼은 짧아야 한다. 2분으로 둔다.
+   *
+   * **잠금이 아니라 임대인 이유** — 프로세스가 발송 도중 죽으면 잠금은 영영
+   * 안 풀린다. 그러면 그 알림은 다시는 안 나가고, 알림함에는 떠 있으니
+   * 아무도 모른다. 여기서는 2분 뒤 다음 번이 집어 간다.
+   */
+  static readonly NOTIFY_LEASE_MS = 2 * 60 * 1000;
+
   async notifications(actor: Actor) {
     const [cashPosition, ar, debt, today, stored] = await Promise.all([
       this.cashPosition({}, actor),
@@ -1215,13 +1227,29 @@ export class LedgerService {
       }
 
       /*
-       * 재시도는 **한계를 둔다.** 슬랙 채널 ID 가 틀렸다면 몇 번을 보내도
-       * 안 간다. 무한히 두드리면 크론이 매번 같은 벽에 부딪히고 실패 이유는
-       * 덮어써진다.
+       * **보내기 전에 집는다** (QA-004).
+       *
+       * 예전에는 읽고 → 보내고 → 저장했다. 세 동작 사이에 아무 보호가 없으니
+       * 화면 조회와 크론이 겹치면 둘 다 「아직 안 보냈다」를 읽고 둘 다
+       * 보냈다. 알림 3건이면 슬랙 호출이 6번이다.
+       *
+       * 프로세스 안의 잠금으로는 못 막는다 — 운영은 서버리스라 인스턴스가
+       * 여럿이다. 선점은 **저장소 한 문장** 안에서 일어나야 한다.
+       *
+       * 시도 횟수 한계도 같은 문장이 본다. 슬랙 채널 ID 가 틀렸다면 몇 번을
+       * 보내도 안 간다 — 무한히 두드리면 크론이 매번 같은 벽에 부딪힌다.
        */
-      const attempts = existing?.sendAttempts ?? 0;
-      if (attempts >= LedgerService.NOTIFY_MAX_ATTEMPTS) {
-        if (!existing) byId.set(notification.id, notification);
+      const now = nowIso();
+      const claim = await this.store.claimNotification(notification, {
+        now,
+        leaseUntil: new Date(
+          Date.parse(now) + LedgerService.NOTIFY_LEASE_MS
+        ).toISOString(),
+        maxAttempts: LedgerService.NOTIFY_MAX_ATTEMPTS,
+      });
+      if (!claim.claimed) {
+        // 진 쪽도 현재 상태를 보여 준다 — 「안 갔다」로 보이면 사람이 다시 누른다
+        byId.set(claim.current.id, claim.current);
         continue;
       }
 
@@ -1238,20 +1266,32 @@ export class LedgerService {
         lastError = error instanceof Error ? error.message : "발송 실패";
       }
 
-      const saved: Notification = {
-        ...(existing ?? notification),
+      const saved = await this.store.releaseNotification(notification.id, {
         sentAt,
-        sendAttempts: attempts + 1,
         lastError,
-        lastAttemptAt: nowIso(),
-      };
-      await this.store.upsertNotification(saved);
+      });
       byId.set(saved.id, saved);
+    }
+
+    /*
+     * 진 쪽이 「보내는 중」을 「안 갔다」로 보여 주면 사람이 다시 누른다.
+     * 선점 직후를 한 번 더 읽어 현재 상태로 맞춘다 — 발송은 이미 한 번만
+     * 일어났고, 이건 화면 숫자를 맞추는 읽기다.
+     */
+    if (canSend) {
+      for (const fresh of await this.store.listNotifications()) {
+        if (byId.has(fresh.id)) byId.set(fresh.id, fresh);
+      }
     }
 
     const inbox = Array.from(byId.values()).sort((a, b) =>
       a.createdAt < b.createdAt ? 1 : -1
     );
+    const nowMs = Date.now();
+    const isSending = (item: Notification) =>
+      item.sentAt == null &&
+      item.leaseUntil != null &&
+      Date.parse(item.leaseUntil) > nowMs;
     return {
       rules: NOTIFICATION_RULES,
       delivered: inbox,
@@ -1260,10 +1300,16 @@ export class LedgerService {
       /*
        * **안 간 알림을 성공으로 세지 않는다.** 알림함에 떠 있는 것과 도착지에
        * 도달한 것은 다르다 — 이 숫자가 0 이 아니면 누군가는 못 받았다.
+       *
+       * 다만 **「보내는 중」은 「안 갔다」가 아니다** (QA-004). 다른 인스턴스가
+       * 지금 그 알림을 집어서 보내고 있는 중일 수 있다. 그걸 실패로 세면
+       * 사람이 안 가지도 않은 알림을 다시 보낸다.
        */
       undelivered: inbox.filter(
-        item => item.sentAt == null && item.sendAttempts > 0
+        item => item.sentAt == null && item.sendAttempts > 0 && !isSending(item)
       ).length,
+      /** 지금 다른 쪽이 집어서 보내는 중 — 잠시 뒤 성공이나 실패로 바뀐다 */
+      sending: inbox.filter(isSending).length,
       giveUp: inbox.filter(
         item =>
           item.sentAt == null &&

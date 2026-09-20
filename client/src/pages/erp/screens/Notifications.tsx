@@ -75,7 +75,9 @@ export function NotificationsScreen() {
           note={
             data.data?.giveUp
               ? `${data.data.giveUp}건은 재시도를 포기했습니다`
-              : "다음 크론에서 다시 시도합니다"
+              : data.data?.sending
+                ? `${data.data.sending}건은 지금 보내는 중입니다`
+                : "다음 크론에서 다시 시도합니다"
           }
           tone={data.data?.undelivered ? "alert" : "ok"}
         />

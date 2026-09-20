@@ -536,6 +536,18 @@ export interface Notification {
   /** 마지막 실패 이유 — 「안 갔다」만으로는 무엇을 고쳐야 할지 모른다 */
   lastError: string | null;
   lastAttemptAt: string | null;
+  /**
+   * 발송 선점의 임대 만료 시각 (QA-004).
+   *
+   * 화면 조회와 크론이 **같은 함수**를 부르므로 동시에 같은 알림을 집을 수
+   * 있다. 「보냈는가」만 보면 둘 다 아직 안 보낸 것을 보고 둘 다 보낸다.
+   * 그래서 보내기 **전에** 한 문장으로 선점하고, 이 값이 지나기 전에는 다른
+   * 쪽이 못 집는다.
+   *
+   * 잠금이 아니라 **임대**인 이유 — 보내다가 죽은 프로세스가 알림을 영영
+   * 잠가 버리면 그 알림은 다시는 안 나간다.
+   */
+  leaseUntil: string | null;
   readAt: string | null;
   createdAt: string;
 }
