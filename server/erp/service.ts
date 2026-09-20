@@ -4262,34 +4262,25 @@ export class LedgerService {
       settlement,
       entry.amount
     );
-    if (!guard.inserted)
+    /*
+     * **줄이 안 들어간 이유를 저장소가 말해 준다** (QA-007).
+     *
+     * 예전에는 삽입한 **뒤에** 마감을 다시 보고, 걸렸으면 그 줄을 무효로
+     * 되돌렸다. 되돌리는 것과 애초에 안 일어나는 것은 다르다 — 되돌리기
+     * 전까지 그 줄은 실재했고, 그 사이에 다른 계산이 그것을 읽을 수 있다.
+     *
+     * 지금은 한도와 마감을 **삽입하는 문장 안에서** 함께 본다. 못 들어갔으면
+     * 아무 흔적도 남지 않는다.
+     */
+    if (!guard.inserted) {
+      if (guard.closed)
+        throw erpError("period_closed", {
+          ym: settlement.settledOn.slice(0, 7),
+        });
       throw erpError("settlement_exceeds", {
         amount: entry.amount,
         already: guard.settled,
         attempted: amount,
-      });
-
-    /*
-     * **마감이 그 사이에 걸렸는지 한 번 더 본다** (QA-006).
-     *
-     * 위의 사전 검사와 이 삽입 사이에는 틈이 있다. neon-http 는 상태가 없어
-     * 「마감 여부 확인 + 삽입」을 한 트랜잭션으로 묶을 수 없으므로, 그 틈을
-     * 없앨 수는 없다. 대신 **좁히고, 넘어간 것은 되돌린다.**
-     *
-     * 되돌리는 방법은 줄을 지우는 것이 아니라 무효 처리다 (원칙 9). 지우면
-     * 마감된 달에 무슨 일이 있었는지 아무 흔적도 안 남는다 — 무효로 남기면
-     * 「들어왔다가 마감 때문에 취소됐다」가 이력에 보인다.
-     */
-    if ((await this.closedMonths()).has(settlement.settledOn.slice(0, 7))) {
-      await this.store.voidSettlementIfLive(settlement.id, {
-        voidedAt: nowIso(),
-        voidedBy: actor.id,
-        voidReason: "마감된 달이라 되돌렸습니다",
-      });
-      const rolledBack = await this.store.listSettlements(entry.id);
-      await this.syncPaidAt(entry, rolledBack, expectedVersion);
-      throw erpError("period_closed", {
-        ym: settlement.settledOn.slice(0, 7),
       });
     }
 
@@ -4363,11 +4354,24 @@ export class LedgerService {
      * 성공했다고 답하면 감사로그에 취소가 두 번 남고 무엇이 실제로 일어났는지
      * 알 수 없게 된다.
      */
-    const voided = await this.store.voidSettlementIfLive(target.id, {
-      voidedAt: nowIso(),
-      voidedBy: actor.id,
-      voidReason: reason,
-    });
+    const { voided, closed } = await this.store.voidSettlementIfLive(
+      target.id,
+      {
+        voidedAt: nowIso(),
+        voidedBy: actor.id,
+        voidReason: reason,
+      }
+    );
+    /*
+     * **마감이 먼저 저장됐으면 여기서 걸린다** (QA-007).
+     *
+     * 위의 사전 검사는 읽기라서, 읽고 나서 마감이 끝나면 통과한다. 실제로
+     * 막는 것은 저장소의 쓰기 문장 안에 있는 조건이다.
+     */
+    if (closed)
+      throw erpError("period_closed", {
+        ym: target.settledOn.slice(0, 7),
+      });
     if (!voided)
       throw erpError(
         "invalid_transition",
