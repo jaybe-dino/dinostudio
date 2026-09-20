@@ -70,6 +70,13 @@ export function OverviewScreen() {
         </div>
       </div>
 
+      {/*
+        설정 하나가 잘못돼 있으면 **화면은 멀쩡해 보이고 숫자만 틀린다.**
+        그런 것은 문서에 적어 두는 대신 첫 화면에서 스스로 말해야 한다 —
+        사람이 기억해야 하는 것은 대책이 아니다.
+      */}
+      <LaunchChecks />
+
       <div className="kpis">
         <Tile
           label="보유현금"
@@ -268,5 +275,54 @@ export function OverviewScreen() {
         </button>
       </div>
     </>
+  );
+}
+
+/**
+ * 오픈 전 점검 — 막는 것과 알리는 것을 구분해서 보여 준다.
+ *
+ * 다 갖춰지면 한 줄로 줄어든다. 늘 커다랗게 떠 있으면 사람이 곧 안 읽는다.
+ */
+function LaunchChecks() {
+  const q = trpc.erp.launchReport.useQuery();
+  const { goto } = useErpUi();
+  const d = q.data;
+  if (!d) return null;
+
+  const problems = d.checks.filter(c => c.level !== "ok");
+  if (problems.length === 0)
+    return <Note>오픈 전 점검 {d.checks.length}가지를 모두 지났습니다.</Note>;
+
+  return (
+    <Card
+      title="오픈 전 점검"
+      meta={
+        d.blockers > 0
+          ? `막는 것 ${d.blockers}가지 · 알림 ${d.warnings}가지`
+          : `알림 ${d.warnings}가지`
+      }
+    >
+      {problems.map(c => (
+        <div key={c.id} style={{ marginBottom: 10 }}>
+          <Note tone={c.level === "blocker" ? "alert" : "warn"}>
+            <b>
+              {c.level === "blocker" ? "막는 것 — " : "확인 — "}
+              {c.title}
+            </b>
+            <br />
+            {c.detail}
+            {c.action ? (
+              <>
+                <br />
+                <b>할 일:</b> {c.action}
+              </>
+            ) : null}
+          </Note>
+        </div>
+      ))}
+      <button type="button" className="btn" onClick={() => goto("settings")}>
+        기준값 화면으로
+      </button>
+    </Card>
   );
 }

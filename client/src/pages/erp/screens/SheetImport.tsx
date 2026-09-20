@@ -509,8 +509,8 @@ function SheetDiffCard({ text }: { text: string }) {
           </div>
           {d.rows.length === 0 ? (
             <Note>
-              차이가 없습니다 — 시트 {d.sheetRows}줄과 원장{" "}
-              {d.ledgerCompared}건이 맞습니다.
+              차이가 없습니다 — 시트 {d.sheetRows}줄과 원장 {d.ledgerCompared}
+              건이 맞습니다.
             </Note>
           ) : (
             <div className="scroll" style={{ marginTop: 10 }}>
@@ -537,9 +537,7 @@ function SheetDiffCard({ text }: { text: string }) {
                           {r.kind}
                         </span>
                       </td>
-                      <td className="nw">
-                        {r.date ? shortDate(r.date) : "—"}
-                      </td>
+                      <td className="nw">{r.date ? shortDate(r.date) : "—"}</td>
                       <td className="wrap k">{r.title}</td>
                       <td className="n">
                         {r.sheetAmount == null ? "—" : won(r.sheetAmount)}
