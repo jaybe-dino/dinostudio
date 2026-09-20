@@ -134,6 +134,7 @@ import type {
   Scenario,
   Setting,
   Settlement,
+  Notification,
   SlackSyncState,
   CashflowUnit,
   Direction,
@@ -1065,6 +1066,12 @@ export class LedgerService {
    * §12 알림 — 지금 울려야 할 것을 계산해 **알림함에 적재**하고, 도착지가 설정돼 있으면 발송한다.
    * 발송 실패도 알림함에는 남는다 — 도착지가 죽어 있어도 경보가 사라지면 안 된다 (B7).
    */
+  /**
+   * 재시도 한계. 슬랙 채널 ID 가 틀렸다면 몇 번을 보내도 안 간다 —
+   * 무한히 두드리면 크론이 매번 같은 벽에 부딪히고 실패 이유는 덮어써진다.
+   */
+  static readonly NOTIFY_MAX_ATTEMPTS = 3;
+
   async notifications(actor: Actor) {
     const [cashPosition, ar, debt, today, stored] = await Promise.all([
       this.cashPosition({}, actor),
@@ -1078,20 +1085,63 @@ export class LedgerService {
     const { delivered, capped } = applyCeoCap(evaluated, NOTIFICATION_RULES);
     const byId = new Map(stored.map(item => [item.id, item]));
 
+    const channel = process.env.SLACK_NOTIFY_CHANNEL;
+    const canSend = Boolean(channel) && slackConfigured();
+
     for (const notification of delivered) {
       const existing = byId.get(notification.id);
-      // 이미 적재된 알림은 읽음 표시를 지우지 않는다
-      if (existing) continue;
-      const channel = process.env.SLACK_NOTIFY_CHANNEL;
+
+      /*
+       * **이미 보낸 것만 건너뛴다.**
+       *
+       * 예전에는 「이미 적재된 알림」이면 그냥 넘어갔다. 그래서 슬랙 발송이
+       * 실패한 알림은 `sentAt` 이 빈 채로 저장되고, 다음 번에는 존재한다는
+       * 이유로 건너뛰어 **영영 다시 시도되지 않았다.** 알림함에는 떠 있으니
+       * 화면상으로는 멀쩡해 보인다 — 안 간 줄을 아무도 모른다.
+       */
+      if (existing?.sentAt) continue;
+
+      // 도착지가 없으면 알림함에만 쌓인다. 시도한 것으로 세지 않는다
+      if (!canSend) {
+        if (!existing) {
+          const saved = { ...notification };
+          await this.store.upsertNotification(saved);
+          byId.set(saved.id, saved);
+        }
+        continue;
+      }
+
+      /*
+       * 재시도는 **한계를 둔다.** 슬랙 채널 ID 가 틀렸다면 몇 번을 보내도
+       * 안 간다. 무한히 두드리면 크론이 매번 같은 벽에 부딪히고 실패 이유는
+       * 덮어써진다.
+       */
+      const attempts = existing?.sendAttempts ?? 0;
+      if (attempts >= LedgerService.NOTIFY_MAX_ATTEMPTS) {
+        if (!existing) byId.set(notification.id, notification);
+        continue;
+      }
+
       let sentAt: string | null = null;
-      if (channel && slackConfigured()) {
+      let lastError: string | null = null;
+      try {
         const result = await postSlackMessage(
-          channel,
+          channel!,
           `*${notification.title}*\n${notification.body}`
         );
         if (result.sent) sentAt = nowIso();
+        else lastError = result.error ?? "슬랙이 받지 않았습니다";
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "발송 실패";
       }
-      const saved = { ...notification, sentAt };
+
+      const saved: Notification = {
+        ...(existing ?? notification),
+        sentAt,
+        sendAttempts: attempts + 1,
+        lastError,
+        lastAttemptAt: nowIso(),
+      };
       await this.store.upsertNotification(saved);
       byId.set(saved.id, saved);
     }
@@ -1104,6 +1154,21 @@ export class LedgerService {
       delivered: inbox,
       capped,
       unread: inbox.filter(item => item.readAt == null).length,
+      /*
+       * **안 간 알림을 성공으로 세지 않는다.** 알림함에 떠 있는 것과 도착지에
+       * 도달한 것은 다르다 — 이 숫자가 0 이 아니면 누군가는 못 받았다.
+       */
+      undelivered: inbox.filter(
+        item => item.sentAt == null && item.sendAttempts > 0
+      ).length,
+      giveUp: inbox.filter(
+        item =>
+          item.sentAt == null &&
+          item.sendAttempts >= LedgerService.NOTIFY_MAX_ATTEMPTS
+      ).length,
+      lastError:
+        inbox.find(item => item.sentAt == null && item.lastError)?.lastError ??
+        null,
       /** 도착지가 설정돼 있는가 — 아니면 알림함에만 쌓인다 */
       destination:
         process.env.SLACK_NOTIFY_CHANNEL && slackConfigured() ? "슬랙" : null,

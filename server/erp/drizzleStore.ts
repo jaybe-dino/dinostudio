@@ -630,6 +630,7 @@ export class DrizzleLedgerStore implements LedgerStore {
     return rows.map(r => ({
       ...r,
       sentAt: r.sentAt ? r.sentAt.toISOString() : null,
+      lastAttemptAt: r.lastAttemptAt ? r.lastAttemptAt.toISOString() : null,
       readAt: r.readAt ? r.readAt.toISOString() : null,
       createdAt: r.createdAt.toISOString(),
     }));
@@ -639,6 +640,9 @@ export class DrizzleLedgerStore implements LedgerStore {
     const row = {
       ...notification,
       sentAt: notification.sentAt ? new Date(notification.sentAt) : null,
+      lastAttemptAt: notification.lastAttemptAt
+        ? new Date(notification.lastAttemptAt)
+        : null,
       readAt: notification.readAt ? new Date(notification.readAt) : null,
       createdAt: new Date(notification.createdAt),
     };

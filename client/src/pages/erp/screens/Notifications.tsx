@@ -65,7 +65,32 @@ export function NotificationsScreen() {
           }
           tone={data.data?.destination ? "ok" : "null"}
         />
+        {/*
+          **알림함에 떠 있는 것과 도착지에 도달한 것은 다르다.**
+          이 숫자가 0 이 아니면 누군가는 못 받았다.
+        */}
+        <Tile
+          label="도착 못 함"
+          value={`${data.data?.undelivered ?? 0}건`}
+          note={
+            data.data?.giveUp
+              ? `${data.data.giveUp}건은 재시도를 포기했습니다`
+              : "다음 크론에서 다시 시도합니다"
+          }
+          tone={data.data?.undelivered ? "alert" : "ok"}
+        />
       </div>
+
+      {data.data?.lastError ? (
+        <Note tone="alert">
+          <b>알림이 도착지에 닿지 못했습니다 — {data.data.lastError}</b>
+          <br />
+          알림함에는 남아 있지만 <b>아무도 못 받았습니다.</b>{" "}
+          {data.data.giveUp
+            ? "재시도를 포기한 건이 있습니다. 원인을 고친 뒤에는 새 알림부터 다시 갑니다."
+            : "다음 크론에서 다시 시도합니다."}
+        </Note>
+      ) : null}
 
       <Card title="알림함" meta="미발송이어도 적재됩니다" body={false}>
         <div className="scroll">

@@ -549,6 +549,10 @@ export const erpNotifications = pgTable(
     body: text("body").notNull(),
     screen: varchar("screen", { length: 60 }),
     sentAt: timestamp("sentAt", { withTimezone: true }),
+    /** 보내려고 시도한 횟수 — 없으면 실패한 알림이 영영 재시도되지 않는다 */
+    sendAttempts: integer("sendAttempts").notNull().default(0),
+    lastError: text("lastError"),
+    lastAttemptAt: timestamp("lastAttemptAt", { withTimezone: true }),
     readAt: timestamp("readAt", { withTimezone: true }),
     createdAt: timestamp("createdAt", { withTimezone: true })
       .defaultNow()

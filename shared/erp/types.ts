@@ -518,7 +518,16 @@ export interface Notification {
   body: string;
   /** 이동할 화면 */
   screen: string | null;
+  /** 실제로 도착지에 보내진 시각. null 이면 아직 못 보냈다 */
   sentAt: string | null;
+  /**
+   * 보내려고 시도한 횟수. **이게 없으면 실패한 알림이 영영 재시도되지 않는다** —
+   * 중복 방지가 「이미 만든 알림」으로 걸러 버리기 때문이다.
+   */
+  sendAttempts: number;
+  /** 마지막 실패 이유 — 「안 갔다」만으로는 무엇을 고쳐야 할지 모른다 */
+  lastError: string | null;
+  lastAttemptAt: string | null;
   readAt: string | null;
   createdAt: string;
 }
