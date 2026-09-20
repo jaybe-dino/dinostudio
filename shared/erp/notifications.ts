@@ -118,6 +118,10 @@ export function evaluateNotifications(
       body,
       screen,
       sentAt: null, // 도착지 미정 (B7) — 알림함에만 남는다
+      // 아직 보내려고 시도하지 않았다. 실패와 미시도는 다르다
+      sendAttempts: 0,
+      lastError: null,
+      lastAttemptAt: null,
       readAt: null,
       createdAt: `${input.today}T09:00:00+09:00`,
     });

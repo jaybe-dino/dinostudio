@@ -53,6 +53,11 @@ export async function GET(req: Request): Promise<Response> {
         unread: result.unread,
         destination: result.destination,
         cappedForCeo: result.capped.length,
+        // **안 간 것을 안 갔다고 말한다.** 알림함에 떠 있는 것과 도착지에
+        // 도달한 것은 다르다 — 이 숫자가 0 이 아니면 누군가는 못 받았다
+        undelivered: result.undelivered,
+        giveUp: result.giveUp,
+        lastError: result.lastError,
       },
       200
     );
