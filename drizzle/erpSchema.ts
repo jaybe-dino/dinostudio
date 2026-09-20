@@ -393,6 +393,8 @@ export const erpUsers = pgTable("erp_user", {
   email: varchar("email", { length: 320 }).notNull().unique(),
   name: varchar("name", { length: 120 }).notNull(),
   role: roleEnum("role").notNull(),
+  /** 소속 사업부 — 사업부리더의 조회 범위가 이 값으로 정해진다 (§13.1) */
+  buCode: buEnum("buCode"),
   active: boolean("active").notNull().default(true),
 });
 

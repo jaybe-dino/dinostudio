@@ -25,7 +25,7 @@ import type {
   Setting,
 } from "../../shared/erp/index.js";
 import type { SeedDaySnapshot } from "../../shared/erp/seed.js";
-import { and, asc, eq, gte, inArray, lte, like, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte, like, or, sql } from "drizzle-orm";
 import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import {
   erpAccounts,
@@ -364,6 +364,70 @@ export class DrizzleLedgerStore implements LedgerStore {
 
   async appendSettlement(settlement: Settlement): Promise<void> {
     await this.db.insert(erpSettlements).values(rowFromSettlement(settlement));
+  }
+
+  /**
+   * 초과 없이 확인 줄을 넣는다 — **검사와 삽입이 한 문장이다.**
+   *
+   * neon-http 드라이버는 상태가 없어 여러 문장을 한 트랜잭션으로 묶지 못한다.
+   * 그래서 트랜잭션 대신 **조건부 INSERT** 를 쓴다. `INSERT ... SELECT ...
+   * WHERE (합계 + 이번 금액) <= 한도` 는 Postgres 안에서 **한 문장**이므로,
+   * 두 호출이 동시에 들어와도 하나만 행을 만든다. 넣지 못하면 0행이 돌아오고
+   * 그것이 곧 「초과」다.
+   *
+   * 서비스에서 읽고-검사하고-넣는 방식으로는 못 막는다. 두 호출이 같은 시점에
+   * 합계를 읽으면 둘 다 여유가 있다고 보고 둘 다 통과한다.
+   */
+  async appendSettlementGuarded(
+    settlement: Settlement,
+    maxTotal: number
+  ): Promise<{ inserted: boolean; settled: number }> {
+    const r = settlement;
+    const rows = await this.db.execute<{ amount: string | number }>(sql`
+      insert into "erp_settlement"
+        ("id", "entryId", "settledOn", "amount", "bankAccount", "bankRef",
+         "note", "actor", "at", "voidedAt", "voidedBy", "voidReason")
+      select ${r.id}, ${r.entryId}, ${r.settledOn}::date, ${r.amount},
+             ${r.bankAccount}, ${r.bankRef}, ${r.note}, ${r.actor},
+             ${new Date(r.at)}::timestamptz, null, null, null
+      where coalesce(
+        (select sum("amount") from "erp_settlement"
+          where "entryId" = ${r.entryId} and "voidedAt" is null), 0
+      ) + ${r.amount} <= ${maxTotal}
+      returning "amount"
+    `);
+    const list = (rows as unknown as { rows?: unknown[] }).rows ?? rows;
+    const inserted = Array.isArray(list) ? list.length > 0 : false;
+    const settled = await this.settledTotal(r.entryId);
+    return { inserted, settled };
+  }
+
+  private async settledTotal(entryId: string): Promise<number> {
+    const rows = await this.db
+      .select({ amount: erpSettlements.amount })
+      .from(erpSettlements)
+      .where(and(eq(erpSettlements.entryId, entryId), sql`"voidedAt" is null`));
+    return rows.reduce((n, x) => n + Number(x.amount ?? 0), 0);
+  }
+
+  /**
+   * 살아 있을 때만 무효 처리한다 — `WHERE "voidedAt" is null` 이 한 문장 안에
+   * 있으므로 동시에 두 번 눌러도 실제로 바꾸는 쪽은 하나다.
+   */
+  async voidSettlementIfLive(
+    id: string,
+    patch: { voidedAt: string; voidedBy: string; voidReason: string }
+  ): Promise<Settlement | null> {
+    const rows = await this.db
+      .update(erpSettlements)
+      .set({
+        voidedAt: new Date(patch.voidedAt),
+        voidedBy: patch.voidedBy,
+        voidReason: patch.voidReason,
+      })
+      .where(and(eq(erpSettlements.id, id), sql`"voidedAt" is null`))
+      .returning();
+    return rows[0] ? settlementFromRow(rows[0]) : null;
   }
 
   async listSettlements(entryId?: string): Promise<Settlement[]> {

@@ -506,12 +506,39 @@ describe("§13 권한 · 내부통제 (G10)", () => {
   });
 
   it("사업부 리더는 33,000,000을 승인할 수 없다", async () => {
+    /*
+     * 한도 판정을 보려면 **그 건이 리더의 범위 안**이어야 한다. 범위 밖이면
+     * 한도에 닿기 전에 「없습니다」로 막히고(§13.1), 그러면 이 테스트는
+     * 한도가 아니라 범위를 보게 된다. 그래서 같은 사업부 건을 만들어 쓴다.
+     */
     const service = freshService();
-    const { entry } = await service.getEntry("EX-260827-07", CFO);
+    const big = await service.createEntry(
+      {
+        direction: "out",
+        title: "한도 판정용 대형 건",
+        amount: 33_000_000,
+        cashDate: "2026-08-27",
+        accountCode: "5210",
+        buCode: "IP",
+        hasEvidence: true,
+      },
+      CFO
+    );
+    await service.addEvidence(
+      {
+        code: big.entry.code,
+        kind: "세금계산서",
+        storage: "link",
+        url: "https://drive.google.com/x",
+      },
+      CFO
+    );
+    const { entry } = await service.getEntry(big.entry.code, CFO);
     await expect(
-      service.approve("EX-260827-07", entry.version, {
+      service.approve(big.entry.code, entry.version, {
         id: "lead@dinostudio.kr",
         role: "사업부리더",
+        buCode: "IP",
       })
     ).rejects.toMatchObject({ code: "approval_limit" });
   });

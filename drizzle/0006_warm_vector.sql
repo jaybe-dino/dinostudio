@@ -1,0 +1,1 @@
+ALTER TABLE "erp_user" ADD COLUMN "buCode" "erp_bu";

@@ -65,7 +65,7 @@ describe("§13.2 증빙", () => {
     // 대표 요청 — 실제로 증빙을 받을 수 없는 지출이 있으므로 길을 열어 둔다.
     // 다만 사유를 남기고 손해액을 계산해 보여 주는 것이 조건이다.
     const svc = service();
-    const before = await svc.evidence("EX-260901-01");
+    const before = await svc.evidence("EX-260901-01", CFO);
     expect(before.attachments).toHaveLength(0);
 
     await svc.addEvidence(
@@ -78,7 +78,7 @@ describe("§13.2 증빙", () => {
       CFO
     );
 
-    const after = await svc.evidence("EX-260901-01");
+    const after = await svc.evidence("EX-260901-01", CFO);
     expect(after.attachments[0]).toMatchObject({
       storage: "none",
       reason: "해외 결제로 세금계산서 발급 불가",
@@ -157,6 +157,7 @@ describe("§13.1 사용자 · 역할 (G13)", () => {
       email: "a@x.kr",
       name: "가",
       role: "재무" as const,
+      buCode: null,
       active: true,
     };
     await expect(svc.putAppUser(user, CFO)).rejects.toMatchObject({
@@ -164,6 +165,7 @@ describe("§13.1 사용자 · 역할 (G13)", () => {
     });
     await expect(svc.putAppUser(user, CEO)).resolves.toMatchObject({
       role: "재무",
+      buCode: null,
     });
   });
 
@@ -182,6 +184,7 @@ describe("§13.1 사용자 · 역할 (G13)", () => {
         email: "b@x.kr",
         name: "나",
         role: "담당자",
+        buCode: null,
         active: true,
       },
       CEO

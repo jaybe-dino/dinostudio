@@ -64,6 +64,14 @@ export interface AppUser {
   email: string;
   name: string;
   role: Role;
+  /**
+   * 소속 사업부 — **사업부리더의 조회 범위가 이 값으로 정해진다** (§13.1).
+   *
+   * 비어 있으면 리더는 **아무것도 못 본다** (fail-closed). 범위를 모를 때
+   * 전부 보여 주면 범위 규칙이 있으나 마나이고, 아무것도 안 보여 주면
+   * 사람이 바로 알아차리고 채운다.
+   */
+  buCode: BuCode | null;
   active: boolean;
 }
 

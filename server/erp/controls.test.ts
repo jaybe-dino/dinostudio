@@ -11,7 +11,16 @@ import type { Actor } from "./service.js";
 
 const CFO: Actor = { id: "cfo@dinostudio.kr", role: "재무" };
 const CEO: Actor = { id: "ceo@dinostudio.kr", role: "대표" };
-const LEADER: Actor = { id: "lead@dinostudio.kr", role: "사업부리더" };
+/*
+ * 한도 판정을 보려면 **그 건이 리더의 범위 안**이어야 한다. 범위 밖이면
+ * 한도에 닿기 전에 「없습니다」로 막히고(§13.1) 이 파일은 한도가 아니라
+ * 범위를 보게 된다. 그래서 리더와 아래 건들의 사업부를 맞춰 둔다.
+ */
+const LEADER: Actor = {
+  id: "lead@dinostudio.kr",
+  role: "사업부리더",
+  buCode: "IP",
+};
 
 function svc() {
   return new LedgerService(new InMemoryLedgerStore());
@@ -42,6 +51,7 @@ describe("D1 자기승인 — 관여한 사람 전부", () => {
       s,
       {
         direction: "out",
+        buCode: "IP",
         title: "외주",
         amount: 1_000_000,
         accountCode: "5210",
@@ -61,6 +71,7 @@ describe("D1 자기승인 — 관여한 사람 전부", () => {
       s,
       {
         direction: "out",
+        buCode: "IP",
         title: "외주",
         amount: 1_000_000,
         accountCode: "5210",
@@ -103,6 +114,7 @@ describe("D2 한도 쪼개기", () => {
         s,
         {
           direction: "out",
+          buCode: "IP",
           title: `분할 ${i}`,
           amount,
           accountCode: "5210",
@@ -118,6 +130,7 @@ describe("D2 한도 쪼개기", () => {
       s,
       {
         direction: "out",
+        buCode: "IP",
         title: "분할 2",
         amount: 4_300_000,
         accountCode: "5210",
@@ -139,6 +152,7 @@ describe("D2 한도 쪼개기", () => {
       s,
       {
         direction: "out",
+        buCode: "IP",
         title: "A사",
         amount: 4_000_000,
         accountCode: "5210",
@@ -153,6 +167,7 @@ describe("D2 한도 쪼개기", () => {
       s,
       {
         direction: "out",
+        buCode: "IP",
         title: "B사",
         amount: 4_500_000,
         accountCode: "5210",

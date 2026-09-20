@@ -13,7 +13,12 @@ import {
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc.js";
-import { getLedgerService, resolveErpRole, storeIsDatabase } from "./index.js";
+import {
+  getLedgerService,
+  resolveErpBu,
+  resolveErpRole,
+  storeIsDatabase,
+} from "./index.js";
 import { ErpError } from "./errors.js";
 import type { Actor } from "./service.js";
 
@@ -34,6 +39,14 @@ function actorFrom(ctx: {
   return {
     id: ctx.user?.email ?? ctx.user?.openId ?? "unknown",
     role,
+    /*
+     * **조회 범위가 여기서 정해진다** (§13.1 own_bu).
+     *
+     * 이 값을 안 실으면 `permissions.ts` 의 `scope` 선언은 선언으로만 남는다 —
+     * 실제로 그랬고, 사업부리더가 다른 사업부 건을 목록으로 받아 갔다.
+     * 비어 있으면 리더는 아무것도 못 본다 (fail-closed).
+     */
+    buCode: resolveErpBu(ctx.user?.email ?? null),
     ip: ctx.req.ip ?? null,
     // 민감 조회는 세션이 아니라 재인증 시각으로 열린다 (D7)
     stepUpFresh: ctx.stepUpFresh ?? false,
@@ -611,10 +624,9 @@ export const erpRouter = router({
   evidence: router({
     list: protectedProcedure
       .input(z.object({ code: z.string() }))
-      .query(({ ctx, input }) => {
-        actorFrom(ctx);
-        return run(() => getLedgerService().evidence(input.code));
-      }),
+      .query(({ ctx, input }) =>
+        run(() => getLedgerService().evidence(input.code, actorFrom(ctx)))
+      ),
     requestUpload: protectedProcedure
       .input(
         z.object({
@@ -669,11 +681,18 @@ export const erpRouter = router({
           name: z.string().min(1),
           // 역할은 ROLES 가 유일한 출처다 — 여기에 또 적으면 역할을 추가할 때 어긋난다
           role: z.enum(ROLES),
+          /** 사업부리더의 조회 범위 — 비면 아무것도 못 본다 (fail-closed) */
+          buCode: z.enum(["IP", "NET", "COM", "GLV", "CMN"]).nullish(),
           active: z.boolean().default(true),
         })
       )
       .mutation(({ ctx, input }) =>
-        run(() => getLedgerService().putAppUser(input, actorFrom(ctx)))
+        run(() =>
+          getLedgerService().putAppUser(
+            { ...input, buCode: input.buCode ?? null },
+            actorFrom(ctx)
+          )
+        )
       ),
   }),
 
@@ -838,10 +857,9 @@ export const erpRouter = router({
       run(() => getLedgerService().putAccount(input, actorFrom(ctx)))
     ),
 
-  settings: protectedProcedure.query(({ ctx }) => {
-    actorFrom(ctx);
-    return run(() => getLedgerService().settings());
-  }),
+  settings: protectedProcedure.query(({ ctx }) =>
+    run(() => getLedgerService().settings(actorFrom(ctx)))
+  ),
 
   audit: protectedProcedure
     .input(
@@ -849,10 +867,9 @@ export const erpRouter = router({
         .object({ table: z.string().optional(), rowId: z.string().optional() })
         .optional()
     )
-    .query(({ ctx, input }) => {
-      actorFrom(ctx);
-      return run(() => getLedgerService().auditTrail(input ?? {}));
-    }),
+    .query(({ ctx, input }) =>
+      run(() => getLedgerService().auditTrail(input ?? {}, actorFrom(ctx)))
+    ),
 
   /** §13.1 역할별 대기함 — 「지금 이 건은 누가 움직여야 하는가」 */
   approvalQueues: protectedProcedure.query(({ ctx }) =>

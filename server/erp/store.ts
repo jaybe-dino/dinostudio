@@ -77,8 +77,33 @@ export interface LedgerStore {
 
   /** 실제 입출금 확인 — entryId 를 비우면 전부 */
   appendSettlement(settlement: Settlement): Promise<void>;
+  /**
+   * **초과 없이** 확인 줄을 넣는다 — 합계 검사와 삽입이 **한 번에** 일어난다.
+   *
+   * 서비스에서 「읽고 → 검사하고 → 넣는」 방식은 동시 호출을 막지 못한다.
+   * 두 호출이 같은 시점에 합계를 읽으면 둘 다 여유가 있다고 판단하고 둘 다
+   * 통과한다 — 1,000원짜리 건에 600 + 600 이 들어간다. 버전으로도 못 막는다:
+   * 부분 확인은 건을 바꾸지 않으므로 두 호출의 expectedVersion 이 똑같이
+   * 유효하다. 화면에서 두 번 못 누르게 하는 것도 대책이 아니다 — API 를
+   * 직접 부르면 그대로 통과한다.
+   *
+   * 그래서 **검사를 삽입과 같은 연산 안에** 둔다.
+   */
+  appendSettlementGuarded(
+    settlement: Settlement,
+    maxTotal: number
+  ): Promise<{ inserted: boolean; settled: number }>;
   listSettlements(entryId?: string): Promise<Settlement[]>;
   replaceSettlement(settlement: Settlement): Promise<Settlement | null>;
+  /**
+   * **살아 있을 때만** 무효 처리한다 — 두 사람이 같은 줄을 동시에 취소해도
+   * 실제로 바꾸는 쪽은 하나다. 둘 다 성공했다고 답하면 감사로그에 취소가 두 번
+   * 남고, 사람은 무엇이 실제로 일어났는지 알 수 없다.
+   */
+  voidSettlementIfLive(
+    id: string,
+    patch: { voidedAt: string; voidedBy: string; voidReason: string }
+  ): Promise<Settlement | null>;
   appendAudit(log: AuditLog): Promise<void>;
   listAudit(filter?: { table?: string; rowId?: string }): Promise<AuditLog[]>;
   appendJournal(journal: Journal): Promise<void>;
@@ -292,6 +317,25 @@ export class InMemoryLedgerStore implements LedgerStore {
   async appendSettlement(settlement: Settlement): Promise<void> {
     this.settlements.push({ ...settlement });
   }
+  async appendSettlementGuarded(
+    settlement: Settlement,
+    maxTotal: number
+  ): Promise<{ inserted: boolean; settled: number }> {
+    /*
+     * **이 블록 안에 `await` 가 하나도 없다 — 그래서 원자적이다.**
+     *
+     * 자바스크립트는 한 번에 한 흐름만 돈다. `await` 가 없으면 중간에 다른
+     * 호출이 끼어들 수 없다. 한 줄이라도 `await` 를 넣으면 그 자리에서
+     * 동시 호출이 갈라져 둘 다 통과하게 된다.
+     */
+    const settled = this.settlements
+      .filter(x => x.entryId === settlement.entryId && x.voidedAt == null)
+      .reduce((n, x) => n + x.amount, 0);
+    if (settled + settlement.amount > maxTotal)
+      return { inserted: false, settled };
+    this.settlements.push({ ...settlement });
+    return { inserted: true, settled: settled + settlement.amount };
+  }
   async listSettlements(entryId?: string): Promise<Settlement[]> {
     const rows = entryId
       ? this.settlements.filter(s => s.entryId === entryId)
@@ -303,6 +347,17 @@ export class InMemoryLedgerStore implements LedgerStore {
     if (i < 0) return null;
     this.settlements[i] = { ...settlement };
     return { ...settlement };
+  }
+  async voidSettlementIfLive(
+    id: string,
+    patch: { voidedAt: string; voidedBy: string; voidReason: string }
+  ): Promise<Settlement | null> {
+    // 이 블록 안에 `await` 가 없다 — 그래서 원자적이다
+    const i = this.settlements.findIndex(x => x.id === id);
+    if (i < 0) return null;
+    if (this.settlements[i].voidedAt != null) return null;
+    this.settlements[i] = { ...this.settlements[i], ...patch };
+    return { ...this.settlements[i] };
   }
 
   async listApprovals(entryId: string): Promise<Approval[]> {
