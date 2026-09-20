@@ -627,15 +627,18 @@ export class LedgerService {
     },
     actor: Actor
   ) {
-    const [entries, settings] = await Promise.all([
+    const [entries, settings, settlements] = await Promise.all([
       this.store.listEntries(),
       this.store.listSettings(),
+      this.store.listSettlements(),
     ]);
     const position = computeCashPosition(entries, {
       cashOnHand: settingValue<number>(settings, "cash_on_hand"),
       horizon: settingValue<string>(settings, "cash_requirement_horizon"),
       includeUndecided: options.includeUndecided,
       overrides: options.overrides,
+      // 이미 나간 만큼은 「앞으로 막아야 할 돈」이 아니다 — 부분 지급 포함
+      settlements,
     });
     return {
       ...position,

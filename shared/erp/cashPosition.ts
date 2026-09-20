@@ -12,7 +12,8 @@
  * 두 값을 사양서 §5.4 시드에 맞추면 §9.2 · T3 · T6의 모든 수치가 정확히 재현된다.
  */
 import { priorityRank, resolvePriority } from "./accounts.js";
-import type { Entry, Priority } from "./types.js";
+import { settledAmount } from "./settlement.js";
+import type { Settlement, Entry, Priority } from "./types.js";
 
 export interface PriorityOverrideInput {
   code: string;
@@ -30,6 +31,14 @@ export interface CashPositionOptions {
   horizon?: string | null;
   /** 저장하지 않는 시뮬레이션용 등급 상향 (§10.1 POST /cash-position/simulate) */
   overrides?: PriorityOverrideInput[];
+  /**
+   * 실제 입출금 확인 줄.
+   *
+   * 없으면 `paidAt` 만 보고 판정하는데, **부분 지급이 그 사이로 빠진다** —
+   * 절반이 이미 나간 건은 `paidAt` 이 아직 비어 있으므로 **전액이 앞으로
+   * 막아야 할 돈으로** 잡힌다. 부족액이 그만큼 부풀어 오른다.
+   */
+  settlements?: Settlement[];
 }
 
 export interface ShortfallTier {
@@ -99,6 +108,13 @@ export function computeCashPosition(
   const lines: CashPositionLine[] = [];
   const excludedCodes: string[] = [];
 
+  const settledByEntry = new Map<string, Settlement[]>();
+  for (const line of options.settlements ?? []) {
+    const list = settledByEntry.get(line.entryId);
+    if (list) list.push(line);
+    else settledByEntry.set(line.entryId, [line]);
+  }
+
   for (const entry of entries) {
     if (!isOutstandingOutflow(entry, horizon)) continue;
     if (entry.status === "undecided" && !includeUndecided) continue;
@@ -114,7 +130,16 @@ export function computeCashPosition(
       if (entry.status === "undecided") excludedCodes.push(entry.code);
       continue;
     }
-    lines.push({ entry, priorityEff, amountUsed, isCandidate });
+
+    /*
+     * **이미 나간 만큼은 뺀다.** 절반이 나간 건은 남은 절반만 막으면 된다.
+     * 이걸 안 하면 부족액이 부풀어 「돈이 모자란다」가 사실과 달라진다.
+     */
+    const settled = settledAmount(settledByEntry.get(entry.id) ?? []);
+    const remaining = amountUsed - settled;
+    if (remaining <= 0) continue;
+
+    lines.push({ entry, priorityEff, amountUsed: remaining, isCandidate });
   }
 
   const tiers = ([0, 1, 2] as const).map(level => {
