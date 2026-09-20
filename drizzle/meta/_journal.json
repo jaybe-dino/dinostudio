@@ -29,6 +29,13 @@
       "when": 1789911686123,
       "tag": "0003_nappy_proteus",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789912469810,
+      "tag": "0004_bizarre_flatman",
+      "breakpoints": true
     }
   ]
 }

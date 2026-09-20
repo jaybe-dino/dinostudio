@@ -453,6 +453,7 @@ function toEntry(input: SeedEntryInput): Entry {
     partyId: null,
     contractId: null,
     priority: direction === "in" ? null : defaultPriorityOf(input.account),
+    internalTransferId: null,
     priorityOverride: null,
     priorityReason: null,
     payMethod: input.payMethod ?? null,

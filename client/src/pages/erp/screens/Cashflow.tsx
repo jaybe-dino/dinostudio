@@ -289,6 +289,22 @@ export function CashflowScreen() {
                   지어내지 않고, 적힌 것도 버리지 않는다 — 이름으로 구분한다.
                 */}
                 {/*
+                  계에서 뺀 것은 **따로 보여 준다.** 빼기만 하고 안 보여 주면
+                  「왜 지출이 이것밖에 안 되나」가 되고, 사람이 숫자를 안 믿게 된다.
+                */}
+                {block.cardSpend > 0 ? (
+                  <div>
+                    <span className="lb">카드 사용 (계 제외)</span>
+                    <span className="vv">{won(block.cardSpend)}</span>
+                  </div>
+                ) : null}
+                {block.internalTransfer > 0 ? (
+                  <div>
+                    <span className="lb">내부이체 (계 제외)</span>
+                    <span className="vv">{won(block.internalTransfer)}</span>
+                  </div>
+                ) : null}
+                {/*
                   **은행 대사 잔액** — 실제 입출금이 확인된 것만으로 이은 잔액.
                   「종료」는 승인 기준이라 결재만 끝나고 아직 안 나간 돈이
                   들어 있다. 은행 잔액과 맞춰 볼 수 있는 것은 이쪽뿐이다.
@@ -511,6 +527,8 @@ export function CashflowScreen() {
               "입금",
               "종료 (계산)",
               "대사 잔액 (실제 확인)",
+              "카드 사용 (계 제외)",
+              "내부이체 (계 제외)",
               "확인 입금",
               "확인 출금",
               "시트 잔액",
@@ -526,6 +544,8 @@ export function CashflowScreen() {
               b.inSum,
               b.close,
               b.settledClose,
+              b.cardSpend,
+              b.internalTransfer,
               b.settledIn,
               b.settledOut,
               b.recordedClose,
@@ -552,6 +572,13 @@ export function CashflowScreen() {
           <b>승인은 났지만 아직 안 나간 돈</b>입니다. <b>「시트 잔액」</b>은
           시트에 사람이 적어 둔 값이고, <b>보유현금</b>은 기준값 화면에서 사람이
           통장을 보고 적는 값입니다.
+        </p>
+        <p style={{ margin: "10px 0 0" }}>
+          <b>카드 사용분과 내부 계좌이체는 계에서 뺍니다.</b> 카드는 긁은 날
+          통장이 그대로고 <b>카드대금 결제일에 한 번</b> 나갑니다 — 둘 다 세면
+          같은 돈이 두 번 빠집니다. 내부이체는 우리 계좌끼리 옮긴 것이라 보유
+          현금 총액이 변하지 않습니다. 다만 <b>빼기만 하고 숨기지는 않습니다</b>{" "}
+          — 위에 금액을 따로 적어 두었습니다.
         </p>
         <p style={{ margin: "10px 0 0" }}>
           그동안 잔액을 못 보시는 일이 없도록 <b>「시트 잔액」</b>을 따로 보여

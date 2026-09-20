@@ -3153,6 +3153,7 @@ export class LedgerService {
       contractId: null,
       priority:
         input.direction === "in" ? null : defaultPriorityOf(input.accountCode),
+      internalTransferId: null,
       priorityOverride: null,
       priorityReason: null,
       payMethod: input.payMethod ?? null,
@@ -3504,6 +3505,100 @@ export class LedgerService {
       entry: maskEntryForRole(confirmed, actor.role),
       journal,
       affectedBlock: affected,
+    };
+  }
+
+  /**
+   * 내부 계좌이체 — **두 건을 한 번에, 짝으로** 만든다.
+   *
+   * 사람이 따로따로 두 건을 올리면 반드시 한쪽만 올리는 날이 온다. 그러면
+   * 우리 계좌끼리 옮긴 돈이 통째로 지출이나 수입으로 남는다. 그래서 여기서만
+   * 만들고, 두 건에 같은 짝 키를 박아 둔다.
+   *
+   * 짝 키가 있는 건은 현금흐름 계에도 손익에도 들어가지 않는다 — 보유현금
+   * 총액은 변하지 않고, 비용도 수익도 아니기 때문이다. 대신 그 날 블록에
+   * 「내부이체 얼마」로 따로 실려 보인다.
+   */
+  async recordInternalTransfer(
+    input: {
+      date: string;
+      amount: number;
+      fromAccount: string;
+      toAccount: string;
+      note?: string | null;
+    },
+    actor: Actor
+  ) {
+    if (!["대표", "부대표", "재무"].includes(actor.role))
+      throw erpError(
+        "forbidden_field",
+        { role: actor.role },
+        "내부 계좌이체 기록은 대표·부대표·재무만 할 수 있습니다"
+      );
+    const amount = Math.trunc(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0)
+      throw erpError("reason_required", {}, "이체 금액은 0보다 커야 합니다");
+    const from = input.fromAccount.trim();
+    const to = input.toAccount.trim();
+    if (!from || !to)
+      throw erpError(
+        "reason_required",
+        {},
+        "보내는 계좌와 받는 계좌가 필요합니다"
+      );
+    if (from === to)
+      throw erpError(
+        "reason_required",
+        {},
+        "같은 계좌로는 이체할 수 없습니다 — 계좌를 확인하십시오"
+      );
+
+    const transferId = randomUUID();
+    const note = input.note?.trim() || null;
+    const made: Entry[] = [];
+    for (const leg of [
+      { direction: "out" as const, title: `내부이체 → ${to}`, account: from },
+      { direction: "in" as const, title: `내부이체 ← ${from}`, account: to },
+    ]) {
+      const created = await this.createEntry(
+        {
+          direction: leg.direction,
+          title: leg.title,
+          amount,
+          cashDate: input.date,
+          // 손익에 잡히지 않는다는 뜻을 계정성격에도 남긴다
+          nature: "손익아님",
+          bankAccount: leg.account,
+          hasEvidence: true,
+          note,
+          payMethod: "계좌",
+          // 같은 금액 두 건이라 중복 탐지가 먼저 걸린다 — 의도된 짝임을 알린다
+          duplicateOverrideReason: "내부 계좌이체의 짝 건입니다",
+        },
+        actor
+      );
+      const withPair: Entry = {
+        ...created.entry,
+        internalTransferId: transferId,
+      };
+      const saved = await this.store.replaceEntry(
+        withPair,
+        created.entry.version
+      );
+      made.push(saved ?? withPair);
+    }
+
+    await this.audit(
+      "entry",
+      transferId,
+      "internal-transfer",
+      null,
+      { amount, from, to, date: input.date, codes: made.map(e => e.code) },
+      actor
+    );
+    return {
+      transferId,
+      entries: made.map(e => maskEntryForRole(e, actor.role)),
     };
   }
 

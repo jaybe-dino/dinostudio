@@ -160,6 +160,8 @@ export const erpEntries = pgTable(
     partyId: varchar("partyId", { length: 36 }),
     contractId: varchar("contractId", { length: 36 }),
     priority: priorityEnum("priority"),
+    /** 내부 계좌이체의 짝 키 — 같은 값 두 건이 한 쌍 */
+    internalTransferId: varchar("internalTransferId", { length: 36 }),
     priorityOverride: priorityEnum("priorityOverride"),
     /** priorityOverride가 있으면 필수 — 애플리케이션과 함께 CHECK로도 막는다 */
     priorityReason: text("priorityReason"),

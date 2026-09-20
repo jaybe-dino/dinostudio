@@ -12,6 +12,7 @@
  * 파생 뷰는 계산 결과이고 저장하지 않는다 (§4). 이 파일에 부수효과가 없어야 한다.
  */
 import { countsInCashflow } from "./status.js";
+import { isCardSpend, isInternalTransfer, movesCash } from "./cashEffect.js";
 import type { DaySnapshot, Entry, Settlement } from "./types.js";
 
 export type CashflowUnit = "day" | "month" | "year";
@@ -55,6 +56,16 @@ export interface CashflowBlock {
   /** 그 날 실제로 확인된 입금 / 출금 */
   settledIn: number;
   settledOut: number;
+  /**
+   * 그 날 **카드로 긁은 금액**. 계에는 안 들어간다 — 통장은 카드대금
+   * 결제일에 움직인다. 빼기만 하고 안 보여 주면 「왜 지출이 이것밖에 안 되나」
+   * 가 된다.
+   */
+  cardSpend: number;
+  cardEntries: Entry[];
+  /** 그 날 **내부 계좌이체**로 옮긴 금액 (나간 쪽 기준). 총액은 변하지 않는다 */
+  internalTransfer: number;
+  transferEntries: Entry[];
   /**
    * 계산값 − 기록값. 둘 다 있을 때만 나온다.
    *
@@ -156,12 +167,25 @@ export function buildDailyBlocks(
     const snap = snapByDate.get(date);
     const dayEntries = byDate.get(date) ?? [];
 
-    const outEntries = dayEntries.filter(
-      e => e.direction === "out" && countsInCashflow(e.status, e.amount)
+    /*
+     * **그 날 통장이 실제로 움직이는 것만** 계에 넣는다 (`movesCash`).
+     *
+     * 법인카드는 긁은 날 통장이 그대로고 카드대금 결제일에 한 번 나간다.
+     * 둘 다 세면 같은 돈이 두 번 빠진다. 내부 계좌이체는 우리 계좌끼리
+     * 옮긴 것이라 총액이 안 변하는데 양쪽을 세면 그 날 지출계·입금계가
+     * 동시에 부풀어 오른다.
+     *
+     * **빼되 숨기지 않는다** — 아래에서 따로 세어 블록에 같이 실어 보낸다.
+     */
+    const counted = dayEntries.filter(e =>
+      countsInCashflow(e.status, e.amount)
     );
-    const inEntries = dayEntries.filter(
-      e => e.direction === "in" && countsInCashflow(e.status, e.amount)
+    const outEntries = counted.filter(
+      e => e.direction === "out" && movesCash(e)
     );
+    const inEntries = counted.filter(e => e.direction === "in" && movesCash(e));
+    const cardEntries = counted.filter(isCardSpend);
+    const transferEntries = counted.filter(isInternalTransfer);
     const pendingEntries = dayEntries.filter(e => e.status === "pending");
     const undecided: UndecidedRef[] = dayEntries
       .filter(e => e.status === "undecided")
@@ -215,6 +239,10 @@ export function buildDailyBlocks(
       settledClose,
       settledIn: settled.in,
       settledOut: settled.out,
+      cardSpend: sum(cardEntries),
+      cardEntries,
+      internalTransfer: sum(transferEntries.filter(e => e.direction === "out")),
+      transferEntries,
       recordedAsOf: recordedClose == null ? null : date,
       closeGap:
         close != null && recordedClose != null ? close - recordedClose : null,
@@ -282,6 +310,10 @@ export function foldBlocks(
         settledClose: lastDay.settledClose,
         settledIn: days.reduce((acc, d) => acc + d.settledIn, 0),
         settledOut: days.reduce((acc, d) => acc + d.settledOut, 0),
+        cardSpend: days.reduce((acc, d) => acc + d.cardSpend, 0),
+        cardEntries: days.flatMap(d => d.cardEntries),
+        internalTransfer: days.reduce((acc, d) => acc + d.internalTransfer, 0),
+        transferEntries: days.flatMap(d => d.transferEntries),
         recordedClose,
         recordedAsOf: recorded?.recordedAsOf ?? null,
         closeGap:
@@ -434,6 +466,10 @@ export function anchorToday(
       settledClose: previous?.settledClose ?? null,
       settledIn: 0,
       settledOut: 0,
+      cardSpend: 0,
+      cardEntries: [],
+      internalTransfer: 0,
+      transferEntries: [],
       closeGap: null,
       nullReason:
         previous?.close == null ? (previous?.nullReason ?? null) : null,

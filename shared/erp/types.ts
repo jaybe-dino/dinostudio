@@ -130,6 +130,14 @@ export interface Entry {
   projectId: string | null;
   partyId: string | null;
   contractId: string | null;
+  /**
+   * **내부 계좌이체**의 짝 키. 같은 값을 가진 두 건이 한 쌍이다 (나간 쪽 · 들어온 쪽).
+   *
+   * 우리 계좌에서 우리 계좌로 옮긴 것이므로 보유현금 총액은 변하지 않고
+   * 손익에도 잡히지 않는다. 그런데 양쪽을 그냥 두면 그 날 지출계와 입금계가
+   * 동시에 부풀어 「이번 달에 3억을 썼다」가 사실은 계좌를 옮긴 것이 된다.
+   */
+  internalTransferId: string | null;
   /** 계정으로 자동 부여 (§8.2) */
   priority: Priority | null;
   /** 사람이 올린 등급. 설정 시 priorityReason 필수 */

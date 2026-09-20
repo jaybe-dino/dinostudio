@@ -87,6 +87,7 @@ function toEntry(row: ErpEntryRow): Entry {
     partyId: row.partyId,
     contractId: row.contractId,
     priority: row.priority,
+    internalTransferId: row.internalTransferId ?? null,
     priorityOverride: row.priorityOverride,
     priorityReason: row.priorityReason,
     payMethod: row.payMethod,

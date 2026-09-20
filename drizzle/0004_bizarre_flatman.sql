@@ -1,0 +1,1 @@
+ALTER TABLE "erp_entry" ADD COLUMN "internalTransferId" varchar(36);
