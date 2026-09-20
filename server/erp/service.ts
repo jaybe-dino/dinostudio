@@ -3972,17 +3972,23 @@ export class LedgerService {
     /*
      * 아직 오지 않은 날은 확인할 수 없다 — 「예정」과 「실제」를 가르는 선이다.
      *
-     * 다만 기준은 `today()` 가 아니라 **실제 시계와 비교해 더 늦은 쪽**이다.
-     * `today_override` 기준값이 과거(시드 기본값 2026-08-27)로 남아 있으면
-     * `today()` 가 과거를 가리키고, 그러면 **이미 통장에서 나간 돈이 「미래」로
-     * 판정돼** 확인 자체가 막힌다. 실제로 일어난 일을 기준값이 부정할 수는 없다.
+     * **기준은 서버의 실제 KST 오늘 하나뿐이다.** `today()` 를 쓰지 않는다.
+     *
+     * `today()` 는 `today_override` 기준값이 걸린 **예측용 기준일**이다. 두
+     * 축을 섞으면 양쪽으로 틀어진다.
+     *   · 기준일이 **과거**면(시드 기본값 2026-08-27) 이미 나간 돈이 「미래」로
+     *     판정돼 확인이 막힌다
+     *   · 기준일이 **미래**면 아직 일어나지 않은 집행이 통과하고 `paidAt` 까지
+     *     미래가 된다
+     *
+     * 한때 「둘 중 더 늦은 쪽」으로 뒀는데, 그것이 두 번째 구멍을 열었다.
+     * **실제로 일어난 일은 기준값이 앞당기지도 미루지도 못한다.**
      */
-    const [anchor, realToday] = [await this.today(), kstToday()];
-    const latest = anchor > realToday ? anchor : realToday;
-    if (input.settledOn > latest)
+    const realToday = kstToday();
+    if (input.settledOn > realToday)
       throw erpError("settlement_future", {
         settledOn: input.settledOn,
-        today: latest,
+        today: realToday,
       });
 
     const existing = await this.store.listSettlements(entry.id);
