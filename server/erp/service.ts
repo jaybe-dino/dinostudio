@@ -3862,7 +3862,37 @@ export class LedgerService {
         withPair,
         created.entry.version
       );
-      made.push(saved ?? withPair);
+
+      /*
+       * **짝 키가 안 붙었으면 성공으로 반환하지 않는다.**
+       *
+       * 예전에는 `saved ?? withPair` 로 그냥 넘겼다. 그러면 저장소에는 짝 키가
+       * 없는 건이 남는데 반환값은 붙었다고 말한다. 짝 키가 없으면
+       * `movesCash()` 가 true 가 되어 **내부이체 한쪽이 현금흐름에 실제
+       * 지출(또는 수입)로 잡힌다** — 이 함수를 만든 이유가 바로 그걸 막는
+       * 것이었다.
+       *
+       * 먼저 만든 쪽이 있으면 되돌린다. 반쪽짜리 이체를 남기는 것이 실패보다
+       * 나쁘다 — 3억을 옮겼는데 나간 것만 잡히면 그 달이 통째로 적자로 보인다.
+       */
+      if (!saved) {
+        for (const done of made)
+          await this.cancelEntry(
+            done.code,
+            "내부 계좌이체 짝을 만들지 못해 되돌립니다",
+            done.version,
+            actor,
+            null
+          ).catch(() => {
+            /* 되돌리기까지 실패하면 아래 오류로 사람이 보게 된다 */
+          });
+        throw erpError(
+          "version_conflict",
+          { transferId, madeCodes: made.map(e => e.code) },
+          "내부 계좌이체의 짝을 만들지 못했습니다 — 다시 시도하십시오. 먼저 만든 건은 되돌렸습니다"
+        );
+      }
+      made.push(saved);
     }
 
     await this.audit(

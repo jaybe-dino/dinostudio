@@ -288,3 +288,49 @@ describe("짝으로만 만든다", () => {
     expect(trail.some(r => r.action === "internal-transfer")).toBe(true);
   });
 });
+
+describe("짝이 안 붙으면 반쪽을 남기지 않는다", () => {
+  /*
+   * 예전에는 `saved ?? withPair` 로 넘겨, 저장소에는 짝 키가 없는데 반환값은
+   * 붙었다고 말했다. 짝 키가 없으면 movesCash() 가 true 가 되어 **내부이체
+   * 한쪽이 현금흐름에 실제 지출로 잡힌다** — 이 기능을 만든 이유가 바로
+   * 그걸 막는 것이었다.
+   */
+  it("두 번째 다리에서 저장이 실패하면 첫 번째를 되돌리고 오류를 낸다", async () => {
+    const store = new InMemoryLedgerStore();
+    const s = new LedgerService(store);
+
+    // 두 번째 replaceEntry 만 실패시킨다 (버전 충돌을 흉내낸다)
+    const real = store.replaceEntry.bind(store);
+    let calls = 0;
+    store.replaceEntry = async (entry, expected) => {
+      calls += 1;
+      if (calls === 2) return undefined;
+      return real(entry, expected);
+    };
+
+    await expect(
+      s.recordInternalTransfer(
+        {
+          date: "2026-09-14",
+          amount: 30_000_000,
+          fromAccount: "기업은행 주거래",
+          toAccount: "농협 제2계좌",
+        },
+        CFO
+      )
+    ).rejects.toThrow(/짝을 만들지 못했습니다/);
+
+    /*
+     * 가장 중요한 것 — **반쪽이 현금흐름에 남아 있으면 안 된다.**
+     * 3억을 옮겼는데 나간 것만 잡히면 그 달이 통째로 적자로 보인다.
+     */
+    const after = await s.cashflow("day");
+    const onDay = after.blocks.find(b => b.key === "2026-09-14");
+    const leaked = [
+      ...(onDay?.outEntries ?? []),
+      ...(onDay?.inEntries ?? []),
+    ].filter(e => e.amount === 30_000_000);
+    expect(leaked).toEqual([]);
+  });
+});
