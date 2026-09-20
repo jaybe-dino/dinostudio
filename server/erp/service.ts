@@ -4163,6 +4163,18 @@ export class LedgerService {
         today: realToday,
       });
 
+    /*
+     * **마감된 달에는 돈이 드나들 수 없다** (QA-006).
+     *
+     * `requireWritable` 은 건의 **발생월·지급예정월**만 본다. 실제로 돈이
+     * 움직인 달은 `settledOn` 이고, 그 달은 아무도 안 봤다. 그래서 8월을
+     * 마감한 뒤에도 「8월 31일에 나갔습니다」를 새로 적을 수 있었다.
+     *
+     * 마감의 뜻이 「그 달 현금 내역은 더 안 바뀐다」이므로, 이게 뚫리면
+     * 이미 보고한 8월 잔액이 조용히 틀어진다.
+     */
+    this.assertMonthsOpen([input.settledOn], await this.closedMonths());
+
     const existing = await this.store.listSettlements(entry.id);
     const already = settledAmount(existing);
 
@@ -4257,6 +4269,30 @@ export class LedgerService {
         attempted: amount,
       });
 
+    /*
+     * **마감이 그 사이에 걸렸는지 한 번 더 본다** (QA-006).
+     *
+     * 위의 사전 검사와 이 삽입 사이에는 틈이 있다. neon-http 는 상태가 없어
+     * 「마감 여부 확인 + 삽입」을 한 트랜잭션으로 묶을 수 없으므로, 그 틈을
+     * 없앨 수는 없다. 대신 **좁히고, 넘어간 것은 되돌린다.**
+     *
+     * 되돌리는 방법은 줄을 지우는 것이 아니라 무효 처리다 (원칙 9). 지우면
+     * 마감된 달에 무슨 일이 있었는지 아무 흔적도 안 남는다 — 무효로 남기면
+     * 「들어왔다가 마감 때문에 취소됐다」가 이력에 보인다.
+     */
+    if ((await this.closedMonths()).has(settlement.settledOn.slice(0, 7))) {
+      await this.store.voidSettlementIfLive(settlement.id, {
+        voidedAt: nowIso(),
+        voidedBy: actor.id,
+        voidReason: "마감된 달이라 되돌렸습니다",
+      });
+      const rolledBack = await this.store.listSettlements(entry.id);
+      await this.syncPaidAt(entry, rolledBack, expectedVersion);
+      throw erpError("period_closed", {
+        ym: settlement.settledOn.slice(0, 7),
+      });
+    }
+
     const after = await this.store.listSettlements(entry.id);
     const entryAfter = await this.syncPaidAt(entry, after, expectedVersion);
 
@@ -4312,6 +4348,14 @@ export class LedgerService {
     if (!entry) throw erpError("not_found", { id: target.entryId });
     // 마감 확인은 원장 수정과 같은 기준을 쓴다
     await this.requireWritable(entry.code, actor);
+    /*
+     * **취소도 그 달 현금을 바꾼다** (QA-006).
+     *
+     * 위의 `requireWritable` 은 건의 달만 본다. 지우려는 것은 `settledOn`
+     * 달의 현금이므로, 그 달이 마감됐으면 취소도 막아야 한다. 안 그러면
+     * 마감된 달의 잔액을 **빼는 방향으로** 바꿀 수 있다.
+     */
+    this.assertMonthsOpen([target.settledOn], await this.closedMonths());
 
     /*
      * **살아 있을 때만 바꾼다.** 위의 `target.voidedAt` 검사는 사람에게 말을
@@ -4620,6 +4664,44 @@ export class LedgerService {
     throw erpError("not_found", { code: entry.code }, OUT_OF_SCOPE_MESSAGE);
   }
 
+  /**
+   * 마감된 달 — **두 곳을 합친다.**
+   *
+   * `closed_periods` 기준값은 사람이 손으로 적는 목록이고, `erp_period` 행은
+   * 마감 버튼이 만드는 것이다. 쓰기 검사는 기준값만 읽고 있었다. 그래서
+   * **마감 버튼을 눌러도 그 달 원장이 계속 수정됐다** — 사람이 기준값을
+   * 따로 적어 넣어야만 잠겼고, 그것을 아무 데도 안 적어 뒀다.
+   *
+   * 합집합으로 두는 이유 — 한쪽을 버리면 지금 잠겨 있는 달이 열린다.
+   */
+  private async closedMonths(): Promise<Set<string>> {
+    const [settings, periods] = await Promise.all([
+      this.store.listSettings(),
+      this.store.listPeriods(),
+    ]);
+    const closed = new Set(
+      settingValue<string[]>(settings, "closed_periods") ?? []
+    );
+    for (const p of periods) if (p.status === "closed") closed.add(p.ym);
+    return closed;
+  }
+
+  /**
+   * 마감된 달을 건드리면 멈춘다.
+   *
+   * 마감의 뜻은 **「그 달 숫자는 더 안 바뀐다」**이다. 뒤에서 바뀌면 이미
+   * 보고한 잔액이 조용히 틀어지고, 어느 쪽이 맞는지 아무도 모른다.
+   */
+  private assertMonthsOpen(
+    dates: (string | null | undefined)[],
+    closed: Set<string>
+  ): void {
+    for (const date of dates) {
+      const ym = (date ?? "").slice(0, 7);
+      if (ym && closed.has(ym)) throw erpError("period_closed", { ym });
+    }
+  }
+
   private async requireWritable(code: string, actor: Actor): Promise<Entry> {
     const entry = await this.store.getEntry(code);
     if (!entry) throw erpError("not_found", { code });
@@ -4632,14 +4714,17 @@ export class LedgerService {
     // 이관 구간은 건별 명세가 없으므로 원장에 존재하지 않는다 (§5.3) — 도달하면 코드 오류
     const parsed = parseCode(entry.code);
     if (!parsed) throw erpError("invalid_transition", { code });
-    const settings = await this.store.listSettings();
-    const closed = settingValue<string[]>(settings, "closed_periods") ?? [];
-    // 발생월과 지급월을 모두 본다 — 하나만 보면 발생월이 마감된 건이 통과한다
-    // (docs/erp-qa.md D4)
-    for (const date of [entry.accrualDate, entry.cashDate]) {
-      const ym = (date ?? "").slice(0, 7);
-      if (ym && closed.includes(ym)) throw erpError("period_closed", { ym });
-    }
+    /*
+     * 발생월과 지급**예정**월을 모두 본다 — 하나만 보면 발생월이 마감된 건이
+     * 통과한다 (docs/erp-qa.md D4).
+     *
+     * **여기까지가 건의 달이다.** 실제로 돈이 움직인 달(`settledOn`)은 이
+     * 함수가 모른다 — 그쪽은 `settleEntry` · `voidSettlement` 이 따로 본다.
+     */
+    this.assertMonthsOpen(
+      [entry.accrualDate, entry.cashDate],
+      await this.closedMonths()
+    );
     return entry;
   }
 
