@@ -164,6 +164,8 @@ export const erpRouter = router({
           /** 4대보험 분리 (B6) */
           employeeInsurance: z.number().int().min(0).nullable().optional(),
           employerInsurance: z.number().int().min(0).nullable().optional(),
+          /** 개인이 식별되는 인건비 건 — 금액이 아무에게도 안 나간다 (원칙 10) */
+          isPersonal: z.boolean().optional(),
           /** 외화 (A8) — 환율이 없으면 환산하지 않는다 */
           currency: z
             .string()
@@ -215,6 +217,8 @@ export const erpRouter = router({
               .optional(),
             hasEvidence: z.boolean().optional(),
             note: z.string().nullable().optional(),
+            /** 켜는 건 누구나, 끄는 건 급여 권한이 있어야 한다 */
+            isPersonal: z.boolean().optional(),
           }),
         })
       )

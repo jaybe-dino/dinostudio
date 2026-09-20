@@ -3457,6 +3457,14 @@ export class LedgerService {
       /** 4대보험 분리 (B6) */
       employeeInsurance?: number | null;
       employerInsurance?: number | null;
+      /**
+       * 개인이 식별되는 인건비 건인가 (원칙 10).
+       *
+       * 이 표시가 붙으면 금액이 **아무에게도** 안 나간다 — 대표·재무도
+       * 마찬가지다. 그래서 급여 총액 일괄 건(재무가 실제로 송금해야 하는 건)
+       * 에는 붙이지 않고, 개인별로 쪼갠 건에 붙인다.
+       */
+      isPersonal?: boolean;
       /** 외화 (A8) — amount 는 환산된 원화다 */
       currency?: string | null;
       amountForeign?: number | null;
@@ -3545,7 +3553,7 @@ export class LedgerService {
       linkedRevenueCode: null,
       undecidedReason,
       hasEvidence: input.hasEvidence ?? false,
-      isPersonal: false,
+      isPersonal: input.isPersonal ?? false,
       incomeType: input.incomeType ?? null,
       withheldAmount: input.withheldAmount ?? null,
       principalAmount: input.principalAmount ?? null,
@@ -3610,6 +3618,7 @@ export class LedgerService {
         | "payMethod"
         | "hasEvidence"
         | "note"
+        | "isPersonal"
       >
     >,
     expectedVersion: number,
@@ -3618,6 +3627,22 @@ export class LedgerService {
   ) {
     const entry = await this.requireWritable(code, actor);
     this.assertFresh(entry, expectedVersion);
+
+    /*
+     * 개인 표시는 **켜는 것과 끄는 것의 위험이 다르다.**
+     *
+     * 켜면 금액이 더 가려질 뿐이라 누가 해도 손해가 없다. 끄면 가려져 있던
+     * 급여 금액이 화면에 나온다 — 그쪽만 급여 권한을 본다.
+     */
+    if (patch.isPersonal === false && entry.isPersonal) {
+      if (!permissionFor(actor.role, "payroll").write) {
+        throw erpError(
+          "forbidden_field",
+          { role: actor.role, field: "isPersonal" },
+          "개인 표시는 급여 권한이 있는 사람만 해제할 수 있습니다"
+        );
+      }
+    }
 
     if (entry.status === "confirmed") {
       const all = await this.store.listEntries();
