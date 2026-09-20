@@ -71,11 +71,24 @@ export function BurnRateScreen() {
         />
       </div>
 
-      <Note tone="warn">
-        지금 런웨이를 말해야 하면 확정 운영비만으로 계산한 <b>하한</b> 값을 쓰고
-        반드시 「하한」 라벨을 붙이십시오 — 현재 확정 운영비{" "}
-        {won(data?.lowerBoundMonthlyOpex ?? 0)}원(원장 확보 구간). 이것은 월
-        번레이트가 아닙니다.
+      <Note tone="alert">
+        <b>
+          지금 말할 수 있는 것은 런웨이의 「상한」입니다 — 실제로는 이보다
+          짧습니다.
+        </b>
+        <br />
+        확정 운영비 {won(data?.lowerBoundMonthlyOpex ?? 0)}원(원장 확보 구간)은
+        급여 실액처럼 아직 못 채운 항목이 빠져 있어 <b>실제 운영비의 하한</b>
+        입니다. 비용을 덜 세면 런웨이는 <b>길어지므로</b>, 그 운영비로 낸{" "}
+        {data?.upperBoundRunwayMonths == null ? (
+          "런웨이"
+        ) : (
+          <b>런웨이 {data.upperBoundRunwayMonths}개월</b>
+        )}
+        은 <b>상한</b>입니다.
+        <br />
+        「하한」이라고 말하면 <b>「적어도 이만큼은 버틴다」</b>로 읽혀 정반대의
+        판단을 부릅니다. 이것은 월 번레이트도 아닙니다.
       </Note>
 
       <Card
