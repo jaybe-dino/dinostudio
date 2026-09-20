@@ -425,3 +425,76 @@ describe("감사로그에 남는다", () => {
     expect(actions).toContain("settle-void");
   });
 });
+
+describe("부분 지급은 현금 부족액에서도 빠진다", () => {
+  /** 시드 지평은 2026-09-01 이라 9월 건이 모집단에 안 들어간다 — 넓혀 둔다 */
+  async function wideHorizon(s: LedgerService) {
+    await s.putSetting("cash_requirement_horizon", "2026-12-31", false, CEO);
+  }
+
+  /*
+   * `paidAt` 만 보면 **절반이 이미 나간 건이 전액으로** 잡힌다 —
+   * 다 채워질 때까지 `paidAt` 이 비어 있기 때문이다. 부족액이 그만큼
+   * 부풀어 「돈이 모자란다」가 사실과 달라진다.
+   */
+  it("나간 만큼 필요액이 줄어든다", async () => {
+    const s = svc();
+    await wideHorizon(s);
+    const e = await approved(s, 10_000_000);
+    const need = async () =>
+      (await s.cashPosition({ includeUndecided: false }, CEO)).lines.reduce(
+        (sum, l) => sum + (l.amountUsed ?? 0),
+        0
+      );
+    const before = await need();
+
+    await s.settleEntry(
+      { code: e.entry.code, settledOn: "2026-09-14", amount: 4_000_000 },
+      e.entry.version,
+      CFO
+    );
+    expect(await need()).toBe(before - 4_000_000);
+  });
+
+  it("다 나가면 필요액에서 통째로 빠진다", async () => {
+    const s = svc();
+    await wideHorizon(s);
+    const e = await approved(s, 10_000_000);
+    const need = async () =>
+      (await s.cashPosition({ includeUndecided: false }, CEO)).lines.reduce(
+        (sum, l) => sum + (l.amountUsed ?? 0),
+        0
+      );
+    const before = await need();
+
+    await s.settleEntry(
+      { code: e.entry.code, settledOn: "2026-09-14", amount: 10_000_000 },
+      e.entry.version,
+      CFO
+    );
+    expect(await need()).toBe(before - 10_000_000);
+  });
+
+  it("무효 처리하면 다시 필요액으로 돌아온다", async () => {
+    const s = svc();
+    await wideHorizon(s);
+    const e = await approved(s, 10_000_000);
+    const need = async () =>
+      (await s.cashPosition({ includeUndecided: false }, CEO)).lines.reduce(
+        (sum, l) => sum + (l.amountUsed ?? 0),
+        0
+      );
+    const before = await need();
+
+    const done = await s.settleEntry(
+      { code: e.entry.code, settledOn: "2026-09-14", amount: 4_000_000 },
+      e.entry.version,
+      CFO
+    );
+    await s.voidSettlement(
+      { settlementId: done.settlement.id, reason: "착오" },
+      CFO
+    );
+    expect(await need()).toBe(before);
+  });
+});
