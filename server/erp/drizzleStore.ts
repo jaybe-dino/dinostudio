@@ -26,6 +26,7 @@ import type {
 } from "../../shared/erp/index.js";
 import type { SeedDaySnapshot } from "../../shared/erp/seed.js";
 import { and, asc, eq, gte, inArray, lte, like, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import type { NeonHttpDatabase } from "drizzle-orm/neon-http";
 import {
   erpAccounts,
@@ -54,6 +55,35 @@ import {
 import type { EntryFilter, LedgerStore } from "./store.js";
 
 type Db = NeonHttpDatabase<Record<string, never>>;
+
+/**
+ * **그 달이 열려 있는가** — SQL 조각으로 낸다 (QA-007).
+ *
+ * 앱에서 읽어 판단하면 「읽고 → 쓴다」 사이에 마감이 끼어든다. 조각으로 내는
+ * 이유는 **쓰는 문장 안에 그대로 끼워 넣기 위해서**다. 그래야 Postgres 가
+ * 그 문장을 시작할 때의 값으로 판정한다.
+ *
+ * 마감은 두 곳에 있다 — 마감 버튼이 만드는 `erp_period` 행과, 사람이 손으로
+ * 적는 `closed_periods` 기준값. 합집합으로 본다.
+ *
+ * `ym` 은 문자열일 수도 있고 `to_char("settledOn", 'YYYY-MM')` 같은 조각일
+ * 수도 있다 — 삽입은 값이 손에 있고, 취소는 행에서 꺼내야 하기 때문이다.
+ */
+function monthOpenSql(ym: SQL | string): SQL {
+  const month = typeof ym === "string" ? sql`${ym}` : ym;
+  return sql`(
+    not exists (
+      select 1 from "erp_period"
+      where "ym" = ${month} and "status" = 'closed'
+    )
+    and not exists (
+      select 1 from "erp_setting"
+      where "key" = 'closed_periods'
+        and jsonb_typeof("value") = 'array'
+        and jsonb_exists("value", ${month})
+    )
+  )`;
+}
 
 /** 아는 소득구분만 도메인으로 올린다 — 모르는 값으로 원천징수율을 만들면 신고가 틀린다 */
 const INCOME_TYPES: IncomeType[] = ["근로소득", "사업소득", "기타소득"];
@@ -381,8 +411,9 @@ export class DrizzleLedgerStore implements LedgerStore {
   async appendSettlementGuarded(
     settlement: Settlement,
     maxTotal: number
-  ): Promise<{ inserted: boolean; settled: number }> {
+  ): Promise<{ inserted: boolean; settled: number; closed: boolean }> {
     const r = settlement;
+    const ym = r.settledOn.slice(0, 7);
     const rows = await this.db.execute<{ amount: string | number }>(sql`
       insert into "erp_settlement"
         ("id", "entryId", "settledOn", "amount", "bankAccount", "bankRef",
@@ -394,12 +425,27 @@ export class DrizzleLedgerStore implements LedgerStore {
         (select sum("amount") from "erp_settlement"
           where "entryId" = ${r.entryId} and "voidedAt" is null), 0
       ) + ${r.amount} <= ${maxTotal}
+      and ${monthOpenSql(ym)}
       returning "amount"
     `);
     const list = (rows as unknown as { rows?: unknown[] }).rows ?? rows;
     const inserted = Array.isArray(list) ? list.length > 0 : false;
     const settled = await this.settledTotal(r.entryId);
-    return { inserted, settled };
+    // 왜 못 들어갔는지 **말해 주기 위한** 읽기다. 판정은 위 문장에서 끝났다
+    const closed = inserted ? false : await this.isMonthClosed(ym);
+    return { inserted, settled, closed };
+  }
+
+  /** 마감 여부를 **쓰는 문장 안에서** 읽는다 (QA-007) */
+  private async isMonthClosed(ym: string): Promise<boolean> {
+    const rows = await this.db.execute<{ closed: boolean }>(sql`
+      select (not (${monthOpenSql(ym)})) as closed
+    `);
+    const list = (rows as unknown as { rows?: unknown[] }).rows ?? rows;
+    const first = Array.isArray(list)
+      ? (list[0] as { closed?: boolean } | undefined)
+      : undefined;
+    return first?.closed === true;
   }
 
   private async settledTotal(entryId: string): Promise<number> {
@@ -411,13 +457,20 @@ export class DrizzleLedgerStore implements LedgerStore {
   }
 
   /**
-   * 살아 있을 때만 무효 처리한다 — `WHERE "voidedAt" is null` 이 한 문장 안에
-   * 있으므로 동시에 두 번 눌러도 실제로 바꾸는 쪽은 하나다.
+   * 살아 있고 **그 달이 열려 있을 때만** 무효 처리한다.
+   *
+   * `WHERE "voidedAt" is null` 이 한 문장 안에 있으므로 동시에 두 번 눌러도
+   * 실제로 바꾸는 쪽은 하나다. 마감 조건도 **같은 문장 안에서** 본다
+   * (QA-007) — 앱이 먼저 읽고 나중에 쓰면 그 사이에 마감이 끼어든다.
+   *
+   * Postgres 는 이 UPDATE 를 시작할 때 스냅샷을 뜨므로, **마감이 먼저
+   * 커밋됐으면 이 문장은 그것을 본다.** 반대로 취소가 먼저 커밋되면 마감이
+   * 그것을 본다. 둘 중 하나의 순서로 정해진다.
    */
   async voidSettlementIfLive(
     id: string,
     patch: { voidedAt: string; voidedBy: string; voidReason: string }
-  ): Promise<Settlement | null> {
+  ): Promise<{ voided: Settlement | null; closed: boolean }> {
     const rows = await this.db
       .update(erpSettlements)
       .set({
@@ -425,9 +478,26 @@ export class DrizzleLedgerStore implements LedgerStore {
         voidedBy: patch.voidedBy,
         voidReason: patch.voidReason,
       })
-      .where(and(eq(erpSettlements.id, id), sql`"voidedAt" is null`))
+      .where(
+        and(
+          eq(erpSettlements.id, id),
+          sql`"voidedAt" is null`,
+          sql`${monthOpenSql(sql`to_char("settledOn", 'YYYY-MM')`)}`
+        )
+      )
       .returning();
-    return rows[0] ? settlementFromRow(rows[0]) : null;
+    if (rows[0]) return { voided: settlementFromRow(rows[0]), closed: false };
+    // 왜 안 됐는지 말해 주기 위한 읽기다 — 판정은 위 문장에서 끝났다
+    const current = await this.db
+      .select()
+      .from(erpSettlements)
+      .where(eq(erpSettlements.id, id));
+    const row = current[0];
+    const closed =
+      row?.voidedAt == null && row != null
+        ? await this.isMonthClosed(settlementFromRow(row).settledOn.slice(0, 7))
+        : false;
+    return { voided: null, closed };
   }
 
   async listSettlements(entryId?: string): Promise<Settlement[]> {

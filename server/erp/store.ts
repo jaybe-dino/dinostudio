@@ -89,10 +89,19 @@ export interface LedgerStore {
    *
    * 그래서 **검사를 삽입과 같은 연산 안에** 둔다.
    */
+  /**
+   * 한도와 **마감 여부를 같은 문장 안에서** 본다 (QA-007).
+   *
+   * 앱이 먼저 읽고 나중에 쓰면 그 사이에 마감이 끼어든다. 「읽은 값으로
+   * 판단」이 아니라 「쓰는 순간의 값으로 판단」이어야 한다.
+   *
+   * `closed` 는 **왜 못 들어갔는지 사람에게 말해 주기 위한 것**이지 판정
+   * 근거가 아니다. 판정은 이미 문장 안에서 끝났다.
+   */
   appendSettlementGuarded(
     settlement: Settlement,
     maxTotal: number
-  ): Promise<{ inserted: boolean; settled: number }>;
+  ): Promise<{ inserted: boolean; settled: number; closed: boolean }>;
   listSettlements(entryId?: string): Promise<Settlement[]>;
   replaceSettlement(settlement: Settlement): Promise<Settlement | null>;
   /**
@@ -100,10 +109,16 @@ export interface LedgerStore {
    * 실제로 바꾸는 쪽은 하나다. 둘 다 성공했다고 답하면 감사로그에 취소가 두 번
    * 남고, 사람은 무엇이 실제로 일어났는지 알 수 없다.
    */
+  /**
+   * 살아 있고 **그 달이 열려 있을 때만** 무효 처리한다 (QA-007).
+   *
+   * 취소도 그 달 현금을 바꾼다. 삽입만 막고 취소를 열어 두면 마감된 달의
+   * 숫자가 빠지는 방향으로 틀어진다.
+   */
   voidSettlementIfLive(
     id: string,
     patch: { voidedAt: string; voidedBy: string; voidReason: string }
-  ): Promise<Settlement | null>;
+  ): Promise<{ voided: Settlement | null; closed: boolean }>;
   appendAudit(log: AuditLog): Promise<void>;
   listAudit(filter?: { table?: string; rowId?: string }): Promise<AuditLog[]>;
   appendJournal(journal: Journal): Promise<void>;
@@ -343,21 +358,34 @@ export class InMemoryLedgerStore implements LedgerStore {
   async appendSettlementGuarded(
     settlement: Settlement,
     maxTotal: number
-  ): Promise<{ inserted: boolean; settled: number }> {
+  ): Promise<{ inserted: boolean; settled: number; closed: boolean }> {
     /*
      * **이 블록 안에 `await` 가 하나도 없다 — 그래서 원자적이다.**
      *
      * 자바스크립트는 한 번에 한 흐름만 돈다. `await` 가 없으면 중간에 다른
      * 호출이 끼어들 수 없다. 한 줄이라도 `await` 를 넣으면 그 자리에서
      * 동시 호출이 갈라져 둘 다 통과하게 된다.
+     *
+     * 마감 확인도 **여기 안에서** 한다 (QA-007). 앱이 먼저 읽고 나중에
+     * 쓰면 그 사이에 마감이 끼어든다.
      */
+    if (this.isMonthClosedSync(settlement.settledOn.slice(0, 7))) {
+      const settled = this.settlements
+        .filter(x => x.entryId === settlement.entryId && x.voidedAt == null)
+        .reduce((n, x) => n + x.amount, 0);
+      return { inserted: false, settled, closed: true };
+    }
     const settled = this.settlements
       .filter(x => x.entryId === settlement.entryId && x.voidedAt == null)
       .reduce((n, x) => n + x.amount, 0);
     if (settled + settlement.amount > maxTotal)
-      return { inserted: false, settled };
+      return { inserted: false, settled, closed: false };
     this.settlements.push({ ...settlement });
-    return { inserted: true, settled: settled + settlement.amount };
+    return {
+      inserted: true,
+      settled: settled + settlement.amount,
+      closed: false,
+    };
   }
   async listSettlements(entryId?: string): Promise<Settlement[]> {
     const rows = entryId
@@ -371,16 +399,32 @@ export class InMemoryLedgerStore implements LedgerStore {
     this.settlements[i] = { ...settlement };
     return { ...settlement };
   }
+  /**
+   * 마감 여부를 **동기로** 읽는다.
+   *
+   * `await` 가 하나라도 끼면 그 자리에서 다른 호출이 끼어들어, 「마감을 확인한
+   * 뒤 마감되고 나서 쓰는」 바로 그 경합이 다시 생긴다.
+   */
+  private isMonthClosedSync(ym: string): boolean {
+    if (this.periods.some(p => p.ym === ym && p.status === "closed"))
+      return true;
+    const row = this.settings.find(x => x.key === "closed_periods");
+    return Array.isArray(row?.value) && (row.value as string[]).includes(ym);
+  }
+
   async voidSettlementIfLive(
     id: string,
     patch: { voidedAt: string; voidedBy: string; voidReason: string }
-  ): Promise<Settlement | null> {
+  ): Promise<{ voided: Settlement | null; closed: boolean }> {
     // 이 블록 안에 `await` 가 없다 — 그래서 원자적이다
     const i = this.settlements.findIndex(x => x.id === id);
-    if (i < 0) return null;
-    if (this.settlements[i].voidedAt != null) return null;
+    if (i < 0) return { voided: null, closed: false };
+    if (this.settlements[i].voidedAt != null)
+      return { voided: null, closed: false };
+    if (this.isMonthClosedSync(this.settlements[i].settledOn.slice(0, 7)))
+      return { voided: null, closed: true };
     this.settlements[i] = { ...this.settlements[i], ...patch };
-    return { ...this.settlements[i] };
+    return { voided: { ...this.settlements[i] }, closed: false };
   }
 
   async listApprovals(entryId: string): Promise<Approval[]> {

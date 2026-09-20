@@ -426,7 +426,9 @@ describe("동시 확인이 실제 Postgres 에서도 막힌다 (QA-002)", () => 
       store.voidSettlementIfLive(row.id, patch),
       store.voidSettlementIfLive(row.id, patch),
     ]);
-    expect(both.filter(Boolean).length).toBe(1);
+    // 반환 모양이 { voided, closed } 로 바뀌었다 — 객체가 아니라 voided 를 센다
+    expect(both.filter(r => r.voided != null).length).toBe(1);
+    expect(both.every(r => r.closed === false)).toBe(true);
   }, 60_000);
 });
 
@@ -564,5 +566,127 @@ describe("알림 발송 선점이 실제 Postgres 에서도 하나만 통과한�
     });
     expect(exhausted.claimed).toBe(false);
     expect(exhausted.current.sendAttempts).toBe(3);
+  }, 60_000);
+});
+
+/**
+ * QA-007 — 마감과 집행 쓰기가 **실제 Postgres 에서** 직렬화된다.
+ *
+ * 메모리 저장소의 검증은 한 프로세스 안에서만 의미가 있다. 운영은 마감 버튼과
+ * 집행 확인이 **다른 서버리스 인스턴스**에서 같은 순간에 돈다.
+ *
+ * **드라이버를 실제로 확인했다** — `drizzle-orm/neon-http` 의 `transaction()`
+ * 은 "No transactions support in neon-http driver" 로 던진다. `neon()` 자체는
+ * `sql.transaction([...])`(비대화형 배치)을 지원하지만, 「읽고 보고 그 결과로
+ * 쓸지 정한다」는 배치로 표현할 수 없다. 그래서 판정을 **쓰는 문장 안으로**
+ * 넣는다 — 조건부 INSERT 와 조건부 UPDATE 한 문장씩이다.
+ */
+describe("마감된 달의 집행 쓰기가 실제 Postgres 에서 막힌다 (QA-007)", () => {
+  const line = (id: string, entryId: string, amount: number, on: string) => ({
+    id,
+    entryId,
+    settledOn: on,
+    amount,
+    bankAccount: null,
+    bankRef: null,
+    note: null,
+    actor: "cfo@dinostudio.kr",
+    at: "2026-09-20T09:00:00+09:00",
+    voidedAt: null,
+    voidedBy: null,
+    voidReason: null,
+  });
+
+  const closeMonth = async (ym: string) => {
+    await store.upsertPeriod({
+      ym,
+      status: "closed",
+      closedBy: "ceo@dinostudio.kr",
+      closedAt: "2026-09-30T00:00:00+09:00",
+      blockers: [],
+    });
+  };
+
+  it("**마감된 달로는 삽입이 안 된다** — 흔적도 안 남는다", async () => {
+    const entryId = randomUUID();
+    await closeMonth("2026-04");
+    const guard = await store.appendSettlementGuarded(
+      line(randomUUID(), entryId, 1_000, "2026-04-30"),
+      1_000
+    );
+    expect(guard.inserted).toBe(false);
+    expect(guard.closed).toBe(true);
+    expect(await store.listSettlements(entryId)).toEqual([]);
+  }, 60_000);
+
+  it("**마감된 달의 확인은 취소가 안 된다**", async () => {
+    const entryId = randomUUID();
+    const row = line(randomUUID(), entryId, 1_000, "2026-05-31");
+    expect((await store.appendSettlementGuarded(row, 1_000)).inserted).toBe(
+      true
+    );
+
+    await closeMonth("2026-05");
+
+    const result = await store.voidSettlementIfLive(row.id, {
+      voidedAt: "2026-06-01T09:00:00+09:00",
+      voidedBy: "cfo@dinostudio.kr",
+      voidReason: "착오",
+    });
+    expect(result.voided).toBeNull();
+    expect(result.closed).toBe(true);
+
+    // 줄이 그대로 살아 있어야 한다 — 마감된 달의 현금은 안 바뀐다
+    const rows = await store.listSettlements(entryId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].voidedAt).toBeNull();
+  }, 60_000);
+
+  it("`closed_periods` 기준값으로 막은 달도 같다", async () => {
+    const entryId = randomUUID();
+    await store.putSetting({
+      key: "closed_periods",
+      value: ["2026-03"],
+      isProvisional: false,
+      ownerRole: null,
+      updatedBy: "ceo@dinostudio.kr",
+      updatedAt: "2026-09-20T09:00:00+09:00",
+    });
+    const guard = await store.appendSettlementGuarded(
+      line(randomUUID(), entryId, 1_000, "2026-03-31"),
+      1_000
+    );
+    expect(guard.inserted).toBe(false);
+    expect(guard.closed).toBe(true);
+  }, 60_000);
+
+  it("열려 있는 달은 그대로 된다 — 막기만 하고 못 쓰게 만들면 안 된다", async () => {
+    const entryId = randomUUID();
+    const row = line(randomUUID(), entryId, 1_000, "2026-06-30");
+    const guard = await store.appendSettlementGuarded(row, 1_000);
+    expect(guard.inserted).toBe(true);
+    expect(guard.closed).toBe(false);
+
+    const result = await store.voidSettlementIfLive(row.id, {
+      voidedAt: "2026-07-01T09:00:00+09:00",
+      voidedBy: "cfo@dinostudio.kr",
+      voidReason: "착오",
+    });
+    expect(result.voided).not.toBeNull();
+    expect(result.closed).toBe(false);
+  }, 60_000);
+
+  it("한도 초과는 마감과 구분된다 — 이유를 뒤섞지 않는다", async () => {
+    const entryId = randomUUID();
+    await store.appendSettlementGuarded(
+      line(randomUUID(), entryId, 1_000, "2026-06-30"),
+      1_000
+    );
+    const over = await store.appendSettlementGuarded(
+      line(randomUUID(), entryId, 1, "2026-06-30"),
+      1_000
+    );
+    expect(over.inserted).toBe(false);
+    expect(over.closed).toBe(false);
   }, 60_000);
 });
