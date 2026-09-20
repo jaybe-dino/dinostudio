@@ -145,11 +145,19 @@ export function FinancialStatementsScreen() {
           note="마감된 기간만 확정 표기"
           tone={fs.data?.status === "확정" ? "ok" : "warn"}
         />
+        {/*
+          예전에는 「미설정」이 **하드코딩**돼 있었다. 값을 넣어도 화면은 계속
+          없다고 말했다 — 시스템이 거짓말을 하면 그 뒤로는 맞는 말도 안 믿는다.
+        */}
         <Tile
           label="기초 재무상태표"
-          value="미설정"
-          note="자본·이월 잔액 — 시산표 불일치의 원인 (B6)"
-          tone="null"
+          value={fs.data?.openingEquitySet ? "설정됨" : "미설정"}
+          note={
+            fs.data?.openingEquitySet
+              ? "자본·이월 잔액이 들어와 있습니다"
+              : "자본·이월 잔액 — 시산표 불일치의 원인 (B6)"
+          }
+          tone={fs.data?.openingEquitySet ? "ok" : "null"}
         />
         <Tile
           label="차액 처리"
