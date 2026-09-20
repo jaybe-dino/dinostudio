@@ -24,6 +24,14 @@ export interface FinancialStatements {
   /** 마감된 기간만 「확정」이고 그 외는 가결산이다 */
   status: "가결산" | "확정";
   /**
+   * 기초 재무상태표(자본·이월 잔액)가 들어와 있는가.
+   *
+   * 화면이 이걸 **하드코딩으로 「미설정」이라고 적고 있었다.** 대표님이
+   * 값을 넣어도 화면은 계속 없다고 말한다 — 시스템이 거짓말을 하면 그 뒤로는
+   * 맞는 말도 안 믿는다.
+   */
+  openingEquitySet: boolean;
+  /**
    * 어느 보고서가 어느 날짜를 축으로 쓰는가 (docs/erp-qa.md A4).
    * 화면이 이걸 표시해야 한다 — 같은 달의 손익과 현금이 다르면 사람은
    * 「어느 쪽이 틀렸나」를 먼저 의심하지만, 둘 다 맞고 축이 다를 뿐이다.
@@ -217,6 +225,7 @@ export function buildFinancialStatements(
   return {
     period: { from, to, ym },
     status: closed ? "확정" : "가결산",
+    openingEquitySet: options.openingEquity != null,
     /**
      * 어느 보고서가 어느 날짜를 축으로 쓰는가 (A4).
      *
