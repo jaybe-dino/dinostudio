@@ -190,3 +190,271 @@ describe("QA-002 — 동시 확인이 건 금액을 넘어서는 안 된다", ()
     expect(view.summary.settled).toBe(0);
   });
 });
+
+/* ── QA-001 범위 ─────────────────────────────────────────────────────────── */
+
+const LEAD_IP: Actor = {
+  id: "ip-lead@dinostudio.kr",
+  role: "사업부리더",
+  buCode: "IP",
+};
+const LEAD_NO_BU: Actor = { id: "nobu@dinostudio.kr", role: "사업부리더" };
+const STAFF_A: Actor = { id: "a@dinostudio.kr", role: "담당자" };
+const STAFF_B: Actor = { id: "b@dinostudio.kr", role: "담당자" };
+
+/** IP 한 건 · NET 한 건 — 리더가 자기 것만 봐야 한다 */
+async function twoBus(s: LedgerService) {
+  const ip = await s.createEntry(
+    {
+      direction: "out",
+      title: "IP 외주",
+      amount: 1_100_000,
+      cashDate: "2026-09-14",
+      accountCode: "5210",
+      buCode: "IP",
+      hasEvidence: true,
+    },
+    CFO
+  );
+  const net = await s.createEntry(
+    {
+      direction: "out",
+      title: "NET 외주",
+      amount: 2_200_000,
+      cashDate: "2026-09-14",
+      accountCode: "5210",
+      buCode: "NET",
+      hasEvidence: true,
+    },
+    CFO
+  );
+  return { ip: ip.entry, net: net.entry };
+}
+
+describe("QA-001 — 선언만 있고 강제가 없던 범위", () => {
+  it("사업부리더 목록에 **다른 사업부 건이 안 나온다**", async () => {
+    const s = svc();
+    const { ip, net } = await twoBus(s);
+    const list = await s.listEntries({}, LEAD_IP);
+    const codes = list.entries.map(e => e.code);
+    expect(codes).toContain(ip.code);
+    expect(codes).not.toContain(net.code);
+  });
+
+  it("**단건 조회로도 못 넘어간다** — 목록만 막으면 코드를 알면 열린다", async () => {
+    const s = svc();
+    const { net } = await twoBus(s);
+    await expect(s.getEntry(net.code, LEAD_IP)).rejects.toThrow();
+  });
+
+  it("담당자는 **남이 만든 건**을 목록에서 못 본다", async () => {
+    const s = svc();
+    const mine = await s.createEntry(
+      {
+        direction: "out",
+        title: "내가 올린 건",
+        amount: 500_000,
+        cashDate: "2026-09-14",
+        accountCode: "5210",
+        hasEvidence: true,
+      },
+      STAFF_A
+    );
+    const theirs = await s.createEntry(
+      {
+        direction: "out",
+        title: "남이 올린 건",
+        amount: 700_000,
+        cashDate: "2026-09-14",
+        accountCode: "5210",
+        hasEvidence: true,
+      },
+      STAFF_B
+    );
+    const list = await s.listEntries({}, STAFF_A);
+    const codes = list.entries.map(e => e.code);
+    expect(codes).toContain(mine.entry.code);
+    expect(codes).not.toContain(theirs.entry.code);
+  });
+
+  it("**사업부가 없는 리더는 아무것도 못 본다** (fail-closed)", async () => {
+    // 범위를 모르면 전부 보여 주는 쪽이 아니라 아무것도 안 보여 주는 쪽이다
+    const s = svc();
+    await twoBus(s);
+    const list = await s.listEntries({}, LEAD_NO_BU);
+    expect(list.entries.length).toBe(0);
+  });
+
+  it("합계도 범위 안에서만 낸다 — 목록만 가리면 총액으로 새 나간다", async () => {
+    const s = svc();
+    const { ip, net } = await twoBus(s);
+    const list = await s.listEntries({}, LEAD_IP);
+
+    // 돌려준 것이 **전부** 자기 사업부여야 한다 (시드에도 IP 건이 있다)
+    expect(list.entries.every(e => e.buCode === "IP")).toBe(true);
+    expect(list.entries.map(e => e.code)).toContain(ip.code);
+    expect(list.entries.map(e => e.code)).not.toContain(net.code);
+
+    // 합계가 목록과 같은 모집단에서 나와야 한다 — 여기가 새면 금액이 샌다
+    expect(list.total).toBe(list.entries.length);
+    const ceo = await s.listEntries({}, CEO);
+    expect(list.total).toBeLessThan(ceo.total);
+  });
+
+  it("**확정 합계에도 다른 사업부가 안 섞인다**", async () => {
+    const s = svc();
+    await twoBus(s);
+    const lead = await s.listEntries({}, LEAD_IP);
+    const ceo = await s.listEntries({}, CEO);
+    // 대표가 보는 지출 확정 합계보다 리더 쪽이 작아야 한다
+    expect(lead.out.sum).toBeLessThanOrEqual(ceo.out.sum);
+    expect(lead.payrollTotal).toBeLessThanOrEqual(ceo.payrollTotal);
+  });
+
+  it("대표·재무는 전부 본다 — 범위가 없는 역할이다", async () => {
+    const s = svc();
+    const { ip, net } = await twoBus(s);
+    for (const actor of [CEO, CFO]) {
+      const codes = (await s.listEntries({}, actor)).entries.map(e => e.code);
+      expect(codes).toContain(ip.code);
+      expect(codes).toContain(net.code);
+    }
+  });
+});
+
+describe("QA-001 — 우회 경로도 같은 잣대를 쓴다", () => {
+  /*
+   * 목록과 단건만 막으면 나머지 화면으로 그대로 새 나간다. 아래는 QA 가
+   * 지목한 경로들이다 — 하나라도 빠지면 범위 규칙이 있으나 마나다.
+   */
+  it("승인 대기함", async () => {
+    const s = svc();
+    const { net } = await twoBus(s);
+    const queues = await s.approvalQueues(LEAD_IP);
+    const seen = JSON.stringify(queues);
+    // 어느 대기함에도 그 코드가 나오면 안 된다
+    expect(seen).not.toContain(net.code);
+  });
+
+  it("지급 순서", async () => {
+    const s = svc();
+    const { net } = await twoBus(s);
+    const order = await s.paymentOrder(LEAD_IP);
+    const codes = order.groups.flatMap(g => g.entries.map(x => x.entry.code));
+    expect(codes).not.toContain(net.code);
+  });
+
+  it("현금 부족액 — 줄에 다른 사업부가 섞이면 금액이 샌다", async () => {
+    const s = svc();
+    const { net } = await twoBus(s);
+    // 시드 지평(2026-09-01)을 넓혀 **실제로 모집단에 들어온 상태**에서 본다.
+    // 안 넓히면 지평 밖이라 우연히 통과하고, 범위 검사를 안 해도 초록이 된다
+    await s.putSetting("cash_requirement_horizon", "2026-12-31", false, CEO);
+    const position = await s.cashPosition({}, LEAD_IP);
+    const codes = position.lines.map(l => l.entry.code);
+    expect(codes).not.toContain(net.code);
+
+    // 대표는 그 건을 본다 — 즉 지평 때문이 아니라 범위 때문에 빠진 것이다
+    const asCeo = await s.cashPosition({}, CEO);
+    expect(asCeo.lines.map(l => l.entry.code)).toContain(net.code);
+  });
+
+  it("입출금 확인 이력", async () => {
+    const s = svc();
+    const { net } = await twoBus(s);
+    await expect(s.settlements(net.code, LEAD_IP)).rejects.toThrow();
+  });
+
+  it("증빙", async () => {
+    const s = svc();
+    const { net } = await twoBus(s);
+    await expect(s.evidence(net.code, LEAD_IP)).rejects.toThrow();
+  });
+
+  it("수정·승인 등 쓰기 경로", async () => {
+    const s = svc();
+    const { net } = await twoBus(s);
+    const fresh = await s.getEntry(net.code, CEO);
+    await expect(
+      s.patchEntry(
+        net.code,
+        { title: "몰래 고치기" },
+        fresh.entry.version,
+        LEAD_IP
+      )
+    ).rejects.toThrow();
+    await expect(
+      s.cancelEntry(net.code, "몰래 취소", fresh.entry.version, LEAD_IP, null)
+    ).rejects.toThrow();
+  });
+
+  it("**「없습니다」로 답한다** — 「권한 없음」이면 그 건의 존재가 새 나간다", async () => {
+    const s = svc();
+    const { net } = await twoBus(s);
+    await expect(s.getEntry(net.code, LEAD_IP)).rejects.toThrow(
+      /찾을 수 없습니다/
+    );
+  });
+});
+
+describe("QA-001 — 세션이 사업부를 실어 나른다", () => {
+  /*
+   * 범위 검사가 아무리 정확해도 `actorFrom` 이 사업부를 안 실으면 선언으로만
+   * 남는다 — 실제로 그랬다. 여기서는 그 배선을 본다.
+   */
+  it("ERP_ROLE_MAP 의 「사업부리더:IP」 에서 역할과 사업부를 읽는다", async () => {
+    const { resolveErpRole, resolveErpBu } = await import("./index.js");
+    const before = process.env.ERP_ROLE_MAP;
+    process.env.ERP_ROLE_MAP = JSON.stringify({
+      "lead@dinostudio.kr": "사업부리더:IP",
+      "cfo@dinostudio.kr": "재무",
+    });
+    try {
+      expect(resolveErpRole("lead@dinostudio.kr")).toBe("사업부리더");
+      expect(resolveErpBu("lead@dinostudio.kr")).toBe("IP");
+      // 사업부를 안 붙인 사람은 null — 리더가 아니면 쓰이지 않는다
+      expect(resolveErpRole("cfo@dinostudio.kr")).toBe("재무");
+      expect(resolveErpBu("cfo@dinostudio.kr")).toBeNull();
+    } finally {
+      if (before === undefined) delete process.env.ERP_ROLE_MAP;
+      else process.env.ERP_ROLE_MAP = before;
+    }
+  });
+
+  it("사용자 배정의 사업부가 환경변수보다 우선한다", async () => {
+    const { setAssignedRoles, resolveErpBu } = await import("./index.js");
+    const before = process.env.ERP_ROLE_MAP;
+    process.env.ERP_ROLE_MAP = JSON.stringify({
+      "lead@dinostudio.kr": "사업부리더:IP",
+    });
+    try {
+      setAssignedRoles([
+        {
+          email: "lead@dinostudio.kr",
+          role: "사업부리더",
+          buCode: "NET",
+          active: true,
+        },
+      ]);
+      expect(resolveErpBu("lead@dinostudio.kr")).toBe("NET");
+    } finally {
+      setAssignedRoles([]);
+      if (before === undefined) delete process.env.ERP_ROLE_MAP;
+      else process.env.ERP_ROLE_MAP = before;
+    }
+  });
+
+  it("비활성 사용자는 사업부도 안 실린다", async () => {
+    const { setAssignedRoles, resolveErpBu } = await import("./index.js");
+    setAssignedRoles([
+      {
+        email: "gone@dinostudio.kr",
+        role: "사업부리더",
+        buCode: "IP",
+        active: false,
+      },
+    ]);
+    expect(resolveErpBu("gone@dinostudio.kr")).toBeNull();
+    setAssignedRoles([]);
+  });
+});

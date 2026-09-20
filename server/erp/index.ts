@@ -78,14 +78,50 @@ export function getLedgerService(): LedgerService {
  * 매 요청마다 DB를 보지 않도록 들고 있고, 사용자 저장 시 갱신한다.
  */
 const assignedRoles = new Map<string, Role>();
+/** 소속 사업부 — 사업부리더의 조회 범위가 여기서 나온다 (§13.1) */
+const assignedBu = new Map<string, string>();
 
 export function setAssignedRoles(
-  users: { email: string; role: Role; active: boolean }[]
+  users: {
+    email: string;
+    role: Role;
+    buCode?: string | null;
+    active: boolean;
+  }[]
 ) {
   assignedRoles.clear();
+  assignedBu.clear();
   for (const user of users) {
-    if (user.active)
-      assignedRoles.set(user.email.trim().toLowerCase(), user.role);
+    if (!user.active) continue;
+    const key = user.email.trim().toLowerCase();
+    assignedRoles.set(key, user.role);
+    if (user.buCode) assignedBu.set(key, user.buCode);
+  }
+}
+
+/**
+ * 이 사람의 소속 사업부.
+ *
+ * 사용자 배정이 우선이고, 없으면 `ERP_ROLE_MAP` 에서 읽는다 — 거기서는
+ * `"사업부리더:IP"` 처럼 역할 뒤에 붙여 쓴다. 첫 리더를 계정 배정 화면 없이
+ * 넣기 위한 부트스트랩이다.
+ *
+ * **못 찾으면 null 을 돌려준다.** 그러면 리더는 아무것도 못 본다
+ * (fail-closed) — 범위를 모를 때 전부 보여 주면 규칙이 있으나 마나다.
+ */
+export function resolveErpBu(email: string | null | undefined): string | null {
+  const key = (email ?? "").trim().toLowerCase();
+  const assigned = assignedBu.get(key);
+  if (assigned) return assigned;
+  const raw = process.env.ERP_ROLE_MAP;
+  if (!raw || !email) return null;
+  try {
+    const map = JSON.parse(raw) as Record<string, string>;
+    const found = map[email] ?? map[key];
+    const bu = typeof found === "string" ? found.split(":")[1] : null;
+    return bu?.trim() || null;
+  } catch {
+    return null;
   }
 }
 
@@ -113,7 +149,9 @@ export function resolveErpRole(email: string | null | undefined): Role | null {
     try {
       const map = JSON.parse(raw) as Record<string, string>;
       const found = map[email] ?? map[email.toLowerCase()];
-      if (found && isRole(found)) return found;
+      // `"사업부리더:IP"` — 역할 뒤에 사업부를 붙여 쓸 수 있다
+      const role = typeof found === "string" ? found.split(":")[0].trim() : "";
+      if (role && isRole(role)) return role;
     } catch (error) {
       console.warn("[ERP] ERP_ROLE_MAP 파싱 실패:", error);
     }

@@ -33,6 +33,10 @@ import {
   flattenDailyCashSheet,
   buildSheetSeed,
   buildLaunchReport,
+  scopeEntries,
+  inScope,
+  scopeIsUndetermined,
+  OUT_OF_SCOPE_MESSAGE,
   diffSheetAgainstLedger,
   settledAmount,
   summarize,
@@ -191,9 +195,13 @@ export interface Actor {
   /**
    * 이 사람의 사업부 — 사업부리더의 조회 범위(§13.1 scope: own_bu)에 쓴다.
    *
-   * **아직 세션이 이 값을 채우지 않는다.** 역할 배정(ERP_ROLE_MAP)에 사업부가
-   * 없기 때문이다. 값이 없으면 범위를 좁히지 않는다 — 좁히는 척하다가 엉뚱한
-   * 것을 감추는 것보다, 안 좁히고 그렇다고 말하는 편이 낫다.
+   * 세션이 `resolveErpBu()` 로 채운다. 사용자 배정의 `buCode` 가 우선이고,
+   * 없으면 `ERP_ROLE_MAP` 의 `"사업부리더:IP"` 형태에서 읽는다.
+   *
+   * **비어 있으면 리더는 아무것도 못 본다** (fail-closed). 한동안 이 값이
+   * 안 채워져 범위 선언이 선언으로만 남아 있었고, 그래서 리더가 다른 사업부
+   * 건을 목록으로 받아 갔다. 범위를 모를 때 전부 보여 주면 규칙이 있으나
+   * 마나다 — 아무것도 안 보여 주면 사람이 바로 알아차리고 채운다.
    */
   buCode?: string | null;
 }
@@ -212,9 +220,34 @@ export class LedgerService {
     actor: Actor,
     page?: { cursor?: string | null; limit?: number }
   ) {
-    const entries = await this.store.listEntries(filter);
-    // §13.3 — 급여·부채는 조회도 감사로그에 남긴다
-    await this.recordSensitiveRead(entries, actor, "entries");
+    const entries = await this.scopedEntries(actor, filter);
+    const all = await this.store.listEntries(filter);
+    /*
+     * §13.3 — 급여·부채는 조회도 감사로그에 남긴다.
+     *
+     * **같은 필터로, 범위를 걸기 전** 목록을 본다. 아래에서 인건비 총액은
+     * 범위를 타지 않고 나가므로(T10), 범위로 거른 목록으로 판정하면 **총액은
+     * 나가는데 기록은 안 남는다.** 나간 것은 나갔다고 남겨야 한다.
+     *
+     * 필터는 그대로 태운다 — 인건비를 안 부른 조회까지 민감 조회로 세면
+     * 감사로그가 잡음으로 가득 차 정작 볼 것이 묻힌다.
+     */
+    await this.recordSensitiveRead(all, actor, "entries");
+
+    /*
+     * **인건비 총액만 범위를 안 탄다** — 명시된 제품 결정이기 때문이다.
+     *
+     * 원칙 10 은 「개인별 급여는 어느 화면에도 표시하지 않고 **총액만** 쓴다」
+     * 이고, 인수 기준 T10 이 담당자도 그 총액을 본다고 못박고 있다. 건별
+     * 명세가 없는 회사 전체 한 숫자라 「남의 건」과 성격이 다르다.
+     *
+     * 나머지는 전부 범위 안에서 낸다 — 목록만 가리고 지출·수입 합계를
+     * 그대로 주면 **금액으로 새 나간다.**
+     *
+     * 이 예외가 마음에 걸리면 `payrollTotal(entries)` 로 바꾸면 된다. 다만
+     * 그때 T10 이 깨지므로 제품 결정을 함께 바꾸는 것이다.
+     */
+    const payrollAll = payrollTotal(await this.store.listEntries());
 
     // §14 — offset 금지. 코드는 불변이므로 커서로 쓰기에 안전하다 (승인으로 순서가 바뀌지 않음)
     const ordered = [...entries].sort((a, b) =>
@@ -234,7 +267,7 @@ export class LedgerService {
       total: ordered.length,
       entries: entries.map(e => maskEntryForRole(e, actor.role)),
       /** 개인 금액을 못 보는 역할도 총액은 본다 (원칙 10) */
-      payrollTotal: payrollTotal(entries),
+      payrollTotal: payrollAll,
       out: confirmedTotals(entries, "out"),
       in: confirmedTotals(entries, "in"),
     };
@@ -244,7 +277,12 @@ export class LedgerService {
   async getEntry(code: string, actor: Actor) {
     const entry = await this.store.getEntry(code);
     if (!entry) throw erpError("not_found", { code });
-    const all = await this.store.listEntries();
+    /*
+     * **목록만 막으면 코드를 아는 사람은 그대로 연다.** 코드는 규칙이 있어
+     * (EX-260914-01) 추측도 된다. 단건 조회가 목록과 같은 잣대를 써야 한다.
+     */
+    this.assertInScope(entry, actor);
+    const all = await this.scopedEntries(actor);
     return {
       entry: maskEntryForRole(entry, actor.role),
       revisions: await this.store.listRevisions(entry.id),
@@ -323,7 +361,9 @@ export class LedgerService {
    * 보면 「증빙이 없습니다」가 뜬다.
    */
   async approvalQueues(actor: Actor) {
-    const entries = await this.store.listEntries();
+    // 범위 규칙을 여기서 또 쓰지 않는다 — 아래 `scoped()` 는 역할별 대기함을
+    // 나누는 용도고, 「무엇을 볼 수 있나」는 한 곳에서 이미 정해진다
+    const entries = await this.scopedEntries(actor);
     const waiting = entries.filter(
       e => e.status === "pending" || e.status === "undecided"
     );
@@ -628,7 +668,8 @@ export class LedgerService {
     actor: Actor
   ) {
     const [entries, settings, settlements] = await Promise.all([
-      this.store.listEntries(),
+      // 범위 밖 건이 줄에 섞이면 목록을 가려도 **금액으로 새 나간다**
+      this.scopedEntries(actor),
       this.store.listSettings(),
       this.store.listSettlements(),
     ]);
@@ -1541,7 +1582,7 @@ export class LedgerService {
    */
   async paymentOrder(actor: Actor) {
     const [entries, parties, settlements] = await Promise.all([
-      this.store.listEntries(),
+      this.scopedEntries(actor),
       this.store.listParties(),
       this.store.listSettlements(),
     ]);
@@ -3269,9 +3310,10 @@ export class LedgerService {
     return attachment;
   }
 
-  async evidence(code: string) {
+  async evidence(code: string, actor: Actor) {
     const entry = await this.store.getEntry(code);
     if (!entry) throw erpError("not_found", { code });
+    this.assertInScope(entry, actor);
     const attachments = await this.store.listAttachments(entry.id);
     return {
       attachments,
@@ -4182,6 +4224,7 @@ export class LedgerService {
     if (!entry) throw erpError("not_found", { code });
     if (!permissionFor(actor.role, "entry").read)
       throw erpError("forbidden_field", { role: actor.role });
+    this.assertInScope(entry, actor);
     const rows = await this.store.listSettlements(entry.id);
     return { code, rows, summary: summarize(entry, rows) };
   }
@@ -4421,9 +4464,41 @@ export class LedgerService {
       .reduce((sum, e) => sum + (e.amount ?? 0), 0);
   }
 
+  /**
+   * §13.1 범위 안의 원장만 — **모든 조회가 이것을 지난다.**
+   *
+   * 경로마다 따로 거르면 반드시 한 군데를 빠뜨리고, 빠진 그 한 군데가
+   * 전부를 무효로 만든다. 합계·내보내기도 여기서 걸러진 목록으로 낸다 —
+   * 목록만 가리고 총액을 그대로 주면 금액이 총액으로 새 나간다.
+   */
+  private async scopedEntries(
+    actor: Actor,
+    filter?: EntryFilter
+  ): Promise<Entry[]> {
+    const entries = await this.store.listEntries(filter);
+    return scopeEntries(entries, actor);
+  }
+
+  /**
+   * 범위 밖이면 **「없습니다」로** 답한다.
+   *
+   * 「권한이 없습니다」라고 하면 그 코드가 **존재한다는 사실**이 새 나간다.
+   * 다른 사업부에 어떤 건이 있는지를 코드를 넣어 보며 알아낼 수 있게 된다.
+   */
+  private assertInScope(entry: Entry, actor: Actor): void {
+    if (inScope(entry, actor)) return;
+    throw erpError("not_found", { code: entry.code }, OUT_OF_SCOPE_MESSAGE);
+  }
+
   private async requireWritable(code: string, actor: Actor): Promise<Entry> {
     const entry = await this.store.getEntry(code);
     if (!entry) throw erpError("not_found", { code });
+    /*
+     * **쓰기 경로가 전부 이 함수로 모인다** — 수정 · 취소 · 승인 · 반려 ·
+     * 보류 · 등급 상향 · 입출금 확인 · 확인 취소. 그래서 범위 검사를 여기
+     * 한 번 두면 그 전부가 덮인다.
+     */
+    this.assertInScope(entry, actor);
     // 이관 구간은 건별 명세가 없으므로 원장에 존재하지 않는다 (§5.3) — 도달하면 코드 오류
     const parsed = parseCode(entry.code);
     if (!parsed) throw erpError("invalid_transition", { code });

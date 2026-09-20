@@ -43,6 +43,13 @@
       "when": 1789914029445,
       "tag": "0005_nice_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789920179219,
+      "tag": "0006_warm_vector",
+      "breakpoints": true
     }
   ]
 }
