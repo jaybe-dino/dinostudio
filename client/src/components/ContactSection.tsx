@@ -125,6 +125,7 @@ export default function ContactSection() {
                     <option value="finance-fund" style={{ background: "#0d0d2b" }}>{t("contact", "sol5", lang)}</option>
                     <option value="finance-invest" style={{ background: "#0d0d2b" }}>{t("contact", "sol6", lang)}</option>
                     <option value="finance-equity" style={{ background: "#0d0d2b" }}>{t("contact", "sol7", lang)}</option>
+                    <option value="reels-market" style={{ background: "#0d0d2b" }}>{t("contact", "sol8", lang)}</option>
                   </select>
                 </div>
 

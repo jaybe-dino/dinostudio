@@ -9,6 +9,7 @@ import Home from "./pages/Home";
 
 const Sale2 = lazy(() => import("./pages/Sale2"));
 const ErpApp = lazy(() => import("./pages/erp/ErpApp"));
+const RealsMarket = lazy(() => import("./pages/RealsMarket"));
 
 /**
  * 경영관리 시스템은 admin.dinostudio.kr 로 씁니다.
@@ -59,6 +60,15 @@ function Router() {
           }
         >
           <Sale2 />
+        </Suspense>
+      </Route>
+      <Route path={"/realsmarket"}>
+        <Suspense
+          fallback={
+            <div className="min-h-screen" style={{ background: "#03030a" }} />
+          }
+        >
+          <RealsMarket />
         </Suspense>
       </Route>
       <Route path={"/erp"} component={ErpRoute} />

@@ -372,6 +372,32 @@ export const translations = {
     companyLabel: { ko: "회사명", en: "Company" },
     solutionLabel: { ko: "관심 솔루션", en: "Solution of Interest" },
     messageLabel: { ko: "문의 내용", en: "Message" },
+    // ContactSection 컴포넌트가 실제로 조회하는 키들 — 누락 시 키 이름이 그대로 노출된다
+    fieldName: { ko: "이름", en: "Name" },
+    fieldCompany: { ko: "회사명", en: "Company" },
+    fieldSolution: { ko: "관심 솔루션", en: "Solution of Interest" },
+    fieldMessage: { ko: "문의 내용", en: "Message" },
+    placeholderName: { ko: "홍길동", en: "John Doe" },
+    placeholderCompany: { ko: "(주)브랜드명", en: "Brand Name Inc." },
+    placeholderMessage: {
+      ko: "브랜드 소개 및 문의 내용을 자유롭게 작성해주세요.",
+      en: "Please briefly introduce your brand and describe your inquiry.",
+    },
+    sol1: { ko: "커머스 - 공동구매", en: "Commerce - Group Buy" },
+    sol2: { ko: "커머스 - 유튜브 커머스", en: "Commerce - YouTube Commerce" },
+    sol3: { ko: "커머스 - 틱톡샵 크로스보더", en: "Commerce - TikTok Shop Cross-Border" },
+    sol4: { ko: "콘텐츠 IP 솔루션", en: "Content IP Solutions" },
+    sol5: { ko: "파이낸스 - 펀드", en: "Finance - Fund" },
+    sol6: { ko: "파이낸스 - 투자", en: "Finance - Investment" },
+    sol7: { ko: "파이낸스 - 지분 투자", en: "Finance - Equity" },
+    sol8: { ko: "릴스마켓 캠페인", en: "Reels Market Campaign" },
+    sending: { ko: "전송 중...", en: "Sending..." },
+    meetingCta: { ko: "Zoom 25분 상담 예약하기 →", en: "Book a 25-min Zoom Call →" },
+    successTitle: { ko: "문의가 접수되었습니다", en: "Inquiry Received" },
+    successSub: {
+      ko: "빠른 시일 내에 담당자가 연락드리겠습니다.",
+      en: "Our team will contact you shortly.",
+    },
   },
 
   // ── Footer ───────────────────────────────────────────────────────
