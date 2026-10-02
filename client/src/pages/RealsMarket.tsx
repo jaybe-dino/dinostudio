@@ -8,6 +8,7 @@ import {
   Instagram,
   Link2,
   Mail,
+  Play,
 } from "lucide-react";
 import StarCanvas from "@/components/StarCanvas";
 
@@ -143,9 +144,22 @@ const DELIVERABLES = [
   "조회·도달·클릭·구매전환 데이터 리포트",
 ];
 
-const REFERENCE_LINKS = [
-  { label: "참고 영상 1", url: "https://www.instagram.com/p/DdIqmORyYiB/" },
-  { label: "참고 영상 2", url: "https://www.instagram.com/reel/DcvYthqTt9s/" },
+/**
+ * 레퍼런스 썸네일은 실제 Instagram 릴스 플레이어 화면 캡처(원본 JPG)를
+ * client/public/realsmarket/ 에 셀프호스팅한 것 — 다른 이미지로 교체 금지.
+ * 첫 번째 원 게시물(p/DdIqmORyYiB)은 계정 이용 불가로 제외하고 대체 릴스를 사용한다.
+ */
+const REFERENCE_VIDEOS = [
+  {
+    handle: "@_gyuri_p",
+    url: "https://www.instagram.com/reel/DcvYthqTt9s/",
+    img: "/realsmarket/reference-DcvYthqTt9s.jpg",
+  },
+  {
+    handle: "@suvinci_",
+    url: "https://www.instagram.com/reel/DZpLY3NT4IJ/",
+    img: "/realsmarket/reference-DZpLY3NT4IJ.jpg",
+  },
 ];
 
 const FAQS = [
@@ -452,25 +466,39 @@ export default function RealsMarket() {
             참고 <span className="text-cosmic-gradient">영상</span>
           </h2>
           <p className="text-white/45 text-sm mb-8">릴스마켓 캠페인으로 제작된 콘텐츠 형식을 Instagram에서 확인하실 수 있습니다.</p>
-          <div className="grid sm:grid-cols-2 gap-4 max-w-2xl">
-            {REFERENCE_LINKS.map(ref => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+            {REFERENCE_VIDEOS.map(ref => (
               <a
                 key={ref.url}
                 href={ref.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="cosmic-card flex items-center gap-4 p-6 hover:border-violet-500/40 transition-all"
+                aria-label={`${ref.handle} 릴스 영상 보기 (Instagram 새 창)`}
+                className="cosmic-card group relative block overflow-hidden p-0 hover:border-violet-500/40 transition-all"
+                style={{ aspectRatio: "9/16" }}
               >
+                <img
+                  src={ref.img}
+                  alt={`${ref.handle} 릴스마켓 캠페인 릴스 캡처`}
+                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                />
+                {/* 하단 스크림 + 재생 칩 */}
                 <div
-                  className="w-10 h-10 shrink-0 flex items-center justify-center"
-                  style={{ background: "rgba(124,58,237,0.15)", border: "1px solid rgba(124,58,237,0.3)", color: "#c4b5fd" }}
+                  className="absolute inset-x-0 bottom-0 flex items-end justify-between p-4 pt-16"
+                  style={{ background: "linear-gradient(180deg, transparent, rgba(3,3,10,0.85))" }}
                 >
-                  <Instagram size={17} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-white mb-0.5">{ref.label}</div>
-                  <div className="text-xs text-white/35 flex items-center gap-1">
-                    Instagram에서 보기 <ExternalLink size={11} />
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-white truncate">{ref.handle}</div>
+                    <div className="text-[11px] text-white/50 flex items-center gap-1">
+                      <Instagram size={11} /> Instagram에서 보기 <ExternalLink size={10} />
+                    </div>
+                  </div>
+                  <div
+                    className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full"
+                    style={{ background: "rgba(124,58,237,0.85)", boxShadow: "0 0 18px rgba(124,58,237,0.5)" }}
+                  >
+                    <Play size={14} className="text-white" fill="currentColor" style={{ marginLeft: 1 }} />
                   </div>
                 </div>
               </a>
