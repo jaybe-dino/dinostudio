@@ -1,14 +1,17 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clapperboard,
   ExternalLink,
   Instagram,
   Link2,
   Mail,
   Play,
+  X,
 } from "lucide-react";
 import StarCanvas from "@/components/StarCanvas";
 
@@ -92,6 +95,91 @@ function scrollToContact() {
   document.getElementById("contact")?.scrollIntoView({ behavior: "smooth" });
 }
 
+/** 캠페인 사례 확대 보기 — Escape 로 닫고 ←/→ 로 이동한다 */
+function CaseLightbox({
+  index,
+  onClose,
+  onMove,
+}: {
+  index: number;
+  onClose: () => void;
+  onMove: (delta: number) => void;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight") onMove(1);
+      else if (e.key === "ArrowLeft") onMove(-1);
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose, onMove]);
+
+  const item = CASE_GALLERY[index];
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`공동구매 캠페인 사례 확대 보기: ${item.caption} (${index + 1}/${CASE_GALLERY.length})`}
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-4"
+      style={{ background: "rgba(3,3,10,0.94)", backdropFilter: "blur(8px)" }}
+      onClick={onClose}
+    >
+      <button
+        ref={closeRef}
+        onClick={onClose}
+        aria-label="닫기 (Escape)"
+        className="absolute top-4 right-4 p-3 text-white/70 hover:text-white transition-colors"
+        style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)" }}
+      >
+        <X size={18} />
+      </button>
+
+      <div className="flex items-center gap-2 md:gap-5 max-w-full" onClick={e => e.stopPropagation()}>
+        <button
+          onClick={() => onMove(-1)}
+          aria-label="이전 사례"
+          className="shrink-0 p-3 text-white/60 hover:text-white transition-colors"
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)" }}
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <figure className="min-w-0 text-center">
+          <img
+            src={item.src}
+            alt={`공동구매 캠페인 콘텐츠 예시 — ${item.caption}`}
+            className="max-w-[80vw] md:max-w-[72vw] max-h-[76vh] w-auto h-auto object-contain mx-auto"
+            style={{ boxShadow: "0 12px 80px rgba(0,0,0,0.8)" }}
+          />
+          <figcaption className="mt-4 text-sm text-white/70 font-bold">
+            {item.caption}
+            <span className="text-white/35 font-normal ml-2 tabular-nums">
+              {index + 1} / {CASE_GALLERY.length}
+            </span>
+          </figcaption>
+        </figure>
+        <button
+          onClick={() => onMove(1)}
+          aria-label="다음 사례"
+          className="shrink-0 p-3 text-white/60 hover:text-white transition-colors"
+          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.14)" }}
+        >
+          <ChevronRight size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const PROCESS_STEPS = [
   {
     title: "콘텐츠 전략 설계",
@@ -162,6 +250,21 @@ const REFERENCE_VIDEOS = [
   },
 ];
 
+/**
+ * 공동구매 캠페인 사례 갤러리.
+ * 이미지는 사내 자료 "디노스튜디오_인플루언서커머스_자료.pptx"
+ * (Drive 1WbCujPffu34iee34S8276qkDPG8Kd-8v)에서 추출한 실제 캠페인 콘텐츠 원본이며
+ * client/public/realsmarket/ 에 바이트 그대로 셀프호스팅한다 — 다른 이미지로 교체 금지.
+ * 원본 게시물 링크는 확인된 것이 없으므로 링크를 추정해 걸지 않는다.
+ */
+const CASE_GALLERY = [
+  { src: "/realsmarket/case-01.webp", caption: "제품 사용 경험" },
+  { src: "/realsmarket/case-02.webp", caption: "제품 라인업 소개" },
+  { src: "/realsmarket/case-03.webp", caption: "일상 속 사용 장면" },
+  { src: "/realsmarket/case-04.webp", caption: "체험 리뷰" },
+  { src: "/realsmarket/case-05.webp", caption: "마켓 오픈 안내" },
+];
+
 const FAQS = [
   {
     q: "캠페인 기간은 얼마나 걸리나요?",
@@ -188,6 +291,7 @@ const FAQS = [
 export default function RealsMarket() {
   usePageMeta();
   useScrollReveal();
+  const [caseIndex, setCaseIndex] = useState<number | null>(null);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--cosmos-void)" }}>
@@ -506,6 +610,56 @@ export default function RealsMarket() {
           </div>
         </div>
       </section>
+
+      {/* ── 공동구매 캠페인 사례 ─────────────────────────────────── */}
+      <section className="py-16 md:py-24">
+        <div className="container">
+          <div className="cosmic-label mb-5">Case Gallery</div>
+          <h2
+            className="font-black text-3xl md:text-4xl text-white mb-3"
+            style={{ fontFamily: "'Space Grotesk', 'Pretendard', sans-serif", letterSpacing: "-0.03em" }}
+          >
+            공동구매 캠페인 <span className="text-cosmic-gradient">사례</span>
+          </h2>
+          <p className="text-white/45 text-sm mb-8">디노스튜디오가 진행한 공동구매 캠페인의 콘텐츠 예시입니다.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {CASE_GALLERY.map((item, i) => (
+              <button
+                key={item.src}
+                onClick={() => setCaseIndex(i)}
+                aria-label={`${item.caption} — 확대 보기`}
+                className="cosmic-card group flex flex-col p-0 overflow-hidden text-left hover:border-violet-500/40 transition-all"
+              >
+                <div className="w-full" style={{ aspectRatio: "4/3", background: "rgba(3,3,10,0.6)" }}>
+                  <img
+                    src={item.src}
+                    alt={`공동구매 캠페인 콘텐츠 예시 — ${item.caption}`}
+                    loading="lazy"
+                    className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+                  />
+                </div>
+                <div
+                  className="flex items-center justify-between px-4 py-3 border-t w-full"
+                  style={{ borderColor: "rgba(255,255,255,0.07)" }}
+                >
+                  <span className="text-sm font-bold text-white">{item.caption}</span>
+                  <span className="text-[11px] text-white/35">확대 보기 +</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {caseIndex !== null && (
+        <CaseLightbox
+          index={caseIndex}
+          onClose={() => setCaseIndex(null)}
+          onMove={delta =>
+            setCaseIndex(i => (i === null ? i : (i + delta + CASE_GALLERY.length) % CASE_GALLERY.length))
+          }
+        />
+      )}
 
       {/* ── FAQ ─────────────────────────────────────────────────── */}
       <section className="py-16 md:py-24">
