@@ -10,7 +10,6 @@ import {
   Instagram,
   Link2,
   Mail,
-  Play,
   X,
 } from "lucide-react";
 import StarCanvas from "@/components/StarCanvas";
@@ -559,7 +558,7 @@ export default function RealsMarket() {
         </div>
       </section>
 
-      {/* ── 참고 영상 ───────────────────────────────────────────── */}
+      {/* ── 콘텐츠 레퍼런스 (영상 + 캠페인 사례 통합 그리드) ─────── */}
       <section className="py-16 md:py-24" style={{ background: "var(--cosmos-nebula)" }}>
         <div className="container">
           <div className="cosmic-label mb-5">Reference</div>
@@ -567,10 +566,10 @@ export default function RealsMarket() {
             className="font-black text-3xl md:text-4xl text-white mb-3"
             style={{ fontFamily: "'Space Grotesk', 'Pretendard', sans-serif", letterSpacing: "-0.03em" }}
           >
-            참고 <span className="text-cosmic-gradient">영상</span>
+            콘텐츠 <span className="text-cosmic-gradient">레퍼런스</span>
           </h2>
-          <p className="text-white/45 text-sm mb-8">릴스마켓 캠페인으로 제작된 콘텐츠 형식을 Instagram에서 확인하실 수 있습니다.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+          <p className="text-white/45 text-sm mb-8">릴스마켓·공동구매 캠페인으로 제작된 콘텐츠 예시입니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {REFERENCE_VIDEOS.map(ref => (
               <a
                 key={ref.url}
@@ -578,51 +577,27 @@ export default function RealsMarket() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={`${ref.handle} 릴스 영상 보기 (Instagram 새 창)`}
-                className="cosmic-card group relative block overflow-hidden p-0 hover:border-violet-500/40 transition-all"
-                style={{ aspectRatio: "9/16" }}
+                className="cosmic-card group flex flex-col p-0 overflow-hidden hover:border-violet-500/40 transition-all"
               >
-                <img
-                  src={ref.img}
-                  alt={`${ref.handle} 릴스마켓 캠페인 릴스 캡처`}
-                  loading="lazy"
-                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                />
-                {/* 하단 스크림 + 재생 칩 */}
+                <div className="w-full relative" style={{ aspectRatio: "1/1", background: "rgba(3,3,10,0.6)" }}>
+                  <img
+                    src={ref.img}
+                    alt={`${ref.handle} 릴스마켓 캠페인 릴스 캡처`}
+                    loading="lazy"
+                    className="absolute inset-0 w-full h-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+                  />
+                </div>
                 <div
-                  className="absolute inset-x-0 bottom-0 flex items-end justify-between p-4 pt-16"
-                  style={{ background: "linear-gradient(180deg, transparent, rgba(3,3,10,0.85))" }}
+                  className="flex items-center justify-between px-4 py-3 border-t w-full"
+                  style={{ borderColor: "rgba(255,255,255,0.07)" }}
                 >
-                  <div className="min-w-0">
-                    <div className="text-sm font-bold text-white truncate">{ref.handle}</div>
-                    <div className="text-[11px] text-white/50 flex items-center gap-1">
-                      <Instagram size={11} /> Instagram에서 보기 <ExternalLink size={10} />
-                    </div>
-                  </div>
-                  <div
-                    className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full"
-                    style={{ background: "rgba(124,58,237,0.85)", boxShadow: "0 0 18px rgba(124,58,237,0.5)" }}
-                  >
-                    <Play size={14} className="text-white" fill="currentColor" style={{ marginLeft: 1 }} />
-                  </div>
+                  <span className="text-sm font-bold text-white truncate">{ref.handle}</span>
+                  <span className="shrink-0 text-[11px] text-white/35 flex items-center gap-1">
+                    <Instagram size={11} /> Instagram에서 보기 <ExternalLink size={10} />
+                  </span>
                 </div>
               </a>
             ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── 공동구매 캠페인 사례 ─────────────────────────────────── */}
-      <section className="py-16 md:py-24">
-        <div className="container">
-          <div className="cosmic-label mb-5">Case Gallery</div>
-          <h2
-            className="font-black text-3xl md:text-4xl text-white mb-3"
-            style={{ fontFamily: "'Space Grotesk', 'Pretendard', sans-serif", letterSpacing: "-0.03em" }}
-          >
-            공동구매 캠페인 <span className="text-cosmic-gradient">사례</span>
-          </h2>
-          <p className="text-white/45 text-sm mb-8">디노스튜디오가 진행한 공동구매 캠페인의 콘텐츠 예시입니다.</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {CASE_GALLERY.map((item, i) => (
               <button
                 key={item.src}
@@ -630,20 +605,20 @@ export default function RealsMarket() {
                 aria-label={`${item.caption} — 확대 보기`}
                 className="cosmic-card group flex flex-col p-0 overflow-hidden text-left hover:border-violet-500/40 transition-all"
               >
-                <div className="w-full" style={{ aspectRatio: "4/3", background: "rgba(3,3,10,0.6)" }}>
+                <div className="w-full relative" style={{ aspectRatio: "1/1", background: "rgba(3,3,10,0.6)" }}>
                   <img
                     src={item.src}
                     alt={`공동구매 캠페인 콘텐츠 예시 — ${item.caption}`}
                     loading="lazy"
-                    className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+                    className="absolute inset-0 w-full h-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
                   />
                 </div>
                 <div
                   className="flex items-center justify-between px-4 py-3 border-t w-full"
                   style={{ borderColor: "rgba(255,255,255,0.07)" }}
                 >
-                  <span className="text-sm font-bold text-white">{item.caption}</span>
-                  <span className="text-[11px] text-white/35">확대 보기 +</span>
+                  <span className="text-sm font-bold text-white truncate">{item.caption}</span>
+                  <span className="shrink-0 text-[11px] text-white/35">확대 보기 +</span>
                 </div>
               </button>
             ))}
