@@ -90,6 +90,7 @@ export function ContactsScreen() {
                   <th>접수일시</th>
                   <th>이름</th>
                   <th>회사</th>
+                  <th>연락처</th>
                   <th>관심 솔루션</th>
                   <th>문의 내용</th>
                 </tr>
@@ -102,6 +103,9 @@ export function ContactsScreen() {
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>{row.name}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{row.company}</td>
+                    <td style={{ whiteSpace: "nowrap", userSelect: "all" }}>
+                      {row.contact ?? "—"}
+                    </td>
                     <td style={{ whiteSpace: "nowrap" }}>
                       {solutionLabel(row.solution)}
                     </td>

@@ -27,12 +27,15 @@ export const appRouter = router({
         z.object({
           name: z.string().min(1).max(100),
           company: z.string().min(1).max(200),
+          // 회신 수단. 새 폼에서는 필수지만, 배포 전환기의 구형 클라이언트가
+          // 이 필드 없이 보내도 접수 자체는 받는다 — 문의를 잃지 않는 게 우선.
+          contact: z.string().min(1).max(200).optional(),
           solution: z.string().optional(),
           message: z.string().optional(),
         })
       )
       .mutation(async ({ input }) => {
-        const summary = `이름: ${input.name}\n회사: ${input.company}\n솔루션: ${input.solution ?? "-"}\n내용: ${input.message ?? "-"}`;
+        const summary = `이름: ${input.name}\n회사: ${input.company}\n연락처: ${input.contact ?? "-"}\n솔루션: ${input.solution ?? "-"}\n내용: ${input.message ?? "-"}`;
 
         // 문의는 어떤 경우에도 잃지 않는다 — DB가 없어도 로그에는 남는다.
         console.log("[Contact] 새 파트너십 문의:", JSON.stringify(input));
@@ -41,6 +44,7 @@ export const appRouter = router({
           await createContact({
             name: input.name,
             company: input.company,
+            contact: input.contact ?? null,
             solution: input.solution ?? null,
             message: input.message ?? null,
           });

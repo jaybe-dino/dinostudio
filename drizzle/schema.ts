@@ -50,6 +50,8 @@ export const contacts = pgTable("contacts", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   company: varchar("company", { length: 200 }).notNull(),
+  /** 이메일 또는 전화번호 — 폼에서는 필수지만 과거 접수분은 비어 있어 nullable */
+  contact: varchar("contact", { length: 200 }),
   solution: varchar("solution", { length: 100 }),
   message: text("message"),
   createdAt: timestamp("createdAt", { withTimezone: true })

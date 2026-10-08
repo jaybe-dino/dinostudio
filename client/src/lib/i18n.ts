@@ -375,10 +375,15 @@ export const translations = {
     // ContactSection 컴포넌트가 실제로 조회하는 키들 — 누락 시 키 이름이 그대로 노출된다
     fieldName: { ko: "이름", en: "Name" },
     fieldCompany: { ko: "회사명", en: "Company" },
+    fieldContact: { ko: "연락처", en: "Contact" },
     fieldSolution: { ko: "관심 솔루션", en: "Solution of Interest" },
     fieldMessage: { ko: "문의 내용", en: "Message" },
     placeholderName: { ko: "홍길동", en: "John Doe" },
     placeholderCompany: { ko: "(주)브랜드명", en: "Brand Name Inc." },
+    placeholderContact: {
+      ko: "이메일 또는 전화번호",
+      en: "Email or phone number",
+    },
     placeholderMessage: {
       ko: "브랜드 소개 및 문의 내용을 자유롭게 작성해주세요.",
       en: "Please briefly introduce your brand and describe your inquiry.",

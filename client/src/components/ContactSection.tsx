@@ -6,7 +6,7 @@ import { t } from "@/lib/i18n";
 
 export default function ContactSection() {
   const { lang } = useLang();
-  const [form, setForm] = useState({ name: "", company: "", solution: "", message: "" });
+  const [form, setForm] = useState({ name: "", company: "", contact: "", solution: "", message: "" });
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -17,10 +17,11 @@ export default function ContactSection() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.company.trim()) return;
+    if (!form.name.trim() || !form.company.trim() || !form.contact.trim()) return;
     submitMutation.mutate({
       name: form.name,
       company: form.company,
+      contact: form.contact,
       solution: form.solution || undefined,
       message: form.message || undefined,
     });
@@ -108,6 +109,16 @@ export default function ContactSection() {
                       placeholder={t("contact", "placeholderCompany", lang)}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-white/35 mb-2 uppercase tracking-wider">{t("contact", "fieldContact", lang)}</label>
+                  <input type="text" required value={form.contact}
+                    onChange={(e) => setForm({ ...form, contact: e.target.value })}
+                    className="w-full px-4 py-3 text-sm text-white placeholder-white/20 outline-none transition-all"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+                    placeholder={t("contact", "placeholderContact", lang)}
+                  />
                 </div>
 
                 <div>

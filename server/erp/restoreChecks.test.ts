@@ -225,6 +225,7 @@ describe("**옛 시점 복구본** — 예전 도구가 성공이라고 하던 �
     expect(r.migrations.missingTags).toEqual([
       "0006_warm_vector",
       "0007_chunky_paper_doll",
+      "0008_previous_human_fly",
     ]);
     expect(r.exitCode).toBe(1);
   }, 60_000);
