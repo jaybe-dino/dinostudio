@@ -48,6 +48,7 @@ import { OverviewScreen } from "./screens/Overview";
 import { PnlScreen } from "./screens/Pnl";
 import { SettingsScreen } from "./screens/Settings";
 import { SheetImportScreen } from "./screens/SheetImport";
+import { ContactsScreen } from "./screens/Contacts";
 
 interface ScreenDef {
   id: string;
@@ -419,6 +420,14 @@ const SCREENS: ScreenDef[] = [
     hint: "역할 · 의존 · 자동화 레벨 · 막는 것",
     stage: 3,
     render: () => <AgentsScreen />,
+  },
+  {
+    id: "contacts",
+    label: "파트너십 문의",
+    group: "웹사이트",
+    hint: "dinostudio.kr 문의 폼 접수 내역 · 최신순",
+    stage: 1,
+    render: () => <ContactsScreen />,
   },
 ];
 

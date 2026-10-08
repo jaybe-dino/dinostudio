@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { createDb } from "./dbPool.js";
 import {
   InsertUser,
@@ -110,5 +110,6 @@ export async function createContact(data: InsertContact) {
 export async function listContacts() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(contacts).orderBy(contacts.createdAt);
+  // 문의함은 최신 접수가 먼저 보여야 한다
+  return db.select().from(contacts).orderBy(desc(contacts.createdAt));
 }

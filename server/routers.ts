@@ -6,6 +6,7 @@ import { publicProcedure, router, protectedProcedure } from "./_core/trpc.js";
 import { createContact, listContacts } from "./db.js";
 import { notifyOwner } from "./_core/notification.js";
 import { erpRouter } from "./erp/router.js";
+import { resolveErpRole } from "./erp/index.js";
 
 export const appRouter = router({
   system: systemRouter,
@@ -76,7 +77,12 @@ export const appRouter = router({
       }),
 
     list: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== "admin") return [];
+      // §13.1 — 역할은 이메일로 해석한다. 세션의 role 필드는 어댑터가 "user"로
+      // 고정해 넣으므로 admin 비교만으로는 아무도 통과하지 못한다(죽은 조건).
+      // 경영관리 시스템 접근 권한이 있는 구성원이면 문의 접수 내역을 볼 수 있다.
+      const allowed =
+        ctx.user.role === "admin" || resolveErpRole(ctx.user.email) !== null;
+      if (!allowed) return [];
       return listContacts();
     }),
   }),
