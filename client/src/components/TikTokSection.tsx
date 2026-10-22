@@ -3,10 +3,9 @@ import { ExternalLink, Globe, ShoppingBag, Star, Users } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { t } from "@/lib/i18n";
 
-const TIKTOK_BANNER =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663330652910/dmGrJ35z4AhFJFQ83XfsdQ/tiktok-shop-banner-T4FfcyUHh8etLw38yvtGBZ.webp";
-const TIKTOK_MOBILE =
-  "https://d2xsxph8kpxj0f.cloudfront.net/310519663330652910/dmGrJ35z4AhFJFQ83XfsdQ/tiktok-shop-mobile-386SNxdZ4dcJQqMfub4djQ.webp";
+// 외부 CDN(Manus CloudFront) 장애로 전환된 저장소 자산 — /img 아래에서만 서빙한다
+const TIKTOK_BANNER = "/img/tiktok-shop-banner.svg";
+const TIKTOK_MOBILE = "/img/tiktok-shop-mobile.svg";
 
 export default function TikTokSection() {
   const { lang } = useLang();
@@ -57,6 +56,7 @@ export default function TikTokSection() {
       <div className="absolute inset-0 pointer-events-none">
         <img
           src={TIKTOK_BANNER}
+          onError={(e) => { e.currentTarget.style.display = "none"; }}
           loading="lazy"
           decoding="async"
           alt=""
@@ -156,6 +156,7 @@ export default function TikTokSection() {
           <div className="hidden lg:block flex-shrink-0 reveal-scale">
             <img
               src={TIKTOK_MOBILE}
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
               loading="lazy"
               decoding="async"
               alt="TikTok Shop Live Commerce"

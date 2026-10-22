@@ -3,7 +3,9 @@ import { ChevronDown, Rocket, Zap, Globe } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
 import { t } from "@/lib/i18n";
 
-const HERO_BG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663330652910/dmGrJ35z4AhFJFQ83XfsdQ/cosmic-hero-DmQ2ymtFBoDSf2b6jYYiS4.webp";
+// Manus CloudFront 가 내려가 이미지가 전부 액박이 됐던 이력이 있다 (2026-10).
+// 배경은 저장소에 두고 같은 도메인에서 서빙한다 — 외부 CDN 의존 금지.
+const HERO_BG = "/img/cosmic-hero.svg";
 
 function CounterItem({ value, suffix, label }: { value: number; suffix: string; label: string }) {
   const [count, setCount] = useState(0);
@@ -91,6 +93,7 @@ export default function HeroSection() {
       >
         <img
           src={HERO_BG}
+          onError={(e) => { e.currentTarget.style.display = "none"; }}
           alt="cosmic background"
           loading="eager"
           fetchPriority="high"

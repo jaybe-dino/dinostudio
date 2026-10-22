@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="560" viewBox="0 0 1600 560">
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#05050f"/>
+      <stop offset="55%" stop-color="#0a0a22"/>
+      <stop offset="100%" stop-color="#101035"/>
+    </linearGradient>
+    <linearGradient id="rise" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.85"/>
+      <stop offset="55%" stop-color="#6366f1" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#c4b5fd" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="riseFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6366f1" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1600" height="560" fill="url(#base)"/>
+  <ellipse cx="1300" cy="150" rx="520" ry="300" fill="url(#glow)"/>
+
+  <!-- faint ledger grid -->
+  <g stroke="#6366f1" stroke-opacity="0.08">
+    <line x1="0" y1="112" x2="1600" y2="112"/><line x1="0" y1="224" x2="1600" y2="224"/>
+    <line x1="0" y1="336" x2="1600" y2="336"/><line x1="0" y1="448" x2="1600" y2="448"/>
+    <line x1="320" y1="0" x2="320" y2="560"/><line x1="640" y1="0" x2="640" y2="560"/>
+    <line x1="960" y1="0" x2="960" y2="560"/><line x1="1280" y1="0" x2="1280" y2="560"/>
+  </g>
+
+  <!-- growth flow: area under the rising curve -->
+  <path d="M520 470 C 760 430 900 360 1060 280 C 1200 212 1330 160 1470 118 L 1470 560 L 520 560 Z"
+        fill="url(#riseFill)"/>
+  <!-- the rising curve itself -->
+  <path d="M520 470 C 760 430 900 360 1060 280 C 1200 212 1330 160 1470 118"
+        fill="none" stroke="url(#rise)" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- milestone nodes on the curve -->
+  <g>
+    <circle cx="520" cy="470" r="10" fill="#0e1b2e" stroke="#22d3ee" stroke-width="2.5"/>
+    <circle cx="520" cy="470" r="3.5" fill="#67e8f9"/>
+    <circle cx="820" cy="403" r="11" fill="#12102c" stroke="#818cf8" stroke-width="2.5"/>
+    <circle cx="820" cy="403" r="4" fill="#a5b4fc"/>
+    <circle cx="1090" cy="265" r="12" fill="#140f2e" stroke="#a78bfa" stroke-width="2.5"/>
+    <circle cx="1090" cy="265" r="4.5" fill="#c4b5fd"/>
+    <circle cx="1330" cy="160" r="13" fill="#17122f" stroke="#c4b5fd" stroke-width="3"/>
+    <circle cx="1330" cy="160" r="5" fill="#e9d5ff"/>
+  </g>
+  <!-- apex burst -->
+  <circle cx="1470" cy="118" r="18" fill="#c4b5fd" opacity="0.25"/>
+  <circle cx="1470" cy="118" r="9" fill="#ede9fe"/>
+  <g stroke="#c4b5fd" stroke-opacity="0.6" stroke-width="2" stroke-linecap="round">
+    <line x1="1470" y1="86" x2="1470" y2="70"/>
+    <line x1="1498" y1="98" x2="1510" y2="87"/>
+    <line x1="1442" y1="98" x2="1430" y2="87"/>
+  </g>
+
+  <!-- network mesh under the curve: capital connecting -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M620 505 L 820 403" stroke="#38bdf8" stroke-opacity="0.3" stroke-width="1.5"/>
+    <path d="M620 505 L 1090 265" stroke="#818cf8" stroke-opacity="0.22" stroke-width="1.5"/>
+    <path d="M900 500 L 1090 265" stroke="#818cf8" stroke-opacity="0.28" stroke-width="1.5"/>
+    <path d="M900 500 L 1330 160" stroke="#a78bfa" stroke-opacity="0.2" stroke-width="1.5"/>
+    <path d="M1180 480 L 1330 160" stroke="#a78bfa" stroke-opacity="0.26" stroke-width="1.5"/>
+  </g>
+  <g>
+    <circle cx="620" cy="505" r="6" fill="#0e1b2e" stroke="#38bdf8" stroke-opacity="0.7" stroke-width="1.5"/>
+    <circle cx="900" cy="500" r="6" fill="#12102c" stroke="#818cf8" stroke-opacity="0.7" stroke-width="1.5"/>
+    <circle cx="1180" cy="480" r="6" fill="#140f2e" stroke="#a78bfa" stroke-opacity="0.7" stroke-width="1.5"/>
+  </g>
+
+  <!-- sparse stars (right side carries the visual, left stays calm for text) -->
+  <g fill="#ffffff">
+    <circle cx="1120" cy="80" r="1.5" opacity="0.6"/><circle cx="1360" cy="60" r="1.3" opacity="0.55"/>
+    <circle cx="1540" cy="240" r="1.5" opacity="0.6"/><circle cx="980" cy="140" r="1.3" opacity="0.5"/>
+    <circle cx="1240" cy="360" r="1.2" opacity="0.45"/><circle cx="1560" cy="430" r="1.3" opacity="0.5"/>
+    <circle cx="860" cy="250" r="1.2" opacity="0.4"/>
+  </g>
+</svg>

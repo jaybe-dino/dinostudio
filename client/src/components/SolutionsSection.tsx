@@ -3,10 +3,11 @@ import { useLang } from "@/contexts/LangContext";
 import { t } from "@/lib/i18n";
 import { ExternalLink, ChevronRight, ShoppingCart, Play, Globe, BarChart3, TrendingUp, DollarSign, Zap } from "lucide-react";
 
-const COSMIC_SOL_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663330652910/dmGrJ35z4AhFJFQ83XfsdQ/cosmic-solutions-BuTdaCdgGsVf5W67Wbk7V6.webp";
-const COSMIC_FIN_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663330652910/dmGrJ35z4AhFJFQ83XfsdQ/cosmic-finance-eZCXKGr2c5E8PTipkQsB7M.webp";
-const TIKTOK_BANNER_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663330652910/dmGrJ35z4AhFJFQ83XfsdQ/tiktok-shop-banner-T4FfcyUHh8etLw38yvtGBZ.webp";
-const TIKTOK_MOBILE_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663330652910/dmGrJ35z4AhFJFQ83XfsdQ/tiktok-shop-mobile-386SNxdZ4dcJQqMfub4djQ.webp";
+// 외부 CDN(Manus CloudFront) 장애로 전환된 저장소 자산 — /img 아래에서만 서빙한다
+const COSMIC_SOL_IMG = "/img/cosmic-solutions.svg";
+const COSMIC_FIN_IMG = "/img/cosmic-finance.svg";
+const TIKTOK_BANNER_IMG = "/img/tiktok-shop-banner.svg";
+const TIKTOK_MOBILE_IMG = "/img/tiktok-shop-mobile.svg";
 
 // ─── Commerce Sub-solutions ──────────────────────────────────────
 // (moved inside component for lang support)
@@ -284,7 +285,7 @@ export default function SolutionsSection() {
 
       {/* Background image */}
       <div className="absolute inset-0 opacity-10">
-        <img src={COSMIC_SOL_IMG} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+        <img src={COSMIC_SOL_IMG} onError={(e) => { e.currentTarget.style.display = "none"; }} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, var(--cosmos-void) 0%, transparent 30%, transparent 70%, var(--cosmos-void) 100%)" }} />
       </div>
 
@@ -410,7 +411,7 @@ export default function SolutionsSection() {
                       <div className="space-y-3">
                         {/* TikTok Shop banner image */}
                         <div className="relative overflow-hidden" style={{ height: "180px" }}>
-                          <img src={TIKTOK_BANNER_IMG} alt="TikTok Shop Global" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-80" />
+                          <img src={TIKTOK_BANNER_IMG} onError={(e) => { e.currentTarget.style.display = "none"; }} alt="TikTok Shop Global" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-80" />
                           <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(3,3,10,0.6) 0%, transparent 60%)" }} />
                           <div className="absolute top-3 left-3 flex items-center gap-2 px-3 py-1.5" style={{ background: "rgba(0,0,0,0.75)", border: "1px solid rgba(105,201,208,0.4)" }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -419,7 +420,7 @@ export default function SolutionsSection() {
                             <span className="text-xs font-black" style={{ color: "#69C9D0", fontFamily: "'Space Grotesk', sans-serif" }}>TikTok Shop</span>
                           </div>
                           <div className="absolute bottom-3 right-3">
-                            <img src={TIKTOK_MOBILE_IMG} alt="" loading="lazy" decoding="async" className="w-16 object-contain" style={{ filter: "drop-shadow(0 0 10px rgba(105,201,208,0.4))" }} />
+                            <img src={TIKTOK_MOBILE_IMG} onError={(e) => { e.currentTarget.style.display = "none"; }} alt="" loading="lazy" decoding="async" className="w-16 object-contain" style={{ filter: "drop-shadow(0 0 10px rgba(105,201,208,0.4))" }} />
                           </div>
                         </div>
                         {/* Countries grid */}
@@ -453,7 +454,7 @@ export default function SolutionsSection() {
                       </div>
                     ) : (
                       <div className="relative overflow-hidden" style={{ height: "280px" }}>
-                        <img src={COSMIC_SOL_IMG} alt={s.title} loading="lazy" decoding="async" className="w-full h-full object-cover opacity-60" />
+                        <img src={COSMIC_SOL_IMG} onError={(e) => { e.currentTarget.style.display = "none"; }} alt={s.title} loading="lazy" decoding="async" className="w-full h-full object-cover opacity-60" />
                         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(3,3,10,0.7) 0%, transparent 60%)" }} />
                         <div className="absolute bottom-4 left-4 right-4">
                           <div className="grid grid-cols-3 gap-2">
@@ -645,7 +646,7 @@ export default function SolutionsSection() {
 
             {/* Finance image banner */}
             <div className="relative h-44 overflow-hidden">
-              <img src={COSMIC_FIN_IMG} alt="파이낸스 솔루션" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-50" />
+              <img src={COSMIC_FIN_IMG} onError={(e) => { e.currentTarget.style.display = "none"; }} alt="파이낸스 솔루션" loading="lazy" decoding="async" className="w-full h-full object-cover opacity-50" />
               <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, rgba(3,3,10,0.95) 0%, rgba(3,3,10,0.5) 60%, transparent 100%)" }} />
               <div className="absolute inset-0 flex items-center px-8">
                 <div>

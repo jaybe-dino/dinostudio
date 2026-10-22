@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="800" viewBox="0 0 400 800">
+  <defs>
+    <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2a2a3e"/>
+      <stop offset="100%" stop-color="#101018"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#17374c"/>
+      <stop offset="50%" stop-color="#1e1640"/>
+      <stop offset="100%" stop-color="#321236"/>
+    </linearGradient>
+    <radialGradient id="screenGlow" cx="50%" cy="34%" r="70%">
+      <stop offset="0%" stop-color="#69C9D0" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#69C9D0" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- phone body (transparent canvas around it) -->
+  <rect x="30" y="14" width="340" height="772" rx="54" fill="url(#frame)"/>
+  <rect x="30" y="14" width="340" height="772" rx="54" fill="none" stroke="#69C9D0" stroke-opacity="0.35" stroke-width="2"/>
+  <!-- screen -->
+  <rect x="46" y="30" width="308" height="740" rx="40" fill="url(#screen)"/>
+  <rect x="46" y="30" width="308" height="740" rx="40" fill="url(#screenGlow)"/>
+  <!-- notch -->
+  <rect x="160" y="44" width="80" height="22" rx="11" fill="#0a0a14"/>
+
+  <!-- LIVE pill -->
+  <rect x="70" y="92" width="86" height="34" rx="17" fill="#EE1D52"/>
+  <circle cx="90" cy="109" r="6" fill="#ffffff"/>
+  <rect x="104" y="103" width="40" height="12" rx="4" fill="#ffffff" opacity="0.95"/>
+  <!-- viewer count pill -->
+  <rect x="246" y="92" width="84" height="34" rx="17" fill="#060612" opacity="0.8"/>
+  <circle cx="266" cy="109" r="7" fill="#69C9D0" opacity="0.9"/>
+  <rect x="280" y="103" width="38" height="12" rx="4" fill="#9bdfe4" opacity="0.9"/>
+
+  <!-- host silhouette: simple glow figure -->
+  <circle cx="200" cy="300" r="56" fill="#69C9D0" opacity="0.22"/>
+  <circle cx="200" cy="286" r="34" fill="#0d2230" stroke="#69C9D0" stroke-opacity="0.6" stroke-width="2"/>
+  <path d="M138 420 q62 -74 124 0 l0 40 q-62 26 -124 0 z" fill="#0d2230" stroke="#69C9D0" stroke-opacity="0.45" stroke-width="2"/>
+
+  <!-- floating reactions -->
+  <g>
+    <path d="M300 420 c-5 -8 -18 -6 -18 4 c0 8 10 13 18 19 c8 -6 18 -11 18 -19 c0 -10 -13 -12 -18 -4 z" fill="#EE1D52" opacity="0.9"/>
+    <path d="M318 352 c-4 -6 -14 -5 -14 3 c0 6 8 10 14 15 c6 -5 14 -9 14 -15 c0 -8 -10 -9 -14 -3 z" fill="#EE1D52" opacity="0.6"/>
+    <circle cx="306" cy="296" r="6" fill="#69C9D0" opacity="0.7"/>
+    <circle cx="322" cy="250" r="4" fill="#ffffff" opacity="0.5"/>
+  </g>
+
+  <!-- chat bubbles -->
+  <g>
+    <rect x="70" y="480" width="168" height="26" rx="13" fill="#060612" opacity="0.72"/>
+    <circle cx="86" cy="493" r="8" fill="#7c3aed" opacity="0.8"/>
+    <rect x="100" y="488" width="120" height="10" rx="5" fill="#ffffff" opacity="0.5"/>
+    <rect x="70" y="514" width="138" height="26" rx="13" fill="#060612" opacity="0.72"/>
+    <circle cx="86" cy="527" r="8" fill="#69C9D0" opacity="0.8"/>
+    <rect x="100" y="522" width="90" height="10" rx="5" fill="#ffffff" opacity="0.5"/>
+    <rect x="70" y="548" width="152" height="26" rx="13" fill="#060612" opacity="0.72"/>
+    <circle cx="86" cy="561" r="8" fill="#EE1D52" opacity="0.8"/>
+    <rect x="100" y="556" width="104" height="10" rx="5" fill="#ffffff" opacity="0.5"/>
+  </g>
+
+  <!-- product card -->
+  <rect x="70" y="608" width="260" height="76" rx="16" fill="#060612" opacity="0.88"/>
+  <rect x="84" y="622" width="48" height="48" rx="10" fill="#69C9D0" opacity="0.45"/>
+  <rect x="84" y="622" width="48" height="48" rx="10" fill="none" stroke="#69C9D0" stroke-opacity="0.7" stroke-width="1.5"/>
+  <rect x="144" y="628" width="120" height="11" rx="5.5" fill="#ffffff" opacity="0.85"/>
+  <rect x="144" y="648" width="76" height="10" rx="5" fill="#69C9D0" opacity="0.8"/>
+  <!-- buy button -->
+  <rect x="272" y="626" width="46" height="40" rx="12" fill="#EE1D52"/>
+  <rect x="283" y="642" width="24" height="8" rx="4" fill="#ffffff" opacity="0.95"/>
+
+  <!-- bottom bar -->
+  <rect x="150" y="736" width="100" height="8" rx="4" fill="#ffffff" opacity="0.35"/>
+</svg>
