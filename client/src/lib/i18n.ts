@@ -26,7 +26,6 @@ export const translations = {
       en: "Recent events and press coverage featuring Dinostudio.",
     },
     eventDateLabel: { ko: "행사일", en: "Event" },
-    readOriginal: { ko: "기사 원문", en: "Coverage" },
     e1Date: {
       ko: "2026.10.22 · 서울 강남 드리움 포레스트홀",
       en: "Oct 22, 2026 · Forest Hall, Gangnam, Seoul",
