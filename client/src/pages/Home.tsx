@@ -5,6 +5,7 @@ import StarCanvas from "@/components/StarCanvas";
 
 // 초기 뷰포트 밖 컴포넌트들은 lazy load → 초기 번들 크기 감소
 const AboutSection = lazy(() => import("@/components/AboutSection"));
+const NewsSection = lazy(() => import("@/components/NewsSection"));
 const SolutionsSection = lazy(() => import("@/components/SolutionsSection"));
 const TikTokSection = lazy(() => import("@/components/TikTokSection"));
 const YouTubeNetworkSection = lazy(() => import("@/components/YouTubeNetworkSection"));
@@ -61,6 +62,10 @@ export default function Home() {
 
       <Suspense fallback={<SectionSkeleton />}>
         <AboutSection />
+      </Suspense>
+
+      <Suspense fallback={<SectionSkeleton />}>
+        <NewsSection />
       </Suspense>
 
       <Suspense fallback={<SectionSkeleton />}>

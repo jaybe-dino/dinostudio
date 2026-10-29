@@ -7,12 +7,58 @@ export const translations = {
   // ── Navbar ──────────────────────────────────────────────────────
   nav: {
     about: { ko: "소개", en: "About" },
+    news: { ko: "뉴스", en: "News" },
     solutions: { ko: "솔루션", en: "Solutions" },
     tiktok: { ko: "TikTok Shop", en: "TikTok Shop" },
     partners: { ko: "파트너", en: "Partners" },
     channels: { ko: "채널", en: "Channels" },
     contact: { ko: "문의", en: "Contact" },
     cta: { ko: "파트너십 문의", en: "Partnership Inquiry" },
+  },
+
+  // ── News & Events Section ───────────────────────────────────────
+  news: {
+    sectionLabel: { ko: "News", en: "News" },
+    headline1: { ko: "뉴스 &", en: "News &" },
+    headline2: { ko: "현장 소식", en: "Highlights" },
+    desc: {
+      ko: "디노스튜디오의 최근 행사 소식과 언론 보도를 전합니다.",
+      en: "Recent events and press coverage featuring Dinostudio.",
+    },
+    eventDateLabel: { ko: "행사일", en: "Event" },
+    readOriginal: { ko: "기사 원문", en: "Coverage" },
+    e1Date: {
+      ko: "2026.10.22 · 서울 강남 드리움 포레스트홀",
+      en: "Oct 22, 2026 · Forest Hall, Gangnam, Seoul",
+    },
+    e1Title: {
+      ko: "한진 × TikTok × 디노스튜디오 ‘ONE-CLICK CONNECT’ 세미나",
+      en: "HANJIN × TikTok × Dinostudio ‘ONE-CLICK CONNECT’ Seminar",
+    },
+    e1Desc: {
+      ko: "미국·일본 진출을 준비하는 국내 브랜드를 위한 공동 세미나를 진행했습니다. 한진은 물류·직배송과 FBA 운영을, 틱톡은 틱톡샵·광고 전략을 소개했고, 디노스튜디오는 성과형 어필리에이트, 제품 시딩, 데이터 기반 크리에이터 발굴과 구매 전환 전략을 발표했습니다.",
+      en: "A joint seminar for Korean brands preparing to enter the US and Japan. HANJIN covered logistics, direct fulfillment and FBA; TikTok presented TikTok Shop and ads strategy; Dinostudio presented performance-based affiliate marketing, product seeding, and data-driven creator sourcing for purchase conversion.",
+    },
+    e1Caption: {
+      ko: "ONE-CLICK CONNECT 세미나 발표 장면 · 사진: 컨슈머타임스",
+      en: "Session at the ONE-CLICK CONNECT seminar · Photo: Consumertimes",
+    },
+    e2Date: {
+      ko: "2026.10.19 · 서울 여의도 국회의원회관 제1회의실",
+      en: "Oct 19, 2026 · National Assembly Members’ Office Bldg., Seoul",
+    },
+    e2Title: {
+      ko: "8개국 주한 대사 참여 ‘해외 수출 워크숍’ D2C 전략 발표",
+      en: "D2C Strategy Talk at the Export Workshop with 8 Ambassadors",
+    },
+    e2Desc: {
+      ko: "한국강소기업협회와 글로벌외교관포럼(GDF)이 공동 개최한 해외 수출 워크숍에 참여했습니다. 모로코·UAE·이탈리아·브라질·독일·말레이시아·우즈베키스탄·필리핀 8개국 주한 대사와 국내 중소기업이 함께한 자리에서, 허정발 디노스튜디오 대표가 틱톡샵 기반 해외 직접판매(D2C) 전략을 발표했습니다.",
+      en: "Dinostudio joined the overseas export workshop co-hosted by the Korea Small & Strong Enterprises Association and the Global Diplomats Forum (GDF). With ambassadors to Korea from eight countries — Morocco, UAE, Italy, Brazil, Germany, Malaysia, Uzbekistan and the Philippines — and Korean SMEs in attendance, CEO Jeongbal Hur presented a TikTok Shop-based direct-to-consumer (D2C) export strategy.",
+    },
+    e2Caption: {
+      ko: "워크숍 진행 장면 · 사진 제공: 글로벌외교관포럼(인더스트리뉴스)",
+      en: "The workshop in session · Photo: Global Diplomats Forum (via Industry News)",
+    },
   },
 
   // ── Hero Section ─────────────────────────────────────────────────

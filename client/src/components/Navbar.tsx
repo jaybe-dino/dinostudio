@@ -11,6 +11,7 @@ export default function Navbar() {
 
   const navLinks = [
     { labelKey: "about", href: "#about" },
+    { labelKey: "news", href: "#news" },
     { labelKey: "solutions", href: "#solutions" },
     { labelKey: "tiktok", href: "#tiktokshop", highlight: true },
     { labelKey: "partners", href: "#results" },
