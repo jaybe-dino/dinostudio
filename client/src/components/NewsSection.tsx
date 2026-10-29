@@ -52,13 +52,14 @@ function PartnerLogoBand() {
         onError={hideOnError}
       />
       <span className="text-white/25 text-sm font-light select-none" aria-hidden="true">×</span>
-      {/* TikTok 가로형 로고는 원본 내부 여백이 커서 한진과 시각 크기가 맞도록 약간 크게 */}
+      {/* TikTok 가로형 로고는 원본 내부 투명 여백이 커서(실제 도형이 캔버스의 절반 이하)
+          한진과 "보이는" 도형 높이가 비슷해지도록 CSS 높이를 크게 잡는다. 원본 비율·색 유지. */}
       <img
         src="/news/logos/tiktok-white.webp"
         alt="TikTok"
         loading="lazy"
         decoding="async"
-        className="h-7 md:h-8 w-auto"
+        className="h-10 md:h-12 w-auto"
         onError={hideOnError}
       />
     </div>
@@ -73,19 +74,25 @@ function CountryFlagBand({ lang }: { lang: "ko" | "en" }) {
       style={{ background: "rgba(3,3,10,0.85)", borderColor: "rgba(255,255,255,0.07)" }}
     >
       {COUNTRIES.map(c => (
-        <div key={c.code} className="flex items-center justify-center gap-1.5 min-w-0">
+        <div
+          key={c.code}
+          className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 min-w-0 text-center"
+        >
           <img
             src={`/news/flags/${c.code}.svg`}
             alt={`${c[lang]} ${lang === "ko" ? "국기" : "flag"}`}
             loading="lazy"
             decoding="async"
-            width={21}
-            height={16}
+            width={24}
+            height={18}
             className="shrink-0 rounded-[2px]"
             style={{ border: "1px solid rgba(255,255,255,0.15)" }}
             onError={hideOnError}
           />
-          <span className="text-[11px] text-white/55 font-medium truncate">{c[lang]}</span>
+          {/* 국명은 절대 말줄임하지 않는다 — 좁으면 줄바꿈으로 전체 표기 */}
+          <span className="text-[11px] leading-tight text-white/55 font-medium break-words">
+            {c[lang]}
+          </span>
         </div>
       ))}
     </div>
