@@ -127,8 +127,11 @@ export default function NewsSection() {
         <p className="text-white/45 text-sm md:text-base mb-10">{t("news", "desc", lang)}</p>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+          {/* 카드에 reveal 클래스 금지 — Home 의 IntersectionObserver 가 lazy 마운트 전에
+              등록을 끝내면 .visible 이 영영 안 붙어 카드가 opacity 0 으로 숨는다
+              (#news 직접 진입·새로고침 시 재현). 뉴스 카드는 애니메이션 없이 항상 보인다. */}
           {(["e1", "e2"] as const).map(key => (
-            <article key={key} className="cosmic-card p-0 overflow-hidden reveal">
+            <article key={key} className="cosmic-card p-0 overflow-hidden">
               {/* 참여사 로고 / 참석국 국기 — 사진 바로 위 별도 밴드 */}
               {key === "e1" ? <PartnerLogoBand /> : <CountryFlagBand lang={lang} />}
 
